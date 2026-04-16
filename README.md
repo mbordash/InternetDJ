@@ -9,31 +9,6 @@ InternetDJ is a full-stack music collaboration app with:
 
 Live demo: [https://InternetDJ.co](https://InternetDJ.co)
 
-## Before you open-source this repo
-
-Do **not** publish any real credentials.
-
-This workspace contains or has referenced real secrets in local-only files such as:
-
-- `.README-private`
-- `backend/.env`
-- `frontend/.env`
-
-Those files are currently ignored, but if the values were ever used in production you should still **rotate them before publishing**.
-
-Recommended rotations:
-
-- database passwords
-- session and JWT secrets
-- Google OAuth client secret
-- Mailgun API key
-- reCAPTCHA keys
-- Redis URL/password
-- Tigris/S3 access keys
-- Replicate API token
-- Solana / RPC provider credentials
-
-If any of those secrets were ever committed in git history, rewrite history before making the repository public.
 
 ## License note
 
