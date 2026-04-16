@@ -1,0 +1,58 @@
+/* src/styles/backgrounds.css */
+/* src/styles/backgrounds.css */
+.bg-gradient-1 {
+    background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+}
+.bg-gradient-2 {
+    background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
+}
+.bg-gradient-3 {
+    background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+}
+.bg-gradient-4 {
+    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+}
+.bg-gradient-5 {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+}
+.bg-gradient-dark-grey {
+    background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+}
+.bg-line-pattern {
+    background:
+            linear-gradient(45deg, transparent 48%, rgba(0, 0, 0, 0.2) 48%, rgba(0, 0, 0, 0.2) 52%, transparent 52%),
+            linear-gradient(-45deg, transparent 48%, rgba(0, 0, 0, 0.2) 48%, rgba(0, 0, 0, 0.2) 52%, transparent 52%);
+    background-color: #e5e7eb; /* Light grey base */
+    background-size: 30px 30px; /* Pattern scale */
+    background-repeat: repeat; /* Ensure repeating pattern */
+}
+.bg-inverse-line-pattern {
+    background:
+            linear-gradient(45deg, transparent 48%, rgba(255, 255, 255, 0.2) 48%, rgba(255, 255, 255, 0.2) 52%, transparent 52%),
+            linear-gradient(-45deg, transparent 48%, rgba(255, 255, 255, 0.2) 48%, rgba(255, 255, 255, 0.2) 52%, transparent 52%);
+    background-color: #1f2937; /* Dark grey base (Tailwind gray-800) */
+    background-size: 30px 30px; /* Same scale as bg-line-pattern */
+    background-repeat: repeat;
+}
+.bg-default {
+    background: #ffffff;
+}
+.profile-background {
+    position: fixed;
+    top: 64px; /* Matches pt-20 navbar height */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    width: 100%;
+    background-position: center;
+    background-repeat: repeat; /* Default to repeat for patterns */
+}
+
+/* Ensure body and html allow full-screen background */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+}

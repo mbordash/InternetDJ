@@ -1,0 +1,40 @@
+app = "your-app-name"
+primary_region = "iad"
+
+[build]
+dockerfile = "dockerfile"
+
+[env]
+NODE_ENV = "production"
+REACT_APP_API_URL = "/api"
+
+[http_service]
+internal_port = 5000
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 1
+processes = ["app"]
+
+[processes]
+app = "node backend/server.js"
+worker = "node backend/workers/stemWorker.js"
+cron = "supercronic /app/crontab"
+
+[[services]]
+processes = ["worker"]
+min_machines_running = 1
+auto_stop_machines = false
+auto_start_machines = false  # Workers don't need auto-start
+
+[[services]]
+processes = ["cron"]
+min_machines_running = 1
+auto_stop_machines = false
+auto_start_machines = false  # Same for cron
+
+[[vm]]
+memory = "1gb"
+cpu_kind = "shared"
+cpus = 1
+

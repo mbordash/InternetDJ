@@ -1,0 +1,58 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "@fortawesome/free-solid-svg-icons": "^6.7.2",
+    "@fortawesome/react-fontawesome": "^0.2.2",
+    "@heroicons/react": "^2.2.0",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.2",
+    "@tailwindcss/typography": "^0.5.16",
+    "axios": "^1.9.0",
+    "chart.js": "^4.4.9",
+    "html-react-parser": "^5.2.5",
+    "lodash": "^4.17.21",
+    "lodash.debounce": "^4.0.8",
+    "prop-types": "^15.8.1",
+    "quill": "^2.0.3",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^18.2.0",
+    "react-google-recaptcha": "^3.1.0",
+    "react-helmet-async": "^2.0.5",
+    "react-quill": "^2.0.0",
+    "react-router-dom": "^7.5.3",
+    "react-scripts": "^5.0.1",
+    "react-select": "^5.10.1",
+    "sanitize-html": "^2.17.0",
+    "socket.io-client": "^4.8.1",
+    "tailwindcss": "^3.4.17",
+    "tone": "^15.1.22",
+    "wavesurfer.js": "^7.9.4"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.5"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "GENERATE_SOURCEMAP=false REACT_APP_MINIFY=false react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

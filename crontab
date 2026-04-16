@@ -1,0 +1,3 @@
+# Run daily at 1:30 AM
+30 1 * * * curl -s -X POST http://127.0.0.1:5000/api/profile/calculate-daily-earnings -H "Content-Type: application/json" -d '{}' >> /app/cron.log 2>&1
+*/5 * * * * node backend/scripts/cleanupStems.js

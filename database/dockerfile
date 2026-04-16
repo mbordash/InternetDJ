@@ -1,0 +1,4 @@
+FROM mariadb:11.7
+ENV MARIADB_DATABASE=internetdj
+COPY schema.sql /docker-entrypoint-initdb.d/
+COPY my.cnf /etc/mysql/my.cnf

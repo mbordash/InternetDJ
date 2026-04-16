@@ -1,0 +1,58 @@
+@import 'quill/dist/quill.snow.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@theme {
+    --color-brand-primary: #3ab7bf;
+    --color-brand-secondary: #121063;
+    --color-custom-red-500: #ef4444; /* Example with shades */
+    --color-custom-red-600: #dc2626;
+}
+
+@keyframes fade-out {
+    0% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.animate-fade-out {
+    animation: fade-out 3s forwards;
+}
+
+.piano-roll {
+    position: relative;
+}
+.note-labels {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #ccc;
+}
+.piano-roll canvas {
+    background: #f9f9f9;
+}
+
+.song-image-container {
+    height: 100%;
+}
+
+.song-image-container img,
+.song-image-container div {
+    height: 100%;
+    width: 128px; /* Matches w-32 (32 * 4px) */
+    object-fit: cover;
+}
+
+@layer utilities {
+    .position-static {
+        position: static !important;
+        z-index: auto !important;
+        bottom: auto !important;
+    }
+}
+
+footer {
+    position: static !important;
+    z-index: auto !important;
+    bottom: auto !important;
+}
