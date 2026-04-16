@@ -7,6 +7,8 @@ InternetDJ is a full-stack music collaboration app with:
 - a MariaDB schema in `database/schema.sql`
 - Fly.io deployment examples in `fly.example.toml` and `database/fly.example.toml`
 
+Live demo: [https://InternetDJ.co](https://InternetDJ.co)
+
 ## Before you open-source this repo
 
 Do **not** publish any real credentials.
