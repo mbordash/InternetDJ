@@ -10,9 +10,9 @@ InternetDJ is a full-stack music collaboration app with:
 Live demo: [https://InternetDJ.co](https://InternetDJ.co)
 
 
-## License note
+## License
 
-If you want to release this project under GPL, add a `LICENSE` file for the exact GPL version you want to use (for example GPL-3.0-only or GPL-3.0-or-later) before publishing.
+This project is licensed under the GNU General Public License v3.0. See `LICENSE` for details.
 
 ## Local development
 
@@ -188,14 +188,6 @@ If you use Fly Machines or process scaling for the worker/cron entries, configur
 
 ## Known deployment gotchas
 
-- This repo previously contained hardcoded `internetdj.co` and bucket host assumptions in several runtime paths. The backend paths used for uploads, auth, proxying, sockets, and Fly config examples now use environment-based settings.
-- The frontend still contains some hardcoded SEO/canonical URLs in individual page components. Those do not expose credentials, but you should update them if you want a fully rebranded deployment on a different domain.
-- Review submission uses parameterized SQL in `backend/routes/reviews.js`; the slash issue reported by a tester is more consistent with an error-handling/schema problem than SQL injection. Raw SQL errors should never be shown to end users.
-
-## Security checklist for publishing
-
-- [ ] rotate all previously used production secrets
-- [ ] verify `.README-private`, `backend/.env`, and `frontend/.env` are not committed
-- [ ] check git history for old secrets
-- [ ] add your GPL license file
-- [ ] replace any remaining domain-specific branding you do not want public
+- Ensure your environment variables are set for your own domain, callback URLs, and storage endpoints.
+- If you rebrand or deploy on a different domain, update SEO/canonical metadata values in frontend pages.
+- Review submission uses parameterized SQL in `backend/routes/reviews.js`; keep generic error responses in production and avoid exposing raw SQL errors.
