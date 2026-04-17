@@ -1,13 +1,21 @@
 # InternetDJ
 
-InternetDJ is a full-stack music collaboration app with:
+InternetDJ is a full-stack music community app featuring:
+
+- Music Profiles, uploading, management
+- Reviews, ratings and crypto based rewards
+- Browser-based Digital Audio Workstation
+- New song recommendation engine
+- Collaboration engine
+
+Construction via:
 
 - a Node/Express backend in `backend/`
 - a React frontend in `frontend/`
 - a MariaDB schema in `database/schema.sql`
 - Fly.io deployment examples in `fly.example.toml` and `database/fly.example.toml`
 
-Live demo: [https://InternetDJ.co](https://InternetDJ.co)
+Live site: [https://InternetDJ.co](https://InternetDJ.co)
 
 
 ## License
