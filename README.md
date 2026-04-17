@@ -5,6 +5,7 @@ InternetDJ is a full-stack music community app featuring:
 - Music Profiles, uploading, management
 - Reviews, ratings and crypto based rewards
 - Browser-based Digital Audio Workstation
+- AI backed stems generator
 - New song recommendation engine
 - Collaboration engine
 
