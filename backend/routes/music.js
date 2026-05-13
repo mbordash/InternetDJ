@@ -702,21 +702,28 @@ router.get('/most-played', async (req, res) => {
 });
 
 router.get('/highest-rated', async (req, res) => {
+    const startedAt = Date.now();
     try {
         const rows = await pool.query(`
-            SELECT s.*, p.name AS profile_name,
-                   (SELECT COUNT(*)
-                    FROM playlist_songs ps
-                             JOIN playlists pl ON ps.playlist_id = pl.id
-                    WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+            SELECT
+                s.*,
+                p.name AS profile_name,
+                COALESCE(l.likes_count, 0) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-                     LEFT JOIN playlist_songs ps ON s.id = ps.song_id
-                     LEFT JOIN playlists pl ON ps.playlist_id = pl.id AND pl.name = 'Likes'
-            GROUP BY s.id
+                     LEFT JOIN (
+                SELECT
+                    ps.song_id,
+                    COUNT(*) AS likes_count
+                FROM playlist_songs ps
+                         INNER JOIN playlists pl ON pl.id = ps.playlist_id
+                WHERE pl.name = 'Likes'
+                GROUP BY ps.song_id
+            ) l ON l.song_id = s.id
             ORDER BY likes_count DESC, s.plays DESC
                 LIMIT 10
         `);
+
         const sanitizedRows = rows.map((row) => ({
             ...row,
             id: Number(row.id),
@@ -725,6 +732,8 @@ router.get('/highest-rated', async (req, res) => {
             profile_name: row.profile_name || 'Unknown',
             likes_count: Number(row.likes_count) || 0,
         }));
+
+        logger.info(`GET /music/highest-rated completed in ${Date.now() - startedAt}ms`);
         res.json(Array.isArray(sanitizedRows) ? sanitizedRows : []);
     } catch (err) {
         logger.error('Error in GET /music/highest-rated:', err);
