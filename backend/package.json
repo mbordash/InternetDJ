@@ -3,16 +3,21 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "idjc:backfill": "node scripts/backfillIdjcEarnings.js",
+    "idjc:backfill:commit": "node scripts/backfillIdjcEarnings.js --commit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@solana/spl-token": "^0.3.11",
+    "@solana/web3.js": "1.95.8",
     "@aws-sdk/client-s3": "^3.800.0",
     "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
+    "bs58": "^6.0.0",
     "bullmq": "^5.70.0",
     "child_process": "^1.0.2",
     "cors": "^2.8.5",

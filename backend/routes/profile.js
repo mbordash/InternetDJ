@@ -369,11 +369,11 @@ router.get('/most-popular', async (req, res) => {
   }
 });
 
-router.get('/:profileId', async (req, res) => {
+router.get('/:profileId', async (req, res, next) => {
   try {
     const profileId = parseInt(req.params.profileId);
     if (isNaN(profileId)) {
-      return res.status(400).json({ error: 'Invalid profile ID' });
+      return next();
     }
     const profiles = await pool.query('SELECT * FROM profiles WHERE id = ?', [profileId]);
     if (!Array.isArray(profiles) || profiles.length === 0) {

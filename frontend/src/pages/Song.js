@@ -9,6 +9,7 @@ import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import sanitizeHtml from 'sanitize-html';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
+import { getDefaultAvatar } from '../utils/defaultAvatar';
 
 // Feedback criteria
 const feedbackCriteria = [
@@ -627,17 +628,14 @@ const Song = () => {
                                                             to={review.profile_id ? `/profile/${review.profile_id}` : '#'}
                                                             className={review.profile_id ? 'hover:underline' : 'cursor-not-allowed'}
                                                         >
-                                                            {review.picture_url ? (
-                                                                <img
-                                                                    src={review.picture_url}
-                                                                    alt={review.user_name}
-                                                                    className="w-10 h-10 rounded-full object-cover"
-                                                                />
-                                                            ) : (
-                                                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
-                                                                    ?
-                                                                </div>
-                                                            )}
+                                                            <img
+                                                                src={review.picture_url || getDefaultAvatar(review.profile_id || review.user_name)}
+                                                                alt={review.user_name}
+                                                                className="w-10 h-10 rounded-full object-cover"
+                                                                onError={(e) => {
+                                                                    e.currentTarget.src = getDefaultAvatar(review.profile_id || review.user_name);
+                                                                }}
+                                                            />
                                                         </Link>
                                                         <div className="flex-1">
                                                             <div className="flex items-center justify-between">

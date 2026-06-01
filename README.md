@@ -75,6 +75,9 @@ See `backend/.env.example` for the full list. The main variables are:
 - `RECAPTCHA_SECRET_KEY`
 - `REDIS_URL`
 - `REPLICATE_API_TOKEN`
+- `IDJC_MINT_ADDRESS`, `IDJC_CLAIM_AMOUNT`, `IDJC_CLAIM_CAMPAIGN`
+- `SOLANA_RPC_URL`
+- `IDJC_TREASURY_SECRET_KEY` (JSON byte array or base58 private key)
 
 ### Frontend
 
@@ -188,6 +191,13 @@ These features need extra setup if you want them enabled:
 - captcha: `RECAPTCHA_SECRET_KEY`, `REACT_APP_RECAPTCHA_SITE_KEY`
 - AI stems worker: `REPLICATE_API_TOKEN`
 - Solana features: `REACT_APP_SOLANA_RPC_URL`
+- IDJC claim campaign treasury transfer: `IDJC_TREASURY_SECRET_KEY`, `SOLANA_RPC_URL`, `IDJC_CLAIM_AMOUNT`, `IDJC_CLAIM_CAMPAIGN`
+
+## IDJC claim campaign notes
+
+- The `/idj-coin` page now includes a "Claim 1,000 IDJC" CTA that forces login and then submits a claim.
+- Claims are tracked in `idjc_claims` and are limited to one completed claim per user per campaign code.
+- Users must have a valid `solana_address` in their profile before claiming.
 
 ### 6) Deploy the web app
 

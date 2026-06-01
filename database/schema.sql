@@ -283,3 +283,23 @@ CREATE TABLE IF NOT EXISTS stems (
 );
 
 ALTER TABLE stems ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS idjc_claims (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    profile_id INT NOT NULL,
+    wallet_address VARCHAR(44) NOT NULL,
+    amount INT NOT NULL,
+    campaign_code VARCHAR(100) NOT NULL,
+    status ENUM('pending', 'completed', 'failed') NOT NULL DEFAULT 'pending',
+    transaction_signature VARCHAR(88) DEFAULT NULL,
+    error_message VARCHAR(255) DEFAULT NULL,
+    attempts INT NOT NULL DEFAULT 1,
+    claimed_at TIMESTAMP NULL DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_user_campaign (user_id, campaign_code),
+    KEY idx_claim_status (status),
+    CONSTRAINT fk_idjc_claims_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_idjc_claims_profile FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+);

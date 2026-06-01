@@ -1,0 +1,25 @@
+# VCS and editor files
+.git
+.gitignore
+.idea
+.DS_Store
+
+# Local env/secrets
+**/.env
+**/.env.*
+!.env.example
+README-private
+.README-private
+
+# Dependency directories (huge)
+frontend/node_modules
+backend/node_modules
+
+# Build artifacts created during image build anyway
+frontend/build
+backend/temp
+
+# Python cache / misc
+**/__pycache__
+**/*.pyc
+

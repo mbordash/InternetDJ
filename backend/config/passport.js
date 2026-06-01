@@ -9,7 +9,9 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
 
 const callbackURL =
     process.env.GOOGLE_CALLBACK_URL ||
-    `${(process.env.API_BASE_URL || 'http://localhost:5050/api').replace(/\/+$/, '')}/auth/google/callback`;
+    (process.env.API_BASE_URL
+        ? `${process.env.API_BASE_URL.replace(/\/+$/, '')}/auth/google/callback`
+        : '/api/auth/google/callback');
 
 passport.use(
     new GoogleStrategy(

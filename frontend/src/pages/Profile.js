@@ -9,6 +9,7 @@ import { createTransferInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Buffer } from 'buffer';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
+import { getDefaultAvatar } from '../utils/defaultAvatar';
 import sanitizeHtml from 'sanitize-html';
 import {Helmet} from "react-helmet-async";
 
@@ -626,18 +627,14 @@ const ProfilePage = () => {
             <div className="relative container mx-auto px-4 py-8 max-w-4xl text-gray-800 z-0 pt-20">
                 <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md mb-8">
                     <div className="flex items-center space-x-6">
-                        {profile.picture_url ? (
-                            <img
-                                src={profile.picture_url}
-                                alt="Profile"
-                                className="w-32 h-32 rounded-full object-cover shadow-sm"
-                                onError={(e) => console.error('Profile image failed to load:', profile.picture_url)}
-                            />
-                        ) : (
-                            <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                                No Image
-                            </div>
-                        )}
+                        <img
+                            src={profile.picture_url || getDefaultAvatar(profile.id || profile.user_id || profile.name)}
+                            alt={profile.name || 'Profile'}
+                            className="w-32 h-32 rounded-full object-cover shadow-sm"
+                            onError={(e) => {
+                                e.currentTarget.src = getDefaultAvatar(profile.id || profile.user_id || profile.name);
+                            }}
+                        />
                         <div>
                             <h1 className="text-3xl font-bold">{profile.name}</h1>
                             <p className="text-lg">Genre: {profile.genre}</p>

@@ -21,15 +21,6 @@ const getClientIp = (req) => {
 
 const { getRunningJobs, incrementRunningJobs, decrementRunningJobs } = require('../utils/concurrency');
 
-const streamToString = async (readable) => {
-    const chunks = [];
-    for await (const chunk of readable) chunks.push(Buffer.from(chunk));
-    return Buffer.concat(chunks).toString('utf-8');
-};
-
-const FEATURED_S3_KEY = 'site-cache/featured-song.json';
-const FEATURED_TTL_MS = 24 * 60 * 60 * 1000;
-
 router.get('/user-songs', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -143,30 +134,7 @@ router.get('/:songId/stats', authenticate, async (req, res) => {
 
 router.get('/featured', async (req, res) => {
     try {
-        const minLikes = Math.max(1, parseInt(req.query.minLikes, 10) || 1);
-
-        // 1) Try read cached featured from Tigris
-        try {
-            const getCmd = new GetObjectCommand({
-                Bucket: process.env.BUCKET_NAME,
-                Key: FEATURED_S3_KEY,
-            });
-            const cachedObj = await s3Client.send(getCmd);
-            const cachedText = await streamToString(cachedObj.Body);
-            const cached = JSON.parse(cachedText);
-
-            const pickedAtMs = cached?.pickedAt ? Date.parse(cached.pickedAt) : NaN;
-            const isFresh = Number.isFinite(pickedAtMs) && (Date.now() - pickedAtMs) < FEATURED_TTL_MS;
-
-            if (isFresh && cached?.song && Number(cached.song.likes_count) >= minLikes) {
-                return res.json([cached.song]);
-            }
-        } catch (err) {
-            // Cache miss or parse error: just regenerate below
-            logger.debug('Featured cache miss/invalid, regenerating:', err?.name || err?.message || err);
-        }
-
-        // 2) Generate a new featured song from DB
+        // Pick a random song with listens and at least one positive review signal.
         const rows = await pool.query(
             `
             SELECT
@@ -178,16 +146,22 @@ router.get('/featured', async (req, res) => {
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
             WHERE s.mp3_url IS NOT NULL
-              AND (
-                SELECT COUNT(*)
-                FROM playlist_songs ps
-                         JOIN playlists pl ON ps.playlist_id = pl.id
-                WHERE pl.name = 'Likes' AND ps.song_id = s.id
-              ) >= ?
+              AND COALESCE(s.plays, 0) > 0
+              AND EXISTS (
+                SELECT 1
+                FROM reviews r
+                WHERE r.song_id = s.id
+                  AND (
+                    (r.feedback IS NOT NULL AND (
+                      JSON_SEARCH(r.feedback, 'one', 'Good') IS NOT NULL
+                      OR JSON_SEARCH(r.feedback, 'one', 'Perfect') IS NOT NULL
+                    ))
+                    OR LOWER(COALESCE(r.review, '')) REGEXP '(^|[^a-z])(good|great|excellent|perfect|awesome)([^a-z]|$)'
+                  )
+              )
             ORDER BY RAND()
             LIMIT 1
-        `,
-            [minLikes]
+        `
         );
 
         if (!rows.length) {
@@ -207,26 +181,6 @@ router.get('/featured', async (req, res) => {
             likes_count: Number(rows[0].likes_count) || 0,
         };
 
-        // 3) Write back to Tigris so everyone gets the same one for ~24h
-        const payload = JSON.stringify(
-            {
-                pickedAt: new Date().toISOString(),
-                minLikes,
-                song,
-            },
-            null,
-            2
-        );
-
-        const putCmd = new PutObjectCommand({
-            Bucket: process.env.BUCKET_NAME,
-            Key: FEATURED_S3_KEY,
-            Body: payload,
-            ContentType: 'application/json',
-            CacheControl: 'no-store',
-        });
-
-        await s3Client.send(putCmd);
 
         return res.json([song]);
     } catch (err) {
