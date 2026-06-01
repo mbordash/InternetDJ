@@ -7,6 +7,7 @@ import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import { Helmet } from 'react-helmet-async'; // Added import for Helmet
 import API_URL from '../utils/api';
 import IDJCoinLogo from '../assets/idj-coin.png';
+import { getDefaultAvatar } from '../utils/defaultAvatar';
 
 function Home() {
     const { user } = useContext(AuthContext);
@@ -557,31 +558,15 @@ function Home() {
                                                     } hover:bg-gray-100 transition-colors duration-200`}
                                                 >
                                                     <td className="px-4 py-2 flex items-center space-x-2">
-                                                        {profile.picture_url ? (
-                                                            <img
-                                                                src={profile.picture_url}
-                                                                alt={profile.name}
-                                                                className="w-12 h-12 rounded-md object-cover"
-                                                                onError={(e) => {
-                                                                    console.error(
-                                                                        `Failed to load profile image for user ${profile.profile_id}:`,
-                                                                        profile.picture_url
-                                                                    );
-                                                                    e.target.style.display = 'none';
-                                                                    e.target.nextSibling.style.display = 'block';
-                                                                }}
-                                                                loading="lazy"
-                                                            />
-                                                        ) : (
-                                                            <div
-                                                                className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
-                                                                style={{
-                                                                    display: profile.picture_url ? 'none' : 'flex',
-                                                                }}
-                                                            >
-                                                                ?
-                                                            </div>
-                                                        )}
+                                                        <img
+                                                            src={profile.picture_url || getDefaultAvatar(profile.profile_id || profile.name)}
+                                                            alt={profile.name}
+                                                            className="w-12 h-12 rounded-md object-cover"
+                                                            onError={(e) => {
+                                                                e.currentTarget.src = getDefaultAvatar(profile.profile_id || profile.name);
+                                                            }}
+                                                            loading="lazy"
+                                                        />
                                                         <Link
                                                             to={`/profile/${profile.profile_id}`}
                                                             className="text-black hover:underline"
@@ -615,31 +600,15 @@ function Home() {
                                                     } hover:bg-gray-100 transition-colors duration-200`}
                                                 >
                                                     <td className="px-4 py-2 flex items-center space-x-2">
-                                                        {profile.picture_url ? (
-                                                            <img
-                                                                src={profile.picture_url}
-                                                                alt={profile.name}
-                                                                className="w-12 h-12 rounded-md object-cover"
-                                                                onError={(e) => {
-                                                                    console.error(
-                                                                        `Failed to load profile image for user ${profile.profile_id}:`,
-                                                                        profile.picture_url
-                                                                    );
-                                                                    e.target.style.display = 'none';
-                                                                    e.target.nextSibling.style.display = 'block';
-                                                                }}
-                                                                loading="lazy"
-                                                            />
-                                                        ) : (
-                                                            <div
-                                                                className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
-                                                                style={{
-                                                                    display: profile.picture_url ? 'none' : 'flex',
-                                                                }}
-                                                            >
-                                                                ?
-                                                            </div>
-                                                        )}
+                                                        <img
+                                                            src={profile.picture_url || getDefaultAvatar(profile.profile_id || profile.name)}
+                                                            alt={profile.name}
+                                                            className="w-12 h-12 rounded-md object-cover"
+                                                            onError={(e) => {
+                                                                e.currentTarget.src = getDefaultAvatar(profile.profile_id || profile.name);
+                                                            }}
+                                                            loading="lazy"
+                                                        />
                                                         <Link
                                                             to={`/profile/${profile.profile_id}`}
                                                             className="text-black hover:underline"

@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
+import { getDefaultAvatar } from '../utils/defaultAvatar';
 import { PlusIcon } from '@heroicons/react/24/solid';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMusic, faVolumeUp, faHeadphones, faSlidersH, faFileAudio } from '@fortawesome/free-solid-svg-icons';
@@ -320,23 +321,15 @@ const Projects = () => {
                                 >
                                     <div className="flex items-start">
                                         <div className="flex-shrink-0 mr-4">
-                                            {project.picture_url ? (
-                                                <img
-                                                    src={project.picture_url}
-                                                    alt={`${project.creator}'s profile`}
-                                                    className="w-16 h-16 rounded-full object-cover"
-                                                    loading="lazy"
-                                                    onError={(e) => {
-                                                        console.error('Profile image failed to load:', project.picture_url);
-                                                        e.target.style.display = 'none';
-                                                        e.target.nextSibling.style.display = 'block';
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xl">
-                                                    {project.creator ? project.creator[0].toUpperCase() : '?'}
-                                                </div>
-                                            )}
+                                            <img
+                                                src={project.picture_url || getDefaultAvatar(project.profile_id || project.creator)}
+                                                alt={`${project.creator}'s profile`}
+                                                className="w-16 h-16 rounded-full object-cover"
+                                                loading="lazy"
+                                                onError={(e) => {
+                                                    e.currentTarget.src = getDefaultAvatar(project.profile_id || project.creator);
+                                                }}
+                                            />
                                         </div>
                                         <div className="flex-1">
                                             <Link to={`/public/${project.id}`} className="block">

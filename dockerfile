@@ -21,9 +21,14 @@ RUN cd backend && npm ci
 COPY frontend/ ./frontend/
 COPY backend/ ./backend/
 
-# Set environment variables for frontend build
-#ENV NODE_ENV=production
-# ENV REACT_APP_API_URL=https://internetdj.co/api
+# Build-time args for frontend (REACT_APP_* vars must be available at build time)
+ARG REACT_APP_RECAPTCHA_SITE_KEY
+ARG REACT_APP_API_URL=https://internetdj.co/api
+ARG REACT_APP_SOLANA_RPC_URL
+
+ENV REACT_APP_RECAPTCHA_SITE_KEY=$REACT_APP_RECAPTCHA_SITE_KEY \
+    REACT_APP_API_URL=$REACT_APP_API_URL \
+    REACT_APP_SOLANA_RPC_URL=$REACT_APP_SOLANA_RPC_URL
 
 # Build the frontend
 RUN cd frontend && npm run build

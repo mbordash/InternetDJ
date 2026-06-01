@@ -4,6 +4,7 @@ import axios from 'axios';
 import { SpeakerWaveIcon, PlayIcon, PauseIcon, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
+import { getDefaultAvatar } from '../utils/defaultAvatar';
 
 function Search() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -228,31 +229,15 @@ function Search() {
                                         className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                                     >
                                         <td className="px-4 py-2 flex items-center space-x-2">
-                                            {profile.picture_url ? (
-                                                <img
-                                                    src={profile.picture_url}
-                                                    alt={profile.name}
-                                                    className="w-12 h-12 rounded-md object-cover"
-                                                    onError={(e) => {
-                                                        console.error(
-                                                            `Failed to load profile image for profile ${profile.id}:`,
-                                                            profile.picture_url
-                                                        );
-                                                        e.target.style.display = 'none';
-                                                        e.target.nextSibling.style.display = 'block';
-                                                    }}
-                                                    loading="lazy"
-                                                />
-                                            ) : (
-                                                <div
-                                                    className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
-                                                    style={{
-                                                        display: profile.picture_url ? 'none' : 'flex',
-                                                    }}
-                                                >
-                                                    ?
-                                                </div>
-                                            )}
+                                            <img
+                                                src={profile.picture_url || getDefaultAvatar(profile.id || profile.name)}
+                                                alt={profile.name}
+                                                className="w-12 h-12 rounded-md object-cover"
+                                                onError={(e) => {
+                                                    e.currentTarget.src = getDefaultAvatar(profile.id || profile.name);
+                                                }}
+                                                loading="lazy"
+                                            />
                                             <Link
                                                 to={`/profile/${profile.id}`}
                                                 className="text-black hover:underline"

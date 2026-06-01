@@ -17,6 +17,7 @@ const projectRoutes = require('./routes/projects');
 const playlistsRouter = require('./routes/playlists');
 const sampleLibraryRouter = require('./routes/sampleLibrary');
 const stemsRouter = require('./routes/stems');
+const idjcRouter = require('./routes/idjc');
 const path = require('path');
 const http = require('http');
 const initializeSocket = require('./socket');
@@ -137,6 +138,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/sample-library', sampleLibraryRouter);
 app.use('/api/playlists', playlistsRouter);
 app.use('/api/stems', stemsRouter);
+app.use('/api/idjc', idjcRouter);
 
 // Serve frontend
 const staticPath = path.join(__dirname, '../frontend/build');
