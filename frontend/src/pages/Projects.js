@@ -122,7 +122,7 @@ const Projects = () => {
     };
 
     return (
-        <div className="container mx-auto px-4 py-8 bg-white text-gray-800 pt-20">
+        <div className="container mx-auto px-4 py-8 text-gray-100 pt-20 min-h-screen max-w-7xl">
             <Helmet>
                 <title>Projects - InternetDJ Digital Audio Workstation</title>
                 <meta
@@ -148,16 +148,16 @@ const Projects = () => {
             </Helmet>
 
             {/* Hero Section */}
-            <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md mb-8">
-                <h1 className="text-3xl font-bold mb-4">InternetDJ: Your Browser-Based Music Studio</h1>
-                <p className="text-lg text-gray-600 mb-4">
+            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8">
+                <h1 className="text-3xl font-bold mb-4 text-white">InternetDJ: Your Browser-Based Music Studio</h1>
+                <p className="text-lg text-gray-300 mb-4">
                     Create music anywhere with InternetDJ’s <strong>browser-based Digital Audio Workstation</strong>. Sequence <strong>MIDI notes</strong>, mix <strong>audio samples</strong>, design <strong>custom instruments</strong>, apply <strong>effects</strong>, and <strong>export to MP3</strong>—no downloads needed. We’re in early development and building this with your input. Join our forum to share ideas and make this studio epic!
                 </p>
                 <div className="flex flex-wrap gap-4">
                     {user ? (
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center px-4 py-2 bg-primary-brand-500 text-white font-semibold rounded-md shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                            className="inline-flex items-center px-4 py-2 bg-primary-brand-500 text-white font-semibold rounded-full shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
                             Start a Project
@@ -165,7 +165,7 @@ const Projects = () => {
                     ) : (
                         <Link
                             to="/login"
-                            className="inline-flex items-center px-4 py-2 bg-primary-brand-500 text-white font-semibold rounded-md shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                            className="inline-flex items-center px-4 py-2 bg-primary-brand-500 text-white font-semibold rounded-full shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
                             Log In to Create
@@ -173,7 +173,7 @@ const Projects = () => {
                     )}
                     <Link
                         to="/forum"
-                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="inline-flex items-center px-4 py-2 bg-primary-brand-600 text-white font-semibold rounded-full shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
                     >
                         Join the Forum
                     </Link>
@@ -183,16 +183,16 @@ const Projects = () => {
             {/* Create Project Modal */}
             {showCreateModal && user && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
-                        <h3 className="text-lg font-bold mb-4">Create New Project</h3>
+                    <div className="bg-[#111827] border border-white/10 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 text-gray-100">
+                        <h3 className="text-lg font-bold mb-4 text-white">Create New Project</h3>
                         <form onSubmit={handleCreateProject} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium">Project Title</label>
+                                <label className="block text-sm font-medium text-gray-300">Project Title</label>
                                 <input
                                     type="text"
                                     value={newProjectTitle}
                                     onChange={(e) => setNewProjectTitle(e.target.value)}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                     placeholder="Enter project title"
                                     autoFocus
                                 />
@@ -201,49 +201,49 @@ const Projects = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateModal(false)}
-                                    className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                    className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                                 >
                                     Create
                                 </button>
                             </div>
                         </form>
-                        {error && <p className="text-red-500 mt-2">{error}</p>}
-                        {success && <p className="text-green-500 mt-2">{success}</p>}
+                        {error && <p className="text-red-400 mt-2">{error}</p>}
+                        {success && <p className="text-emerald-400 mt-2">{success}</p>}
                     </div>
                 </div>
             )}
 
-            <div className="flex flex-col md:flex-row gap-8">
+            <div className="flex flex-col md:flex-row gap-8 items-start">
                 <div className="flex-1 max-w-4xl">
-                    <h2 className="text-2xl font-bold mb-4">Your Digital Audio Workstation Projects</h2>
+                    <h2 className="text-2xl font-bold mb-4 text-white">Your Digital Audio Workstation Projects</h2>
                     {user ? (
                         <>
-                            {error && <p className="text-red-500 mb-4">{error}</p>}
-                            {success && <p className="text-green-500 mb-4">{success}</p>}
+                            {error && <p className="text-red-400 mb-4">{error}</p>}
+                            {success && <p className="text-emerald-400 mb-4">{success}</p>}
                             <div className="space-y-4">
                                 {projects.length === 0 ? (
-                                    <p className="text-gray-600">No projects found. Start one using the button above!</p>
+                                    <p className="text-gray-300">No projects found. Start one using the button above!</p>
                                 ) : (
                                     projects.map((project) => (
                                         <div
                                             key={project.id}
-                                            className="flex items-center justify-between p-4 bg-gray-50 rounded-md shadow-sm hover:bg-gray-100"
+                                            className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl shadow-sm hover:bg-white/10 transition-colors"
                                         >
                                             <Link
                                                 to={`/projects/${project.id}`}
                                                 className="flex-1"
                                             >
-                                                <h3 className="text-lg font-semibold">{project.title}</h3>
-                                                <p className="text-sm text-gray-600">
+                                                <h3 className="text-lg font-semibold text-white">{project.title}</h3>
+                                                <p className="text-sm text-gray-300">
                                                     Created: {new Date(project.created_at).toLocaleDateString()}
                                                 </p>
-                                                <p className="text-sm text-gray-600">
+                                                <p className="text-sm text-gray-300">
                                                     Visibility: {project.is_public ? 'Public' : 'Private'}
                                                 </p>
                                             </Link>
@@ -259,7 +259,7 @@ const Projects = () => {
                             </div>
                         </>
                     ) : (
-                        <p className="text-lg text-gray-600">
+                        <p className="text-lg text-gray-300">
                             Please <Link to="/login" className="text-primary-brand hover:underline">log in</Link> to create and manage your projects.
                         </p>
                     )}
@@ -267,15 +267,15 @@ const Projects = () => {
                     {/* Confirmation Modal */}
                     {deleteProjectId && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
-                                <h3 className="text-lg font-bold mb-4">Confirm Delete</h3>
-                                <p className="text-gray-600 mb-6">
+                            <div className="bg-[#111827] border border-white/10 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 text-gray-100">
+                                <h3 className="text-lg font-bold mb-4 text-white">Confirm Delete</h3>
+                                <p className="text-gray-300 mb-6">
                                     Are you sure you want to delete this project? This action cannot be undone.
                                 </p>
                                 <div className="flex justify-end space-x-4">
                                     <button
                                         onClick={closeDeleteConfirm}
-                                        className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                        className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                                     >
                                         Cancel
                                     </button>
@@ -291,14 +291,14 @@ const Projects = () => {
                     )}
                 </div>
 
-                <div className="w-full md:w-1/3">
-                    <h2 className="text-2xl font-bold mb-4">Explore Community Creations</h2>
-                    <p className="text-gray-600 mb-4">
+                <div className="w-full md:w-1/3 spotify-surface border border-white/10 rounded-xl p-6">
+                    <h2 className="text-2xl font-bold mb-4 text-white">Explore Community Creations</h2>
+                    <p className="text-gray-300 mb-4">
                         Check out what others are making with InternetDJ Digital Audio Workstation! Inspired? Share your own projects to join the community.
                     </p>
                     <div className="space-y-4">
                         {publicProjects.length === 0 ? (
-                            <p className="text-gray-600">
+                            <p className="text-gray-300">
                                 No public projects yet.{' '}
                                 {user ? (
                                     <button
@@ -317,7 +317,7 @@ const Projects = () => {
                             publicProjects.map((project) => (
                                 <div
                                     key={project.id}
-                                    className="p-4 bg-gray-50 rounded-md shadow-sm hover:bg-gray-100"
+                                    className="p-4 bg-white/5 border border-white/10 rounded-xl shadow-sm hover:bg-white/10 transition-colors"
                                 >
                                     <div className="flex items-start">
                                         <div className="flex-shrink-0 mr-4">
@@ -333,12 +333,12 @@ const Projects = () => {
                                         </div>
                                         <div className="flex-1">
                                             <Link to={`/public/${project.id}`} className="block">
-                                                <h3 className="text-lg font-semibold hover:underline">{project.title}</h3>
+                                                <h3 className="text-lg font-semibold text-white hover:underline">{project.title}</h3>
                                             </Link>
-                                            <p className="text-sm text-gray-600">
+                                            <p className="text-sm text-gray-300">
                                                 Created: {new Date(project.created_at).toLocaleDateString()}
                                             </p>
-                                            <p className="text-sm text-gray-600 flex items-center">
+                                            <p className="text-sm text-gray-300 flex items-center">
                                                 Creator:{' '}
                                                 {project.creator && project.profile_id ? (
                                                     <Link
@@ -362,53 +362,53 @@ const Projects = () => {
             </div>
 
             {/* Feature Showcase */}
-            <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md mb-8">
-                <h2 className="text-2xl font-bold mb-4">What Can You Create with InternetDJ Digital Audio Workstation?</h2>
-                <p className="text-gray-600 mb-4">
+            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8">
+                <h2 className="text-2xl font-bold mb-4 text-white">What Can You Create with InternetDJ Digital Audio Workstation?</h2>
+                <p className="text-gray-300 mb-4">
                     From beats to melodies, our Digital Audio Workstation empowers your creativity. Here’s what you can do today, with more features on the way!
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faMusic} className="w-8 h-8 text-blue-600" />
+                        <FontAwesomeIcon icon={faMusic} className="w-8 h-8 text-primary-brand-300" />
                         <div>
-                            <h3 className="text-lg font-semibold">MIDI Sequencing</h3>
-                            <p className="text-sm text-gray-600">
+                            <h3 className="text-lg font-semibold text-white">MIDI Sequencing</h3>
+                            <p className="text-sm text-gray-300">
                                 Craft melodies and rhythms with our intuitive MIDI editor, right in your browser.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faVolumeUp} className="w-8 h-8 text-blue-600" />
+                        <FontAwesomeIcon icon={faVolumeUp} className="w-8 h-8 text-primary-brand-300" />
                         <div>
-                            <h3 className="text-lg font-semibold">Audio Samples</h3>
-                            <p className="text-sm text-gray-600">
+                            <h3 className="text-lg font-semibold text-white">Audio Samples</h3>
+                            <p className="text-sm text-gray-300">
                                 Drag and drop from our sample library or upload your own to mix and layer sounds.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faHeadphones} className="w-8 h-8 text-blue-600" />
+                        <FontAwesomeIcon icon={faHeadphones} className="w-8 h-8 text-primary-brand-300" />
                         <div>
-                            <h3 className="text-lg font-semibold">Custom Instruments</h3>
-                            <p className="text-sm text-gray-600">
+                            <h3 className="text-lg font-semibold text-white">Custom Instruments</h3>
+                            <p className="text-sm text-gray-300">
                                 Design unique synths with customizable settings for endless sonic possibilities.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faSlidersH} className="w-8 h-8 text-blue-600" />
+                        <FontAwesomeIcon icon={faSlidersH} className="w-8 h-8 text-primary-brand-300" />
                         <div>
-                            <h3 className="text-lg font-semibold">Effects</h3>
-                            <p className="text-sm text-gray-600">
+                            <h3 className="text-lg font-semibold text-white">Effects</h3>
+                            <p className="text-sm text-gray-300">
                                 Add reverb, delay, and more to polish your tracks. New effects coming soon!
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faFileAudio} className="w-8 h-8 text-blue-600" />
+                        <FontAwesomeIcon icon={faFileAudio} className="w-8 h-8 text-primary-brand-300" />
                         <div>
-                            <h3 className="text-lg font-semibold">MP3 Export</h3>
-                            <p className="text-sm text-gray-600">
+                            <h3 className="text-lg font-semibold text-white">MP3 Export</h3>
+                            <p className="text-sm text-gray-300">
                                 Export your tracks as MP3s to share or upload to InternetDJ’s music platform.
                             </p>
                         </div>

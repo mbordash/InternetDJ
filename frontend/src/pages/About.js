@@ -40,7 +40,7 @@ function About() {
     };
 
     return (
-    <div className="bg-white text-gray-800 pt-16 min-h-screen">
+    <div className="text-gray-100 pt-16 min-h-screen">
             <Helmet>
                 <title>About InternetDJ</title>
                 <meta
@@ -67,7 +67,7 @@ function About() {
             >
                 <div className="container mx-auto px-4">
                     <div
-                        className={`bg-white rounded-lg shadow-lg text-center relative ${isMinimized ? 'p-4' : 'p-8'}`}
+                        className={`bg-zinc-900/85 border border-white/10 rounded-lg shadow-lg text-center relative ${isMinimized ? 'p-4' : 'p-8'}`}
                         style={{ opacity: 0.9 }}
                     >
                         <button

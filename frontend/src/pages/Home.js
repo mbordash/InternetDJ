@@ -172,7 +172,7 @@ function Home() {
         return (
             <div
                 key={song.id}
-                className="bg-gray-50 rounded-md p-3 flex items-start hover:bg-gray-100 transition-colors duration-200 mb-2"
+                className="bg-zinc-900/80 border border-white/10 rounded-xl p-3 flex items-start hover:bg-zinc-800 transition-colors duration-200 mb-2"
             >
                 <div className="relative w-20 h-20 flex-shrink-0 mr-3">
                     {song.image_url ? (
@@ -189,7 +189,7 @@ function Home() {
                         />
                     ) : (
                         <div
-                            className="w-full h-full rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-base"
+                            className="w-full h-full rounded-md bg-zinc-800 flex items-center justify-center text-gray-400 text-base"
                             style={{ display: song.image_url ? 'none' : 'flex' }}
                         >
                             ?
@@ -218,15 +218,15 @@ function Home() {
                 <div className="flex-1 min-w-0">
                     <Link
                         to={`/song/${song.id}`}
-                        className="text-base font-semibold text-black hover:underline line-clamp-2"
+                        className="text-base font-semibold text-white hover:underline line-clamp-2"
                     >
                         {song.title}
                     </Link>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-gray-300">
                         {song.profile_id > 0 ? (
                             <Link
                                 to={`/profile/${song.profile_id}`}
-                                className="text-black hover:underline truncate block"
+                                className="text-gray-100 hover:underline truncate block"
                             >
                                 {song.profile_name || 'Unknown Artist'}
                             </Link>
@@ -254,7 +254,7 @@ function Home() {
         return (
             <div
                 key={song.id}
-                className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center hover:shadow-lg transition-shadow duration-200"
+                className="bg-zinc-900/80 border border-white/10 rounded-xl p-4 flex flex-col items-center hover:bg-zinc-800/90 transition-colors duration-200"
             >
                 <div className={`relative ${imageSize} mb-4`}>
                     {song.image_url ? (
@@ -271,7 +271,7 @@ function Home() {
                         />
                     ) : (
                         <div
-                            className="w-full h-full rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-2xl"
+                            className="w-full h-full rounded-md bg-zinc-800 flex items-center justify-center text-gray-400 text-2xl"
                             style={{ display: song.image_url ? 'none' : 'flex' }}
                         >
                             ?
@@ -300,15 +300,15 @@ function Home() {
                 <div className="text-center">
                     <Link
                         to={`/song/${song.id}`}
-                        className={`${fontSize} font-semibold text-black hover:underline block truncate ${containerWidth}`}
+                        className={`${fontSize} font-semibold text-white hover:underline block truncate ${containerWidth}`}
                     >
                         {song.title}
                     </Link>
-                    <div className="text-sm text-gray-600 mb-2">
+                    <div className="text-sm text-gray-300 mb-2">
                         {song.profile_id > 0 ? (
                             <Link
                                 to={`/profile/${song.profile_id}`}
-                                className="text-black hover:underline"
+                                className="text-gray-100 hover:underline"
                             >
                                 {song.profile_name || 'Unknown Artist'}
                             </Link>
@@ -321,12 +321,12 @@ function Home() {
                     <div className="flex justify-center space-x-4 text-sm">
                         <span className="inline-flex items-center">
                             {Number(song.plays) || 0}
-                            <SpeakerWaveIcon className="w-4 h-4 text-black ml-1" />
+                            <SpeakerWaveIcon className="w-4 h-4 text-gray-200 ml-1" />
                         </span>
                         <span className="inline-flex items-center">
                             {Number(song.likes_count) || 0}
                             <HeartIconSolid
-                                className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                                className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-400' : 'text-gray-500'}`}
                             />
                         </span>
                     </div>
@@ -342,7 +342,7 @@ function Home() {
         return (
             <tr
                 key={song.id}
-                className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors duration-200`}
+                className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'} hover:bg-white/10 transition-colors duration-200`}
             >
                 <td className="px-4 py-2 flex items-center space-x-2">
                     <button
@@ -356,9 +356,9 @@ function Home() {
                         className="focus:outline-none"
                     >
                         {currentSong?.id === song.id && isPlaying ? (
-                            <PauseIcon className="w-8 h-8 text-black hover:text-gray-700" />
+                            <PauseIcon className="w-8 h-8 text-white hover:text-gray-300" />
                         ) : (
-                            <PlayIcon className="w-8 h-8 text-black hover:text-gray-700" />
+                            <PlayIcon className="w-8 h-8 text-white hover:text-gray-300" />
                         )}
                     </button>
                     <div className="flex items-center space-x-2">
@@ -376,21 +376,21 @@ function Home() {
                             />
                         ) : (
                             <div
-                                className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                className="w-12 h-12 rounded-md bg-zinc-800 flex items-center justify-center text-gray-400 text-xs"
                                 style={{ display: song.image_url ? 'none' : 'flex' }}
                             >
                                 ?
                             </div>
                         )}
                         <div>
-                            <Link to={`/song/${song.id}`} className="text-black hover:underline">
+                            <Link to={`/song/${song.id}`} className="text-white hover:underline">
                                 {song.title}
                             </Link>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-gray-300">
                                 {song.profile_id > 0 ? (
                                     <Link
                                         to={`/profile/${song.profile_id}`}
-                                        className="text-black hover:underline"
+                                        className="text-gray-100 hover:underline"
                                     >
                                         {song.profile_name || 'Unknown Artist'}
                                     </Link>
@@ -406,14 +406,14 @@ function Home() {
                 <td className="px-4 py-2">
                     <span className="inline-flex items-center">
                         {Number(song.plays) || 0}
-                        <SpeakerWaveIcon className="w-4 h-4 text-black ml-1" />
+                        <SpeakerWaveIcon className="w-4 h-4 text-gray-200 ml-1" />
                     </span>
                 </td>
                 <td className="px-4 py-2">
                     <span className="inline-flex items-center">
                         {Number(song.likes_count) || 0}
                         <HeartIconSolid
-                            className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                            className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-400' : 'text-gray-500'}`}
                         />
                     </span>
                 </td>
@@ -423,7 +423,7 @@ function Home() {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800">
+            <div className="container mx-auto px-4 py-8 text-center bg-zinc-900/70 text-gray-100 rounded-xl border border-white/10">
                 <p className="text-red-400 text-lg">{error}</p>
             </div>
         );
@@ -469,19 +469,41 @@ function Home() {
                     })}
                 </script>
             </Helmet>
-            <div className="bg-white text-gray-800 pt-16">
+            <div className="text-gray-100 pt-2">
                 <div className="container mx-auto px-4 py-8 min-h-screen">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <div className="md:col-span-2">
+                    <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_360px] gap-8">
+                        <aside className="hidden xl:block xl:sticky xl:top-24 h-fit">
+                            <div className="spotify-surface p-4">
+                                <h2 className="text-sm uppercase tracking-widest text-gray-300 mb-4">Explore</h2>
+                                <div className="space-y-2">
+                                    <Link to="/discover" className="block rounded-lg px-3 py-2 bg-white/10 text-white">Discover</Link>
+                                    <Link to="/new" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">New Releases</Link>
+                                    <Link to="/browse" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Browse Artists</Link>
+                                    <Link to="/projects" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Studio / DAW</Link>
+                                    <Link to="/stems" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">AI Stems</Link>
+                                    <Link to="/forum" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Community Forum</Link>
+                                </div>
+                                <div className="mt-5 border-t border-white/10 pt-4 text-sm text-gray-300">
+                                    {user
+                                        ? 'Your Discover and follow activity improves recommendations over time.'
+                                        : 'Log in to personalize Discover using your likes and listening behavior.'}
+                                </div>
+                                {!user && (
+                                    <Link to="/login" className="inline-block mt-4 spotify-pill px-4 py-2 rounded-full text-sm transition-colors">
+                                        Log In
+                                    </Link>
+                                )}
+                            </div>
+                        </aside>
 
-
+                        <div>
 
                             <section className="mb-12">
                                 <h2 className="flex items-center text-2xl font-bold mb-4 font-semibold tracking-tight gap-2">
                                     New Releases
                                     <Link
                                         to="/new"
-                                        className="inline-block bg-primary-brand-500 text-white px-2 py-1 rounded-md hover:bg-primary-brand-700 transition-colors text-xs"
+                                        className="inline-block spotify-pill px-2 py-1 rounded-full transition-colors text-xs"
                                     >
                                         More
                                     </Link>
@@ -524,9 +546,9 @@ function Home() {
 
                         </div>
 
-                        <div className="md:col-span-1 md:bg-gray-100 p-4 rounded-lg sticky top-0">
+                        <div className="xl:sticky xl:top-24 h-fit">
                             {user && (
-                                <section className="mb-12 bg-white shadow-md rounded-lg p-4">
+                                <section className="mb-12 spotify-surface p-4">
                                     <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">
                                         Songs from Followed Artists
                                     </h2>
@@ -540,7 +562,7 @@ function Home() {
                                 </section>
                             )}
 
-                            <section className="mb-12 bg-white shadow-md rounded-lg p-4">
+                            <section className="mb-12 spotify-surface p-4">
                                 <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">
                                     New Members
                                 </h2>
@@ -554,8 +576,8 @@ function Home() {
                                                 <tr
                                                     key={profile.profile_id}
                                                     className={`${
-                                                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                                    } hover:bg-gray-100 transition-colors duration-200`}
+                                                        index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'
+                                                    } hover:bg-white/10 transition-colors duration-200`}
                                                 >
                                                     <td className="px-4 py-2 flex items-center space-x-2">
                                                         <img
@@ -569,7 +591,7 @@ function Home() {
                                                         />
                                                         <Link
                                                             to={`/profile/${profile.profile_id}`}
-                                                            className="text-black hover:underline"
+                                                            className="text-gray-100 hover:underline"
                                                         >
                                                             {profile.name}
                                                         </Link>
@@ -582,7 +604,7 @@ function Home() {
                                 )}
                             </section>
 
-                            <section className="mb-12 bg-white shadow-md rounded-lg p-4">
+                            <section className="mb-12 spotify-surface p-4">
                                 <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">
                                     Popular Members
                                 </h2>
@@ -596,8 +618,8 @@ function Home() {
                                                 <tr
                                                     key={profile.profile_id}
                                                     className={`${
-                                                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                                    } hover:bg-gray-100 transition-colors duration-200`}
+                                                        index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'
+                                                    } hover:bg-white/10 transition-colors duration-200`}
                                                 >
                                                     <td className="px-4 py-2 flex items-center space-x-2">
                                                         <img
@@ -611,7 +633,7 @@ function Home() {
                                                         />
                                                         <Link
                                                             to={`/profile/${profile.profile_id}`}
-                                                            className="text-black hover:underline"
+                                                            className="text-gray-100 hover:underline"
                                                         >
                                                             {profile.name}
                                                         </Link>
@@ -619,7 +641,7 @@ function Home() {
                                                     <td className="px-4 py-2">
                                                             <span className="inline-flex items-center">
                                                                 {Number(profile.total_plays) || 0}
-                                                                <SpeakerWaveIcon className="w-4 h-4 text-black ml-1" />
+                                                                <SpeakerWaveIcon className="w-4 h-4 text-gray-200 ml-1" />
                                                             </span>
                                                     </td>
                                                 </tr>
@@ -631,14 +653,14 @@ function Home() {
                                 <div className="mt-4">
                                     <Link
                                         to="/browse"
-                                        className="inline-block bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors"
+                                        className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors"
                                     >
                                         Explore More Artists
                                     </Link>
                                 </div>
                             </section>
 
-                            <section className="mb-12 bg-white shadow-md rounded-lg p-4">
+                            <section className="mb-12 spotify-surface p-4">
                                 <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">
                                     Recently Commented Posts
                                 </h2>
@@ -652,13 +674,13 @@ function Home() {
                                                 <tr
                                                     key={post.id}
                                                     className={`${
-                                                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                                    } hover:bg-gray-100 transition-colors duration-200`}
+                                                        index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'
+                                                    } hover:bg-white/10 transition-colors duration-200`}
                                                 >
                                                     <td className="px-4 py-2">
                                                         <Link
                                                             to={`/forum/post/${post.id}`}
-                                                            className="text-black hover:underline"
+                                                            className="text-gray-100 hover:underline"
                                                         >
                                                             {post.title}
                                                         </Link>
@@ -675,14 +697,14 @@ function Home() {
                                 <div className="mt-4">
                                     <Link
                                         to="/forum"
-                                        className="inline-block bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors"
+                                        className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors"
                                     >
                                         Visit Forum
                                     </Link>
                                 </div>
                             </section>
 
-                            <section className="bg-white shadow-md rounded-lg p-4">
+                            <section className="spotify-surface p-4">
                                 <div className="flex items-start space-x-4">
                                     <img
                                         src={IDJCoinLogo}
@@ -695,28 +717,28 @@ function Home() {
                                     />
                                     <div className="flex-1">
                                         <h2 className="text-2xl font-bold mb-2 font-semibold tracking-tight">IDJ Coin</h2>
-                                        <p className="text-gray-600 mb-4">
+                                        <p className="text-gray-300 mb-4">
                                             Powering InternetDJ with decentralized rewards and community growth.
                                         </p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-                                    <div className="bg-gray-50 p-2 rounded-md">
+                                    <div className="bg-white/5 p-2 rounded-md">
                                         <span className="font-semibold">Total Initial Supply:</span> 1B
                                     </div>
-                                    <div className="bg-gray-50 p-2 rounded-md">
+                                    <div className="bg-white/5 p-2 rounded-md">
                                         <span className="font-semibold">Founders Grant:</span> 200M
                                     </div>
-                                    <div className="bg-gray-50 p-2 rounded-md">
+                                    <div className="bg-white/5 p-2 rounded-md">
                                         <span className="font-semibold">Liquidity Pool:</span> 100M
                                     </div>
-                                    <div className="bg-gray-50 p-2 rounded-md">
+                                    <div className="bg-white/5 p-2 rounded-md">
                                         <span className="font-semibold">Locked (1Y):</span> 500M
                                     </div>
                                 </div>
                                 <Link
                                     to="/idj-coin"
-                                    className="inline-block bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors"
+                                    className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors"
                                 >
                                     Learn More
                                 </Link>

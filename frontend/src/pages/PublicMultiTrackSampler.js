@@ -48,7 +48,7 @@ const SampleBlock = ({ sample, zoom, duration, waveformColor }) => {
 
     return (
         <div
-            className="absolute h-12 flex items-center space-x-2 p-1 bg-gray-50 rounded-md shadow-sm"
+            className="absolute h-12 flex items-center space-x-2 p-1 bg-white/5 border border-white/10 rounded-md shadow-sm"
             style={{
                 left: `${sample.start_time * zoom}px`,
                 width: `${Math.max(blockWidth, 100)}px`,
@@ -68,7 +68,7 @@ const Timeline = ({ trackId, samples, playheadPosition, zoom, sampleDurations, w
 
     return (
         <div
-            className="relative h-12 border border-gray-300 bg-gray-50"
+            className="relative h-12 border border-white/10 bg-white/5"
             style={{ width: `${timelineDuration * zoom}px` }}
         >
             {Array.from({ length: numMinorMarkers }, (_, i) => {
@@ -80,7 +80,7 @@ const Timeline = ({ trackId, samples, playheadPosition, zoom, sampleDurations, w
                 return (
                     <div
                         key={`grid-${i}`}
-                        className={`absolute top-0 z-0 border-l ${isMajorMarker ? 'border-gray-400 border-opacity-80 h-full' : 'border-gray-200 border-opacity-50 h-1/2'}`}
+                        className={`absolute top-0 z-0 border-l ${isMajorMarker ? 'border-white/30 h-full' : 'border-white/15 h-1/2'}`}
                         style={{ left: `${pixelPosition}px` }}
                     />
                 );
@@ -618,7 +618,7 @@ const PublicMultiTrackSampler = () => {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-red-500 text-lg">{error}</p>
                 <button
                     onClick={() => {
@@ -651,7 +651,7 @@ const PublicMultiTrackSampler = () => {
                 </button>
                 <Link
                     to="/projects"
-                    className="mt-4 ml-4 inline-block py-2 px-4 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600"
+                    className="mt-4 ml-4 inline-block py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
                 >
                     Back to Projects
                 </Link>
@@ -661,7 +661,7 @@ const PublicMultiTrackSampler = () => {
 
     if (!project) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -673,13 +673,13 @@ const PublicMultiTrackSampler = () => {
     const numMarkers = Math.ceil(timelineDuration / markerInterval);
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-6xl bg-white text-gray-800 pt-20">
+        <div className="container mx-auto px-4 py-8 max-w-6xl text-gray-100 pt-20">
             <h1 className="text-3xl font-bold mb-2">{project.title} (Listen Only)</h1>
-            <p className="text-sm text-gray-600 mb-2">
+            <p className="text-sm text-gray-300 mb-2">
                 Created: {new Date(project.created_at).toLocaleDateString()}
             </p>
             {project.creator && project.user_id && (
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-300 mb-4">
                     Creator:{' '}
                     <Link
                         to={`/profile/${project.user_id}`}

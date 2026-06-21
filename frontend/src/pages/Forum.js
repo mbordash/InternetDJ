@@ -250,7 +250,7 @@ function Forum() {
 
     if (error && posts.length === 0) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100">
                 <p className="text-red-400 text-lg">{error}</p>
             </div>
         );
@@ -308,7 +308,7 @@ function Forum() {
                     })}
                 </script>
             </Helmet>
-            <div className="bg-white text-gray-800 pt-16">
+            <div className="text-gray-100 pt-16">
                 <div className="container mx-auto px-4 py-8">
                     <div className="flex flex-col lg:flex-row lg:space-x-8">
                         {/* Main Content */}
@@ -332,76 +332,76 @@ function Forum() {
 
                             {/* Create/Edit Post Form */}
                             {showForm && (
-                                <section className="mb-12">
-                                    <h2 className="text-2xl font-bold mb-4">{editingPost ? 'Edit Post' : 'Start a Discussion'}</h2>
-                                    <form onSubmit={handleCreateOrUpdatePost} className="space-y-4">
-                                        <div>
-                                            <input
-                                                type="text"
-                                                value={newPost.title}
-                                                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                                                placeholder="Post title"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand"
-                                            />
-                                        </div>
-                                        <div>
-                                            <ReactQuill
-                                                value={newPost.content}
-                                                onChange={(content) => setNewPost({ ...newPost, content })}
-                                                modules={quillModules}
-                                                placeholder="What's on your mind?"
-                                                className="bg-white"
-                                            />
-                                        </div>
-                                        {!editingPost && (
-                                            <div>
-                                                <label htmlFor="image-upload" className="text-gray-700 mr-2">
-                                                    Image
-                                                </label>
-                                                <input
-                                                    id="image-upload"
-                                                    type="file"
-                                                    accept="image/jpeg,image/png,image/gif"
-                                                    onChange={handleImageChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                                />
-                                                {imagePreview && (
-                                                    <div className="mt-2">
-                                                        <img src={imagePreview} alt="Preview" className="max-w-xs h-auto rounded-md" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                        <div className="relative">
-                                            <button
-                                                type="submit"
-                                                disabled={isSubmitting}
-                                                className={`bg-primary-brand-500 text-white px-4 py-2 rounded-md transition-colors ${
-                                                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-brand-700'
-                                                }`}
-                                            >
-                                                {editingPost ? 'Update Post' : 'Create Post'}
-                                            </button>
-                                            {isSubmitting && (
-                                                <div className="absolute top-0 left-0 right-0 h-1 bg-primary-brand-200 rounded-t-md">
-                                                    <div className="h-full bg-primary-brand-500 animate-pulse" style={{ width: '100%' }} />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </form>
-                                </section>
+                                <section className="mb-12 spotify-surface p-4">
+                                    <h2 className="text-2xl font-bold mb-4 text-white">{editingPost ? 'Edit Post' : 'Start a Discussion'}</h2>
+                                     <form onSubmit={handleCreateOrUpdatePost} className="space-y-4">
+                                         <div>
+                                             <input
+                                                 type="text"
+                                                 value={newPost.title}
+                                                 onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+                                                 placeholder="Post title"
+                                                 className="w-full px-3 py-2 border border-white/10 rounded-md bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                                             />
+                                         </div>
+                                         <div>
+                                             <ReactQuill
+                                                 value={newPost.content}
+                                                 onChange={(content) => setNewPost({ ...newPost, content })}
+                                                 modules={quillModules}
+                                                 placeholder="What's on your mind?"
+                                                 className="bg-white/5 text-white"
+                                             />
+                                         </div>
+                                         {!editingPost && (
+                                             <div>
+                                                 <label htmlFor="image-upload" className="text-gray-300 mr-2">
+                                                     Image
+                                                 </label>
+                                                 <input
+                                                     id="image-upload"
+                                                     type="file"
+                                                     accept="image/jpeg,image/png,image/gif"
+                                                     onChange={handleImageChange}
+                                                     className="w-full px-3 py-2 border border-white/10 rounded-md bg-white/5 text-white"
+                                                 />
+                                                 {imagePreview && (
+                                                     <div className="mt-2">
+                                                         <img src={imagePreview} alt="Preview" className="max-w-xs h-auto rounded-md" />
+                                                     </div>
+                                                 )}
+                                             </div>
+                                         )}
+                                         <div className="relative">
+                                             <button
+                                                 type="submit"
+                                                 disabled={isSubmitting}
+                                                 className={`spotify-pill px-4 py-2 rounded-full transition-colors ${
+                                                     isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-brand-700'
+                                                 }`}
+                                             >
+                                                 {editingPost ? 'Update Post' : 'Create Post'}
+                                             </button>
+                                             {isSubmitting && (
+                                                 <div className="absolute top-0 left-0 right-0 h-1 bg-primary-brand-200 rounded-t-md">
+                                                     <div className="h-full bg-primary-brand-500 animate-pulse" style={{ width: '100%' }} />
+                                                 </div>
+                                             )}
+                                         </div>
+                                     </form>
+                                 </section>
                             )}
 
                             {/* Posts List */}
                             <section>
-                                <h2 className="text-2xl font-bold mb-4">Recent Posts</h2>
+                                <h2 className="text-2xl font-bold mb-4 text-white">Recent Posts</h2>
                                 {posts.length === 0 ? (
-                                    <p>No posts available.</p>
+                                    <p className="text-gray-300">No posts available.</p>
                                 ) : (
                                     <div className="overflow-x-auto">
                                         <table className="min-w-full">
                                             <thead>
-                                            <tr className="bg-gray-100">
+                                            <tr className="bg-white/5 text-gray-300">
                                                 <th className="px-4 py-2 text-left">Post</th>
                                                 <th className="px-4 py-2 text-left">Comments</th>
                                                 <th className="px-4 py-2 text-left">Last Reply</th>
@@ -411,7 +411,7 @@ function Forum() {
                                             {posts.map((post, index) => (
                                                 <tr
                                                     key={post.id}
-                                                    className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                                                    className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'}
                                                 >
                                                     <td className="px-4 py-2 flex items-center space-x-2">
                                                         {post.user_picture ? (
@@ -426,54 +426,51 @@ function Forum() {
                                                                 loading="lazy"
                                                             />
                                                         ) : (
-                                                            <div
-                                                                className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
-                                                                style={{ display: post.user_picture ? 'none' : 'flex' }}
-                                                            >
-                                                                ?
-                                                            </div>
-                                                        )}
-                                                        <div className="flex-1">
-                                                            <Link
-                                                                to={`/forum/post/${post.id}`}
-                                                                className="text-black hover:underline"
-                                                            >
-                                                                {post.title}
-                                                            </Link>
-                                                            <div className="text-sm text-gray-600">
-                                                                <Link
-                                                                    to={`/profile/${post.profile_id}`}
-                                                                    className="text-black hover:underline"
-                                                                >
-                                                                    {post.user_name}
-                                                                </Link>
-                                                                {' • '}
-                                                                {formatDate(post.created_at)}
-                                                                {post.edited_at && (
-                                                                    <span> (Edited {formatDate(post.edited_at)})</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        {user && post.user_id === user.id && (
-                                                            <div className="flex space-x-2">
-                                                                {canEditPost(post) && (
-                                                                    <button
-                                                                        onClick={() => handleEditPost(post)}
-                                                                        className="text-blue-600 hover:text-primary-brand-800"
-                                                                        title="Edit post"
-                                                                    >
-                                                                        <PencilIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                )}
-                                                                <button
-                                                                    onClick={() => handleDeletePost(post.id)}
-                                                                    className="text-red-600 hover:text-red-800"
-                                                                    title="Delete post"
-                                                                >
-                                                                    <XMarkIcon className="w-5 h-5" />
-                                                                </button>
-                                                            </div>
-                                                        )}
+                                                            <div className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs" style={{ display: post.user_picture ? 'none' : 'flex' }}>
+                                                             ?
+                                                         </div>
+                                                     )}
+                                                     <div className="flex-1">
+                                                         <Link
+                                                             to={`/forum/post/${post.id}`}
+                                                             className="text-white hover:text-primary-brand-300 hover:underline"
+                                                         >
+                                                             {post.title}
+                                                         </Link>
+                                                         <div className="text-sm text-gray-300">
+                                                             <Link
+                                                                 to={`/profile/${post.profile_id}`}
+                                                                 className="text-gray-100 hover:text-primary-brand-300 hover:underline"
+                                                             >
+                                                                 {post.user_name}
+                                                             </Link>
+                                                             {' • '}
+                                                             {formatDate(post.created_at)}
+                                                             {post.edited_at && (
+                                                                 <span> (Edited {formatDate(post.edited_at)})</span>
+                                                             )}
+                                                         </div>
+                                                     </div>
+                                                     {user && post.user_id === user.id && (
+                                                         <div className="flex space-x-2">
+                                                             {canEditPost(post) && (
+                                                                 <button
+                                                                     onClick={() => handleEditPost(post)}
+                                                                     className="text-primary-brand-300 hover:text-primary-brand-200"
+                                                                     title="Edit post"
+                                                                 >
+                                                                     <PencilIcon className="w-5 h-5" />
+                                                                 </button>
+                                                             )}
+                                                             <button
+                                                                 onClick={() => handleDeletePost(post.id)}
+                                                                 className="text-red-400 hover:text-red-300"
+                                                                 title="Delete post"
+                                                             >
+                                                                 <XMarkIcon className="w-5 h-5" />
+                                                             </button>
+                                                         </div>
+                                                     )}
                                                     </td>
                                                     <td className="px-4 py-2">{post.comment_count} comments</td>
                                                     <td className="px-4 py-2">
@@ -482,7 +479,7 @@ function Forum() {
                                                                 {formatDate(post.last_commented_at)} by{' '}
                                                                 <Link
                                                                     to={`/profile/${post.last_commenter_id}`}
-                                                                    className="text-black hover:underline"
+                                                                    className="text-gray-100 hover:text-primary-brand-300 hover:underline"
                                                                 >
                                                                     {post.last_commenter_name || 'Unknown'}
                                                                 </Link>
@@ -500,7 +497,7 @@ function Forum() {
                                 {posts.length < total && (
                                     <button
                                         onClick={() => setPage(page + 1)}
-                                        className="mt-4 bg-primary-brand-500 hover:bg-primary-brand-700 text-white px-4 py-2 rounded-md transition-colors"
+                                        className="mt-4 spotify-pill px-4 py-2 rounded-full transition-colors"
                                     >
                                         Load More
                                     </button>
@@ -510,24 +507,24 @@ function Forum() {
 
                         {/* Right Column: Popular Posts */}
                         <div className="lg:w-1/4 mt-8 lg:mt-0">
-                            <section className="bg-gray-50 p-4 rounded-md shadow">
-                                <h2 className="text-xl font-bold mb-4">Popular Posts</h2>
+                            <section className="spotify-surface p-4">
+                                <h2 className="text-xl font-bold mb-4 text-white">Popular Posts</h2>
                                 {popularPosts.length === 0 ? (
-                                    <p>No popular posts yet.</p>
+                                    <p className="text-gray-300">No popular posts yet.</p>
                                 ) : (
                                     <ul className="space-y-3">
                                         {popularPosts.map((post) => (
-                                            <li key={post.id} className="border-b border-gray-200 pb-2">
+                                            <li key={post.id} className="border-b border-white/10 pb-2">
                                                 <Link
                                                     to={`/forum/post/${post.id}`}
-                                                    className="text-black hover:underline text-sm"
+                                                    className="text-white hover:text-primary-brand-300 hover:underline text-sm"
                                                 >
                                                     {post.title}
                                                 </Link>
-                                                <div className="text-xs text-gray-600">
+                                                <div className="text-xs text-gray-300">
                                                     <Link
                                                         to={`/profile/${post.profile_id}`}
-                                                        className="text-black hover:underline"
+                                                        className="text-gray-100 hover:text-primary-brand-300 hover:underline"
                                                     >
                                                         {post.user_name}
                                                     </Link>

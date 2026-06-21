@@ -1,6 +1,6 @@
 import React from 'react';
-import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AudioPlayerProvider } from './context/AudioPlayerContext';
 import { HelmetProvider, Helmet } from 'react-helmet-async'; // Add Helmet import
@@ -32,13 +32,10 @@ import Playlists from './pages/Playlists';
 import About from './pages/About';
 import Discover from './pages/Discover';
 import StemGenerator from './pages/AIStems';
-import axios from 'axios';
-import API_URL from './utils/api';
 import './styles.css';
 import './styles/backgrounds.css';
 import './styles/audioPlayer.css';
 import './styles/react-select.css';
-import { Link } from 'react-router-dom';
 
 // Updated Layout component
 function Layout() {
@@ -50,9 +47,9 @@ function Layout() {
     }, [location.pathname]);
 
     return (
-        <div className="flex flex-col min-h-screen bg-white text-black">
+        <div className="app-shell flex flex-col min-h-screen text-gray-100">
             <Navbar />
-            <main className="flex-grow bg-transparent">
+            <main className="flex-grow bg-transparent pt-24 pb-28">
                 <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/about" element={<About />} />
@@ -95,7 +92,7 @@ class ErrorBoundary extends React.Component {
     render() {
         if (this.state.error) {
             return (
-                <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800">
+                <div className="container mx-auto px-4 py-8 text-center bg-slate-900/70 text-gray-100 rounded-xl">
                     <p className="text-red-400 text-lg">Error: {this.state.error}</p>
                 </div>
             );

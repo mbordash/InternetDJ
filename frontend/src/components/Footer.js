@@ -33,15 +33,6 @@ const Footer = () => {
         prevSong,
     } = useContext(AudioPlayerContext);
 
-    // Add this to debug
-    useEffect(() => {
-        console.log('currentSong:', currentSong);
-        console.log('isPlaying:', isPlaying);
-    }, [currentSong, isPlaying]);
-
-    console.log('Footer class:', currentSong ? 'fixed' : 'static');
-
-
     const { user } = useContext(AuthContext);
     const isAuthenticated = !!user;
     const [state, setState] = useState({
@@ -196,10 +187,10 @@ const Footer = () => {
     };
 
     return (
-        <footer className={`bg-gray-900 text-white py-6 w-full ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}>
+        <footer className={`bg-[#0f0f0f] text-white py-5 w-full border-t border-white/10 ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}>
             <div className="container mx-auto px-4">
                 {currentSong ? (
-                    <div className="flex items-center justify-between space-x-4 w-full mb-4">
+                    <div className="spotify-surface px-4 py-3 flex items-center justify-between space-x-4 w-full">
                         {/* Album Cover */}
                         <Link to={`/song/${currentSong.id}`} className="flex-shrink-0">
                             {currentSong.image_url ? (
@@ -242,13 +233,13 @@ const Footer = () => {
                                 </Link>
                             </div>
                             {/* Time Display */}
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-gray-300">
                                 {formatTime(state.currentTime)} / {formatTime(state.duration)}
                             </p>
                             {/* Progress Bar */}
                             <div
                                 ref={progressBarRef}
-                                className="w-full h-1 bg-gray-600 rounded-full mt-2 cursor-pointer relative"
+                                className="w-full h-1 bg-white/10 rounded-full mt-2 cursor-pointer relative"
                                 onClick={handleSeek}
                                 role="slider"
                                 aria-label="Seek audio"
@@ -257,7 +248,7 @@ const Footer = () => {
                                 aria-valuenow={state.progress}
                             >
                                 <div
-                                    className="h-full bg-primary-brand rounded-full absolute top-0 left-0"
+                                    className="h-full bg-primary-brand-400 rounded-full absolute top-0 left-0"
                                     style={{ width: `${state.progress}%`, transition: 'width 0.05s linear' }}
                                 />
                             </div>
@@ -266,7 +257,7 @@ const Footer = () => {
                             {/* Previous Song Button */}
                             <button
                                 onClick={prevSong}
-                                className={`p-2 rounded-full hover:bg-gray-700 focus:outline-none ${currentQueueIndex <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`p-2 rounded-full hover:bg-white/10 focus:outline-none ${currentQueueIndex <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 disabled={currentQueueIndex <= 0}
                                 aria-label="Previous song"
                             >
@@ -275,7 +266,7 @@ const Footer = () => {
                             {/* Play/Pause Button */}
                             <button
                                 onClick={togglePlayPause}
-                                className="p-2 rounded-full hover:bg-gray-700 focus:outline-none"
+                                className="p-2 rounded-full bg-primary-brand-500 text-white hover:bg-primary-brand-400 focus:outline-none"
                                 aria-label={isPlaying ? 'Pause' : 'Play'}
                             >
                                 {isPlaying ? (
@@ -287,7 +278,7 @@ const Footer = () => {
                             {/* Next Song Button */}
                             <button
                                 onClick={nextSong}
-                                className={`p-2 rounded-full hover:bg-gray-700 focus:outline-none ${currentQueueIndex >= songQueue.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`p-2 rounded-full hover:bg-white/10 focus:outline-none ${currentQueueIndex >= songQueue.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 disabled={currentQueueIndex >= songQueue.length - 1}
                                 aria-label="Next song"
                             >
@@ -296,7 +287,7 @@ const Footer = () => {
                             {/* Stop Button */}
                             <button
                                 onClick={stopPlayback}
-                                className="p-2 rounded-full hover:bg-gray-700 focus:outline-none"
+                                className="p-2 rounded-full hover:bg-white/10 focus:outline-none"
                                 aria-label="Stop playback"
                             >
                                 <XMarkIcon className="w-6 h-6" />
@@ -305,7 +296,7 @@ const Footer = () => {
                             {isAuthenticated && (
                                 <button
                                     onClick={handleLikeSong}
-                                    className={`p-2 rounded-full hover:bg-gray-700 focus:outline-none ${isLiked ? 'text-red-500' : 'text-white'}`}
+                                    className={`p-2 rounded-full hover:bg-white/10 focus:outline-none ${isLiked ? 'text-primary-brand-400' : 'text-white'}`}
                                     aria-label={isLiked ? 'Unlike song' : 'Like song'}
                                 >
                                     {isLiked ? (
@@ -318,7 +309,7 @@ const Footer = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex justify-between items-center w-full text-gray-300">
                         <p>© {new Date().getFullYear()} InternetDJ.co - All rights reserved.</p>
                         <div className="flex items-center space-x-4">
                             <span>Serving Independent Music since 1997</span>

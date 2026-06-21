@@ -621,7 +621,7 @@ router.get('/most-played', async (req, res) => {
                              ) AS likes_count
                      FROM songs s
                               LEFT JOIN profiles p ON s.profile_id = p.id
-                     WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 180 DAY)
+                     WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 270 DAY)
                  ) ranked
             WHERE rn = 1
             ORDER BY ranked.plays DESC

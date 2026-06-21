@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async';
-import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -438,7 +438,7 @@ const Song = () => {
                 className={`profile-background ${typeof backgroundStyle === 'string' ? backgroundStyle : ''}`}
                 style={typeof backgroundStyle === 'object' ? backgroundStyle : {}}
             ></div>
-            <div className="relative container mx-auto px-4 py-8 max-w-7xl text-gray-800 z-0 pt-20">
+            <div className="relative container mx-auto px-4 py-8 max-w-7xl text-gray-100 z-0 pt-20">
                 {error ? (
                     <div className="text-center">
                         <p className="text-red-400 text-lg">{error}</p>
@@ -450,7 +450,7 @@ const Song = () => {
                 ) : (
                     <>
                         {/* Top Section */}
-                        <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md mb-8">
+                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl mb-8 backdrop-blur-sm">
                             <div className="flex flex-col lg:flex-row lg:items-start gap-8">
                                 {/* Left Column: Image, Buttons, Plays, Likes */}
                                 <div className="flex flex-col gap-4 flex-shrink-0">
@@ -461,10 +461,10 @@ const Song = () => {
                                                 src={song.image_url}
                                                 alt={song.title}
                                                 className="w-80 h-80 rounded-md object-cover"
-                                                onError={(e) => console.error('Song image failed to load:', song.image_url)}
+                                                onError={() => console.error('Song image failed to load:', song.image_url)}
                                             />
                                         ) : (
-                                            <div className="w-80 h-80 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
+                                            <div className="w-80 h-80 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-sm">
                                                 No Image
                                             </div>
                                         )}
@@ -510,17 +510,17 @@ const Song = () => {
                                     </div>
                                     {/* Plays, Likes */}
                                     <div className="space-y-2">
-                                        <div className="text-sm text-gray-600 flex space-x-4">
+                                        <div className="text-sm text-gray-300 flex space-x-4">
                                             <span className="inline-flex items-center">
                                             {Number(song?.plays) || 0}
-                                              <SpeakerWaveIcon
-                                                  className={`w-4 h-4 ml-1 ${Number(song?.plays) > 0 ? 'text-black' : 'text-gray-300'}`}
-                                              />
+                                               <SpeakerWaveIcon
+                                                   className={`w-4 h-4 ml-1 ${Number(song?.plays) > 0 ? 'text-gray-100' : 'text-gray-300'}`}
+                                               />
                                             </span>
                                             <span className="inline-flex items-center">
                                                 {Number(song?.likes_count) || 0}
                                                 <HeartIconSolid
-                                                    className={`w-4 h-4 ml-1 ${Number(song?.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                                                    className={`w-4 h-4 ml-1 ${Number(song?.likes_count) > 0 ? 'text-red-500' : 'text-gray-300'}`}
                                                 />
                                             </span>
                                         </div>
@@ -533,7 +533,7 @@ const Song = () => {
                                         <h1 className="text-3xl font-bold break-words">{song?.title || 'Loading...'}</h1>
                                         <Link
                                             to={song?.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                            className={song?.profile_id ? 'text-black hover:underline text-lg' : 'text-gray-500 cursor-not-allowed text-lg'}
+                                             className={song?.profile_id ? 'text-primary-brand-300 hover:underline text-lg' : 'text-gray-500 cursor-not-allowed text-lg'}
                                         >
                                             {song?.profile_name || 'Profile'}
                                         </Link>
@@ -550,7 +550,7 @@ const Song = () => {
                                     </div>
                                     {/* Description and Genre Tags */}
                                     <div className="space-y-2">
-                                        {song?.description && <p className="text-gray-600">{song.description}</p>}
+                                        {song?.description && <p className="text-gray-300">{song.description}</p>}
                                         {song?.genre ? (
                                             <div className="flex flex-wrap gap-2">
                                                 {song.genre
@@ -560,14 +560,14 @@ const Song = () => {
                                                         <Link
                                                             key={index}
                                                             to={`/tag/${genre.trim()}`}
-                                                            className="inline-block bg-primary-brand-100 text-primary-brand-800 text-sm font-semibold px-2 py-1 rounded-md hover:bg-primary-brand-200 transition-colors"
+                                                            className="inline-block bg-primary-brand-500/15 text-primary-brand-200 border border-primary-brand-500/30 text-sm font-semibold px-2 py-1 rounded-md hover:bg-primary-brand-500/25 transition-colors"
                                                         >
                                                             {genre.trim()}
                                                         </Link>
                                                     ))}
                                             </div>
                                         ) : (
-                                            <p className="text-sm text-gray-600">No genres specified</p>
+                                            <p className="text-sm text-gray-300">No genres specified</p>
                                         )}
                                     </div>
                                 </div>
@@ -579,17 +579,17 @@ const Song = () => {
                             {/* Left Column: Review Form and Reviews */}
                             <div className="lg:col-span-2 space-y-6">
                                 {isAuthenticated && (
-                                    <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md">
+                                    <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
                                         <h2 className="text-2xl font-bold mb-4">Submit a Review</h2>
                                         <form onSubmit={handleReviewSubmit} className="space-y-6">
                                             <div>
-                                                <label className="block text-sm font-medium">Review</label>
+                                                <label className="block text-sm font-medium text-gray-300">Review</label>
                                                 <textarea
                                                     name="review"
                                                     value={reviewForm.review}
                                                     onChange={handleReviewInputChange}
                                                     rows="4"
-                                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                                 />
                                             </div>
                                             <div className="flex space-x-4">
@@ -612,16 +612,16 @@ const Song = () => {
                                     </div>
                                 )}
 
-                                <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md">
+                                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
                                     <h2 className="text-2xl font-bold mb-4">Reviews</h2>
                                     {reviews.length === 0 ? (
-                                        <p>No reviews yet.</p>
+                                        <p className="text-gray-300">No reviews yet.</p>
                                     ) : (
                                         <div className="space-y-4">
                                             {reviews.map((review) => (
                                                 <div
                                                     key={review.id}
-                                                    className="p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200"
+                                                    className="p-4 bg-white/5 rounded-lg shadow-sm border border-white/10"
                                                 >
                                                     <div className="flex items-start space-x-4">
                                                         <Link
@@ -641,12 +641,12 @@ const Song = () => {
                                                             <div className="flex items-center justify-between">
                                                                 <Link
                                                                     to={review.profile_id ? `/profile/${review.profile_id}` : '#'}
-                                                                    className={review.profile_id ? 'text-black hover:underline text-sm font-semibold' : 'text-gray-500 cursor-not-allowed text-sm font-semibold'}
+                                                                    className={review.profile_id ? 'text-gray-100 hover:text-primary-brand-300 hover:underline text-sm font-semibold' : 'text-gray-500 cursor-not-allowed text-sm font-semibold'}
                                                                 >
                                                                     {review.user_name}
                                                                 </Link>
                                                                 <div className="flex items-center space-x-4">
-                                                                    <p className="text-sm text-gray-500">
+                                                                    <p className="text-sm text-gray-400">
                                                                         {new Date(review.created_at).toLocaleDateString()}
                                                                     </p>
                                                                     {user && review.profile_id === user.profile_id && (
@@ -660,7 +660,7 @@ const Song = () => {
                                                                 </div>
                                                             </div>
                                                             {review.review && (
-                                                                <p className="mt-2 text-sm text-gray-600">{review.review}</p>
+                                                                <p className="mt-2 text-sm text-gray-300">{review.review}</p>
                                                             )}
                                                             {review.feedback && Object.keys(review.feedback).length > 0 && (
                                                                 <div className="mt-2">
@@ -684,16 +684,16 @@ const Song = () => {
 
                             {/* Right Column: Other Songs */}
                             <div className="lg:col-span-1">
-                                <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md sticky top-20">
+                                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl sticky top-20 backdrop-blur-sm">
                                     <h2 className="text-2xl font-bold mb-4">More by {song?.profile_name || 'Artist'}</h2>
                                     {otherSongs.length === 0 ? (
-                                        <p className="text-sm text-gray-600">No other songs by this artist.</p>
+                                        <p className="text-sm text-gray-300">No other songs by this artist.</p>
                                     ) : (
                                         <div className="space-y-4">
                                             {otherSongs.map((otherSong) => (
                                                 <div
                                                     key={otherSong.id}
-                                                    className="flex items-start space-x-4 p-2 bg-gray-50 rounded-md shadow-sm cursor-pointer hover:bg-gray-100"
+                                                    className="flex items-start space-x-4 p-2 bg-white/5 rounded-md shadow-sm border border-white/10 cursor-pointer hover:bg-white/10"
                                                     onClick={() => handleSongNavigation(otherSong.id)}
                                                 >
                                                     {otherSong.image_url ? (
@@ -701,31 +701,31 @@ const Song = () => {
                                                             src={otherSong.image_url}
                                                             alt={otherSong.title}
                                                             className="w-16 h-16 rounded-md object-cover"
-                                                            onError={(e) => console.error('Song image failed to load:', otherSong.image_url)}
+                                                            onError={() => console.error('Song image failed to load:', otherSong.image_url)}
                                                         />
                                                     ) : (
-                                                        <div className="w-16 h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
+                                                        <div className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs">
                                                             No Image
                                                         </div>
                                                     )}
                                                     <div className="flex-1">
-                            <span className="text-sm font-semibold text-black hover:underline">
+                            <span className="text-sm font-semibold text-gray-100 hover:text-primary-brand-300 hover:underline">
                               {otherSong.title}
                             </span>
-                                                        <div className="text-xs text-gray-600 flex items-center gap-x-2">
+                                                        <div className="text-xs text-gray-300 flex items-center gap-x-2">
                                                             {otherSong.genre && <span>{otherSong.genre}</span>}
                                                             {otherSong.genre && <span>|</span>}
                                                             <span className="inline-flex items-center">
                                 {Number(otherSong.plays) || 0}
                                                                 <SpeakerWaveIcon
-                                                                    className={`w-3 h-3 ml-1 ${Number(otherSong.plays) > 0 ? 'text-black' : 'text-gray-500'}`}
+                                                                    className={`w-3 h-3 ml-1 ${Number(otherSong.plays) > 0 ? 'text-gray-100' : 'text-gray-500'}`}
                                                                 />
                               </span>
                                                             <span>|</span>
                                                             <span className="inline-flex items-center">
                                 {Number(otherSong.likes_count) || 0}
                                                                 <HeartIconSolid
-                                                                    className={`w-3 h-3 ml-1 ${Number(otherSong.likes_count) > 0 ? 'text-red-600' : 'text-gray-500'}`}
+                                                                    className={`w-3 h-3 ml-1 ${Number(otherSong.likes_count) > 0 ? 'text-red-500' : 'text-gray-500'}`}
                                                                 />
                               </span>
                                                         </div>
@@ -741,12 +741,12 @@ const Song = () => {
                         {/* Feedback Input Modal */}
                         {showFeedbackModal && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
                                     <h2 className="text-xl font-bold mb-4">Detailed Feedback</h2>
                                     <div className="space-y-4">
                                         {feedbackCriteria.map(criterion => (
                                             <div key={criterion} className="flex items-center space-x-4">
-                                                <label className="w-1/3 text-sm font-medium">{criterion}</label>
+                                                <label className="w-1/3 text-sm font-medium text-gray-300">{criterion}</label>
                                                 <div className="w-2/3">
                                                     <input
                                                         type="range"
@@ -755,9 +755,9 @@ const Song = () => {
                                                         step="1"
                                                         value={['Needs Work', 'Good', 'Perfect'].indexOf(reviewForm.feedback[criterion])}
                                                         onChange={(e) => handleFeedbackChange(criterion, ['Needs Work', 'Good', 'Perfect'][e.target.value])}
-                                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
                                                     />
-                                                    <div className="flex justify-between text-xs mt-1">
+                                                    <div className="flex justify-between text-xs mt-1 text-gray-400">
                                                         <span>Needs Work</span>
                                                         <span>Good</span>
                                                         <span>Perfect</span>
@@ -769,7 +769,7 @@ const Song = () => {
                                     <div className="flex justify-end mt-6 space-x-4">
                                         <button
                                             onClick={() => setShowFeedbackModal(false)}
-                                            className="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400"
+                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
                                         >
                                             Cancel
                                         </button>
@@ -787,17 +787,17 @@ const Song = () => {
                         {/* Feedback Results Modal */}
                         {showFeedbackResultsModal && selectedFeedback && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
                                     <h2 className="text-xl font-bold mb-4">Detailed Feedback Results</h2>
                                     <div className="space-y-4">
                                         {feedbackCriteria.map(criterion => (
                                             <div key={criterion} className="flex items-center space-x-4">
-                                                <span className="w-1/3 text-sm font-medium">{criterion}</span>
+                                                <span className="w-1/3 text-sm font-medium text-gray-300">{criterion}</span>
                                                 <div className="w-2/3">
-                                                    <div className="text-sm text-gray-600 mb-1">
+                                                    <div className="text-sm text-gray-400 mb-1">
                                                         {selectedFeedback[criterion] || 'Not rated'}
                                                     </div>
-                                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                                    <div className="w-full bg-white/10 rounded-full h-2.5">
                                                         <div
                                                             className={`h-2.5 rounded-full ${getBarStyle(selectedFeedback[criterion]).color}`}
                                                             style={{ width: getBarStyle(selectedFeedback[criterion]).width }}
@@ -810,7 +810,7 @@ const Song = () => {
                                     <div className="flex justify-end mt-6">
                                         <button
                                             onClick={() => setShowFeedbackResultsModal(false)}
-                                            className="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400"
+                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
                                         >
                                             Close
                                         </button>
@@ -829,7 +829,7 @@ const Song = () => {
 
                         {showPlaylistModal && isAuthenticated && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-md w-full text-gray-100">
                                     <h2 className="text-xl font-bold mb-4">Add to Playlist</h2>
                                     {playlistError && <p className="text-red-400 text-sm mb-4">{playlistError}</p>}
                                     <div className="mb-4">
@@ -840,7 +840,7 @@ const Song = () => {
                                                 value={newPlaylistName}
                                                 onChange={(e) => setNewPlaylistName(e.target.value)}
                                                 placeholder="Playlist name"
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                                className="flex-1 px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                             />
                                             <button
                                                 type="submit"
@@ -853,7 +853,7 @@ const Song = () => {
                                     <div>
                                         <h3 className="text-lg font-semibold mb-2">Favorite Playlists</h3>
                                         {playlists.length === 0 ? (
-                                            <p className="text-sm text-gray-600">No playlists found. Create one above.</p>
+                                            <p className="text-sm text-gray-300">No playlists found. Create one above.</p>
                                         ) : (
                                             <ul className="space-y-2">
                                                 {playlists.map((playlist) => (
@@ -861,7 +861,7 @@ const Song = () => {
                                                         <span>{playlist.name} ({playlist.song_count} songs)</span>
                                                         <button
                                                             onClick={() => handleAddToPlaylist(playlist.id)}
-                                                            className="px-3 py-1 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                                                            className="px-3 py-1 bg-white/10 text-white rounded-md hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary-brand"
                                                         >
                                                             Add
                                                         </button>
@@ -873,7 +873,7 @@ const Song = () => {
                                     <div className="flex justify-end mt-6">
                                         <button
                                             onClick={() => setShowPlaylistModal(false)}
-                                            className="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary-brand"
                                         >
                                             Cancel
                                         </button>
@@ -884,9 +884,9 @@ const Song = () => {
 
                         {showReviewDeleteConfirm && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-md w-full text-gray-100">
                                     <h2 className="text-xl font-bold mb-4">Confirm Delete Review</h2>
-                                    <p className="mb-6 text-gray-600">
+                                    <p className="mb-6 text-gray-300">
                                         Are you sure you want to delete this review? This action cannot be undone.
                                     </p>
                                     <div className="flex justify-end space-x-4">
@@ -895,7 +895,7 @@ const Song = () => {
                                                 setShowReviewDeleteConfirm(false);
                                                 setReviewToDelete(null);
                                             }}
-                                            className="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                                         >
                                             Cancel
                                         </button>

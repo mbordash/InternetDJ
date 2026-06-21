@@ -54,7 +54,7 @@ const InviteAccept = () => {
     }, [user, token, navigate, location.pathname]);
 
     return (
-        <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+        <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
             {loading && <p>Processing invitation...</p>}
             {error && <p className="text-red-500">{error}</p>}
             {success && <p className="text-green-500">Invitation accepted! Redirecting to your collaborations...</p>}

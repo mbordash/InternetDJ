@@ -20,7 +20,7 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
             style={{ width: `${gridWidth}px`, height: `${gridHeight}px` }}
         >
             <div
-                className="absolute top-0 left-0 w-full h-full bg-[#f9f9f9] border border-gray-300"
+                className="absolute top-0 left-0 w-full h-full bg-[#0b0f1a] border border-white/10"
                 style={{ width: `${gridWidth}px`, height: `${gridHeight}px` }}
             >
                 {/* Sharp/Flat Note Backgrounds */}
@@ -28,8 +28,8 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
                     <div
                         key={note}
                         className={`absolute w-full h-[15px] ${
-                            note.includes('#') ? 'bg-[#e5e7eb]' : 'bg-[#f9f9f9]'
-                        } border-t border-[#ccc]`}
+                            note.includes('#') ? 'bg-[#121826]' : 'bg-[#0b0f1a]'
+                        } border-t border-white/10`}
                         style={{ top: `${index * rowHeight}px` }}
                     />
                 ))}
@@ -41,7 +41,7 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
                     return (
                         <div
                             key={`time-grid-${i}`}
-                            className="absolute top-0 bottom-0 border-l border-[#ccc] z-0"
+                            className="absolute top-0 bottom-0 border-l border-white/15 z-0"
                             style={{ left: `${pixelPosition}px` }}
                         />
                     );

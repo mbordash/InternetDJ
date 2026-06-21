@@ -454,104 +454,104 @@ const ProfilePage = () => {
     if (error === 'Profile not found') {
         if (isOwner) {
             return (
-                <div className="container mx-auto px-4 py-8 max-w-2xl bg-white text-gray-800 pt-20">
+                <div className="container mx-auto px-4 py-8 max-w-2xl text-gray-100 pt-20">
                     <h1 className="text-3xl font-bold mb-4">Your Profile</h1>
                     <p className="mb-6">Your profile has not been created yet. Create it below:</p>
-                    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-md">
+                    <form onSubmit={handleSubmit} className="space-y-6 bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
                         <div>
-                            <label className="block text-sm font-medium">Name</label>
+                            <label className="block text-sm font-medium text-gray-300">Name</label>
                             <input
                                 type="text"
                                 name="name"
                                 value={formData.name}
                                 onChange={handleInputChange}
                                 required
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Genre</label>
+                            <label className="block text-sm font-medium text-gray-300">Genre</label>
                             <input
                                 type="text"
                                 name="genre"
                                 value={formData.genre}
                                 onChange={handleInputChange}
                                 required
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Description</label>
+                            <label className="block text-sm font-medium text-gray-300">Description</label>
                             <textarea
                                 name="description"
                                 value={formData.description}
                                 onChange={handleInputChange}
                                 rows="4"
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Donation Link (e.g., PayPal, Patreon)</label>
+                            <label className="block text-sm font-medium text-gray-300">Donation Link (e.g., PayPal, Patreon)</label>
                             <input
                                 type="url"
                                 name="donation_link"
                                 value={formData.donation_link}
                                 onChange={handleInputChange}
                                 placeholder="https://www.paypal.me/username"
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Solana Address (Optional)</label>
+                            <label className="block text-sm font-medium text-gray-300">Solana Address (Optional)</label>
                             <input
                                 type="text"
                                 name="solana_address"
                                 value={formData.solana_address}
                                 onChange={handleInputChange}
                                 placeholder="Enter your Solana wallet address"
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                             />
-                            <p className="mt-1 text-sm text-gray-500">
+                            <p className="mt-1 text-sm text-gray-400">
                                 Your Solana address is used to receive IDJ Coin grants and donations for your contributions to InternetDJ.{' '}
                                 <a
                                     href="https://phantom.app/"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
+                                    className="text-primary-brand-300 hover:underline"
                                 >
                                     Get one with Phantom
                                 </a>
                             </p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Profile Picture</label>
+                            <label className="block text-sm font-medium text-gray-300">Profile Picture</label>
                             <input
                                 type="file"
                                 name="picture"
                                 onChange={handleFileChange}
                                 accept="image/*"
-                                className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Background</label>
+                            <label className="block text-sm font-medium text-gray-300">Background</label>
                             <button
                                 type="button"
                                 onClick={() => setIsBackgroundModalOpen(true)}
-                                className="mt-1 w-full py-2 px-4 bg-gray-100 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                className="mt-1 w-full py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand border border-white/10"
                             >
                                 Choose Background
                             </button>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium">Upload Custom Background</label>
+                            <label className="block text-sm font-medium text-gray-300">Upload Custom Background</label>
                             <input
                                 type="file"
                                 name="backgroundImage"
                                 onChange={handleFileChange}
                                 accept="image/*"
                                 ref={backgroundImageInputRef}
-                                className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
                             />
                         </div>
                         <button
@@ -565,7 +565,7 @@ const ProfilePage = () => {
             );
         } else {
             return (
-                <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+                <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                     <p className="text-lg">This user has not created a profile yet.</p>
                 </div>
             );
@@ -574,7 +574,7 @@ const ProfilePage = () => {
 
     if (error && !isOwner) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-red-500 text-lg">{error}</p>
             </div>
         );
@@ -582,7 +582,7 @@ const ProfilePage = () => {
 
     if (!profile) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -624,8 +624,8 @@ const ProfilePage = () => {
                 className={`profile-background ${typeof backgroundStyle === 'string' ? backgroundStyle : ''}`}
                 style={typeof backgroundStyle === 'object' ? backgroundStyle : {}}
             ></div>
-            <div className="relative container mx-auto px-4 py-8 max-w-4xl text-gray-800 z-0 pt-20">
-                <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md mb-8">
+            <div className="relative container mx-auto px-4 py-8 max-w-4xl text-gray-100 z-0 pt-20">
+                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl mb-8 backdrop-blur-sm">
                     <div className="flex items-center space-x-6">
                         <img
                             src={profile.picture_url || getDefaultAvatar(profile.id || profile.user_id || profile.name)}
@@ -639,12 +639,12 @@ const ProfilePage = () => {
                             <h1 className="text-3xl font-bold">{profile.name}</h1>
                             <p className="text-lg">Genre: {profile.genre}</p>
                             <p className="text-lg">Followers: {followerCount}</p>
-                            <Link to="/idj-coin" className="text-lg text-blue-600 hover:underline">
+                            <Link to="/idj-coin" className="text-lg text-primary-brand-300 hover:underline">
                                 IDJC Earned: {profile.total_idjc_earned || 0}
                             </Link>
                             {profile.description && (
                                 <div
-                                    className="mt-2 text-gray-600"
+                                    className="mt-2 text-gray-300"
                                     dangerouslySetInnerHTML={{ __html: processDescription(profile.description) }}
                                 />
                             )}
@@ -705,99 +705,99 @@ const ProfilePage = () => {
                     {isOwner && isEditing && (
                         <form onSubmit={handleSubmit} className="mt-6 space-y-6">
                             <div>
-                                <label className="block text-sm font-medium">Name</label>
+                                <label className="block text-sm font-medium text-gray-300">Name</label>
                                 <input
                                     type="text"
                                     name="name"
                                     value={formData.name}
                                     onChange={handleInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Genre</label>
+                                <label className="block text-sm font-medium text-gray-300">Genre</label>
                                 <input
                                     type="text"
                                     name="genre"
                                     value={formData.genre}
                                     onChange={handleInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Description</label>
+                                <label className="block text-sm font-medium text-gray-300">Description</label>
                                 <textarea
                                     name="description"
                                     value={formData.description}
                                     onChange={handleInputChange}
                                     rows="4"
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Donation Link (e.g., PayPal, Patreon)</label>
+                                <label className="block text-sm font-medium text-gray-300">Donation Link (e.g., PayPal, Patreon)</label>
                                 <input
                                     type="url"
                                     name="donation_link"
                                     value={formData.donation_link}
                                     onChange={handleInputChange}
                                     placeholder="https://www.paypal.me/username"
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Solana Address (Optional)</label>
+                                <label className="block text-sm font-medium text-gray-300">Solana Address (Optional)</label>
                                 <input
                                     type="text"
                                     name="solana_address"
                                     value={formData.solana_address}
                                     onChange={handleInputChange}
                                     placeholder="Enter your Solana wallet address"
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 />
-                                <p className="mt-1 text-sm text-gray-500">
+                                <p className="mt-1 text-sm text-gray-400">
                                     Your Solana address is used to receive IDJ Coin grants and donations for your contributions to InternetDJ.{' '}
                                     <a
                                         href="https://phantom.app/"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-blue-600 hover:underline"
+                                        className="text-primary-brand-300 hover:underline"
                                     >
                                         Get one with Phantom
                                     </a>
                                 </p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Profile Picture</label>
+                                <label className="block text-sm font-medium text-gray-300">Profile Picture</label>
                                 <input
                                     type="file"
                                     name="picture"
                                     onChange={handleFileChange}
                                     accept="image/*"
-                                    className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Background</label>
+                                <label className="block text-sm font-medium text-gray-300">Background</label>
                                 <button
                                     type="button"
                                     onClick={() => setIsBackgroundModalOpen(true)}
-                                    className="mt-1 w-full py-2 px-4 bg-gray-100 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                    className="mt-1 w-full py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand border border-white/10"
                                 >
                                     Choose Background
                                 </button>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Upload Custom Background</label>
+                                <label className="block text-sm font-medium text-gray-300">Upload Custom Background</label>
                                 <input
                                     type="file"
                                     name="backgroundImage"
                                     onChange={handleFileChange}
                                     accept="image/*"
                                     ref={backgroundImageInputRef}
-                                    className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
                                 />
                             </div>
                             <div>
@@ -828,17 +828,14 @@ const ProfilePage = () => {
                     )}
                 </div>
 
-                <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-md">
+                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
                     <h2 className="text-2xl font-bold mb-4">Songs</h2>
                     {songs.length === 0 ? (
                         <p>No songs found for this profile.</p>
                     ) : (
                         <div className="space-y-6">
                             {songs.map((song) => (
-                                <div
-                                    key={song.id}
-                                    className="flex items-start space-x-4 p-4 bg-gray-50 rounded-md shadow-sm"
-                                >
+                                <div key={song.id} className="flex items-start space-x-4 p-4 bg-white/5 rounded-md shadow-sm border border-white/10 hover:bg-white/10 transition-colors">
                                     <div className="relative w-32 h-32 flex-shrink-0">
                                         {song.image_url ? (
                                             <Link to={`/song/${song.id}`}>
@@ -850,7 +847,7 @@ const ProfilePage = () => {
                                                 />
                                             </Link>
                                         ) : (
-                                            <div className="w-32 h-32 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
+                                            <div className="w-32 h-32 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-sm">
                                                 No Image
                                             </div>
                                         )}
@@ -877,29 +874,29 @@ const ProfilePage = () => {
                                     <div className="flex-1">
                                         <Link
                                             to={`/song/${song.id}`}
-                                            className="text-lg font-semibold text-black hover:underline"
+                                            className="text-lg font-semibold text-gray-100 hover:text-primary-brand-300 hover:underline"
                                         >
                                             {song.title}
                                         </Link>
-                                        <div className="text-sm text-gray-600 flex items-center gap-x-2">
+                                        <div className="text-sm text-gray-300 flex items-center gap-x-2">
                                             {song.genre && <span>{song.genre}</span>}
                                             {song.genre && <span> | </span>}
                                             <span className="inline-flex items-center">
                                                 {Number(song.plays) || 0}
                                                 <SpeakerWaveIcon
-                                                    className={`w-4 h-4 ml-1 ${Number(song.plays) > 0 ? 'text-black' : 'text-gray-500'}`}
+                                                    className={`w-4 h-4 ml-1 ${Number(song.plays) > 0 ? 'text-gray-100' : 'text-gray-500'}`}
                                                 />
                                             </span>
                                             <span> | </span>
                                             <span className="inline-flex items-center">
                                                 {Number(song.likes_count) || 0}
                                                 <HeartIconSolid
-                                                    className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-500'}`}
+                                                    className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-red-500' : 'text-gray-500'}`}
                                                 />
                                             </span>
                                         </div>
                                         {song.description && (
-                                            <p className="text-sm text-gray-600 mt-1">{song.description}</p>
+                                            <p className="text-sm text-gray-300 mt-1">{song.description}</p>
                                         )}
                                     </div>
                                 </div>
@@ -911,14 +908,14 @@ const ProfilePage = () => {
 
             {isBackgroundModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
+                    <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 text-gray-100">
                         <h3 className="text-xl font-bold mb-4">Choose a Background</h3>
                         <div className="grid grid-cols-3 gap-4 mb-4">
                             {backgroundOptions.map((option) => (
                                 <div
                                     key={option.id}
                                     className={`w-16 h-16 rounded-md cursor-pointer border-2 ${
-                                        formData.background === option.id ? 'border-blue-600' : 'border-gray-300'
+                                        formData.background === option.id ? 'border-primary-brand-400' : 'border-white/10'
                                     } hover:border-primary-brand transition-colors`}
                                     style={{ background: `var(--${option.class})` }}
                                     onClick={() => handleBackgroundSelect(option.id)}
@@ -931,7 +928,7 @@ const ProfilePage = () => {
                         <button
                             type="button"
                             onClick={() => setIsBackgroundModalOpen(false)}
-                            className="w-full py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                            className="w-full py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                         >
                             Close
                         </button>
@@ -941,22 +938,22 @@ const ProfilePage = () => {
 
             {isSendCoinModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+                    <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-md w-full mx-4 text-gray-100">
                         <h3 className="text-xl font-bold mb-4">Send IDJ Coin to {profile.name}</h3>
                         {sendError && (
-                            <p className="text-red-500 text-sm mb-4" dangerouslySetInnerHTML={{ __html: sendError }}></p>
+                            <p className="text-red-400 text-sm mb-4" dangerouslySetInnerHTML={{ __html: sendError }}></p>
                         )}
                         {sendSuccess && (
-                            <p className="text-green-500 text-sm mb-4">{sendSuccess}</p>
+                            <p className="text-green-400 text-sm mb-4">{sendSuccess}</p>
                         )}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium">Amount (IDJ Coin)</label>
+                            <label className="block text-sm font-medium text-gray-300">Amount (IDJ Coin)</label>
                             <input
                                 type="number"
                                 value={sendAmount}
                                 onChange={handleSendAmountChange}
                                 placeholder="Enter amount"
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 min="0"
                                 step="0.000000001"
                             />
@@ -975,7 +972,7 @@ const ProfilePage = () => {
                                     setSendError(null);
                                     setSendSuccess(null);
                                 }}
-                                className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                             >
                                 Cancel
                             </button>

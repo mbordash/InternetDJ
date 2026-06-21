@@ -210,13 +210,13 @@ const PianoRoll = ({
                 ref={canvasRef}
                 width={gridWidth}
                 height={currentHeight}
-                className={`border border-gray-300 ${isMinimized ? 'cursor-default' : 'cursor-pointer'}`}
+                className={`border border-white/10 ${isMinimized ? 'cursor-default' : 'cursor-pointer'}`}
                 style={{
                     position: 'absolute',
                     left: 0,
                     top: 0,
                     imageRendering: 'pixelated',
-                    background: '#f9f9f9',
+                    background: '#0b0f1a',
                     zIndex: 20,
                     pointerEvents: isMinimized ? 'none' : 'auto',
                 }}
