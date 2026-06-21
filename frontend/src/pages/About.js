@@ -40,7 +40,7 @@ function About() {
     };
 
     return (
-    <div className="text-gray-100 pt-16 min-h-screen">
+    <div className="text-gray-100 pt-2 min-h-screen">
             <Helmet>
                 <title>About InternetDJ</title>
                 <meta

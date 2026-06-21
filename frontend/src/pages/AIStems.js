@@ -109,7 +109,7 @@ function AIStems() {
 
     if (error) {
         return (
-            <div className="text-gray-100 pt-16 min-h-screen flex items-center justify-center">
+            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
                 <div className="container mx-auto px-4 py-8 text-center">
                     <p className="text-red-400 text-lg">{error}</p>
                     {!user ? (
@@ -135,7 +135,7 @@ function AIStems() {
     }
 
     return (
-        <div className="text-gray-100 pt-16 min-h-screen">
+        <div className="text-gray-100 pt-2 min-h-screen">
             <Helmet>
                 <title>AI Music Stem Generator - InternetDJ</title>
                 <meta

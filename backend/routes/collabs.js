@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const Mailgun = require('mailgun.js');
 const FormData = require('form-data');
 const { buildPublicFileUrl, extractObjectKey } = require('../utils/storage');
+const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 
 // Initialize Mailgun
 const mailgun = new Mailgun(FormData);
@@ -272,6 +273,77 @@ router.get('/', authenticate, ensureProfile, async (req, res) => {
     }
 });
 
+// Public collaborations feed
+router.get('/public', async (req, res) => {
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(requestedLimit, 1), 100)
+        : 50;
+
+    try {
+        const rows = await pool.query(
+            `
+                SELECT
+                    c.id,
+                    c.profile_id,
+                    c.title,
+                    c.description,
+                    c.allow_uploads,
+                    c.created_at,
+                    c.updated_at,
+                    p.user_id AS owner_user_id,
+                    p.name AS owner_name,
+                    p.picture_url AS owner_picture_url,
+                    COUNT(ct.id) AS track_count,
+                    MAX(ct.created_at) AS last_track_at
+                FROM collaborations c
+                LEFT JOIN profiles p ON c.profile_id = p.id
+                LEFT JOIN collaboration_tracks ct ON ct.collaboration_id = c.id
+                WHERE c.is_public = 1
+                GROUP BY
+                    c.id,
+                    c.profile_id,
+                    c.title,
+                    c.description,
+                    c.allow_uploads,
+                    c.created_at,
+                    c.updated_at,
+                    p.user_id,
+                    p.name,
+                    p.picture_url
+                ORDER BY COALESCE(MAX(ct.created_at), c.updated_at, c.created_at) DESC
+                LIMIT ?
+            `,
+            [limit]
+        );
+
+        const collaborations = (rows || []).map((row) => ({
+            id: Number(row.id),
+            profile_id: Number(row.profile_id),
+            title: row.title || 'Untitled Collaboration',
+            description: row.description || '',
+            allow_uploads: !!row.allow_uploads,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            owner_user_id: row.owner_user_id ? Number(row.owner_user_id) : null,
+            owner_name: row.owner_name || 'Unknown',
+            owner_picture_url: row.owner_picture_url || null,
+            track_count: Number(row.track_count) || 0,
+            last_track_at: row.last_track_at || null,
+        }));
+
+        res.json({ collaborations });
+    } catch (err) {
+        console.error('GET /collabs/public error:', {
+            message: err.message,
+            stack: err.stack,
+            code: err.code,
+            sqlMessage: err.sqlMessage,
+        });
+        res.status(500).json({ error: 'Failed to fetch public collaborations' });
+    }
+});
+
 // Get collaboration details
 router.get('/:collaborationId', authenticate, ensureProfile, async (req, res) => {
     const { collaborationId } = req.params;
@@ -349,7 +421,10 @@ router.post('/:collaborationId/tracks', authenticate, ensureProfile, async (req,
             return res.status(400).json({ error: 'Invalid audio format (must be MP3 or WebM)' });
         }
 
-        const collaboration = await pool.query('SELECT * FROM collaborations WHERE id = ?', [collaborationId]);
+        const collaboration = await pool.query(
+            'SELECT c.*, p.user_id AS owner_user_id FROM collaborations c JOIN profiles p ON p.id = c.profile_id WHERE c.id = ?',
+            [collaborationId]
+        );
         if (!collaboration || collaboration.length === 0) return res.status(404).json({ error: 'Collaboration not found' });
         const collab = collaboration[0];
         const collaborationOwnerId = Number(collab.profile_id);
@@ -378,6 +453,21 @@ router.post('/:collaborationId/tracks', authenticate, ensureProfile, async (req,
             'INSERT INTO collaboration_tracks (collaboration_id, profile_id, title, mp3_url, is_master) VALUES (?, ?, ?, ?, ?)',
             [collaborationId, profileId, title, audioUrl, is_master === 'true']
         );
+
+        await createNotification({
+            recipientUserId: Number(collab.owner_user_id),
+            actorUserId: req.user.id,
+            type: NOTIFICATION_TYPES.COLLAB_TRACK_ADDED,
+            message: 'Someone added a new track to your collaboration.',
+            entityType: 'collaboration',
+            entityId: Number(collaborationId),
+            metadata: {
+                owner_profile_id: Number(collab.profile_id),
+                collaboration_title: collab.title,
+                track_id: Number(result.insertId),
+                track_title: title || null,
+            },
+        });
 
         res.status(201).json({
             track: {

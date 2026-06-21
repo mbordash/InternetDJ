@@ -5,6 +5,7 @@ const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require('../config/tigris');
 const authenticate = require('../middleware/authenticate');
 const { buildPublicFileUrl } = require('../utils/storage');
+const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 const router = express.Router();
 
 // Get recommended songs
@@ -466,11 +467,12 @@ router.post('/:userId/follow', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    const profiles = await pool.query('SELECT id FROM profiles WHERE id = ?', [userId]);
+    const profiles = await pool.query('SELECT id, user_id, name FROM profiles WHERE id = ?', [userId]);
     if (!profiles || profiles.length === 0) {
       return res.status(404).json({ error: 'Profile not found' });
     }
     const profileId = profiles[0].id;
+    const profileOwnerUserId = Number(profiles[0].user_id);
 
     if (parseInt(userId) === followerId) {
       return res.status(400).json({ error: 'Cannot follow your own profile' });
@@ -489,6 +491,18 @@ router.post('/:userId/follow', authenticate, async (req, res) => {
         'INSERT INTO follows (follower_id, followed_profile_id) VALUES (?, ?)',
         [followerId, profileId]
     );
+
+    await createNotification({
+      recipientUserId: profileOwnerUserId,
+      actorUserId: followerId,
+      type: NOTIFICATION_TYPES.PROFILE_FOLLOWED,
+      message: 'Someone started following your profile.',
+      entityType: 'profile',
+      entityId: Number(profileId),
+      metadata: {
+        profile_name: profiles[0].name || null,
+      },
+    });
 
     res.status(200).json({ message: 'Successfully followed profile' });
   } catch (err) {

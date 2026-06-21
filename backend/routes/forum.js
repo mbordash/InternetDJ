@@ -3,6 +3,7 @@ const pool = require('../config/database');
 const authenticate = require('../middleware/authenticate');
 const { uploadToS3, deleteFromS3 } = require('../utils/s3');
 const sanitizeHtml = require('sanitize-html');
+const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 const router = express.Router();
 
 // Get list of posts with pagination
@@ -371,7 +372,7 @@ router.post('/posts/:postId/comments', authenticate, async (req, res) => {
     }
 
     try {
-        const [post] = await pool.query('SELECT id FROM forum_posts WHERE id = ?', [postId]);
+        const [post] = await pool.query('SELECT id, user_id, title FROM forum_posts WHERE id = ?', [postId]);
         if (!post) {
             return res.status(404).json({ error: 'Post not found' });
         }
@@ -428,6 +429,20 @@ router.post('/posts/:postId/comments', authenticate, async (req, res) => {
             user_name: newComment.user_name || 'Unknown',
             user_picture: newComment.user_picture || null,
         };
+
+        await createNotification({
+            recipientUserId: Number(post.user_id),
+            actorUserId: userId,
+            type: NOTIFICATION_TYPES.FORUM_POST_REPLIED,
+            message: 'Someone replied to your forum post.',
+            entityType: 'forum_post',
+            entityId: postId,
+            metadata: {
+                comment_id: Number(newComment.id),
+                post_title: post.title,
+                parent_comment_id: parent_comment_id ? Number(parent_comment_id) : null,
+            },
+        });
 
         res.status(201).json({ comment: sanitizedComment });
     } catch (err) {

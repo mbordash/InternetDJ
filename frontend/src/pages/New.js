@@ -69,14 +69,14 @@ function New() {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-16">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-400 text-lg">{error}</p>
             </div>
         );
     }
 
     return (
-        <div className="text-gray-100 pt-16">
+        <div className="text-gray-100 pt-2">
             <Helmet>
                 <title>InternetDJ New Music This Month</title>
                 <meta

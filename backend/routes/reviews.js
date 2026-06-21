@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../config/database');
 const authenticate = require('../middleware/authenticate');
 const logger = require('../utils/logger');
+const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 const router = express.Router();
 
 router.post('/', authenticate, async (req, res) => {
@@ -13,7 +14,7 @@ router.post('/', authenticate, async (req, res) => {
 
     // Verify song exists and get its owner
     const songsResult = await pool.query(
-        'SELECT s.id, s.profile_id FROM songs s WHERE s.id = ?',
+        'SELECT s.id, s.profile_id, s.title, p.user_id AS owner_user_id FROM songs s JOIN profiles p ON p.id = s.profile_id WHERE s.id = ?',
         [song_id]
     );
     const songs = Array.isArray(songsResult) ? songsResult : songsResult[0] || [];
@@ -61,6 +62,20 @@ router.post('/', authenticate, async (req, res) => {
     };
 
     logger.info('Created review:', newReview);
+
+    await createNotification({
+      recipientUserId: songs[0].owner_user_id,
+      actorUserId: req.user.id,
+      type: NOTIFICATION_TYPES.SONG_REVIEWED,
+      message: 'Someone posted a review on your uploaded song.',
+      entityType: 'song',
+      entityId: Number(song_id),
+      metadata: {
+        review_id: Number(result.insertId),
+        song_title: songs[0].title,
+      },
+    });
+
     res.status(200).json({ review: newReview });
   } catch (err) {
     logger.error('Error in POST /reviews:', err);

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/database');
 const logger = require('../utils/logger');
 const authenticate = require('../middleware/authenticate');
+const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 
 // Helper function to convert BigInt to string for JSON serialization
 const serializeBigInt = (obj) => {
@@ -134,7 +135,7 @@ router.post('/:playlistId/songs', authenticate, async (req, res) => {
 
         logger.debug('[DEBUG] Verifying playlist ownership for playlistId:', parsedPlaylistId);
         const playlists = await pool.query(
-            'SELECT p.id FROM playlists p JOIN profiles pr ON p.profile_id = pr.id WHERE p.id = ? AND pr.user_id = ?',
+            'SELECT p.id, p.name FROM playlists p JOIN profiles pr ON p.profile_id = pr.id WHERE p.id = ? AND pr.user_id = ?',
             [parsedPlaylistId, userId]
         );
         logger.debug('[DEBUG] Playlist ownership query result:', serializeBigInt(playlists));
@@ -170,6 +171,36 @@ router.post('/:playlistId/songs', authenticate, async (req, res) => {
             'INSERT INTO playlist_songs (playlist_id, song_id) VALUES (?, ?)',
             [parsedPlaylistId, parsedSongId]
         );
+
+        const isLikesPlaylist = (playlists[0].name || '').toLowerCase() === 'likes';
+        if (isLikesPlaylist) {
+            const songOwners = await pool.query(
+                `
+                    SELECT s.title, p.id AS owner_profile_id, p.user_id AS owner_user_id
+                    FROM songs s
+                    JOIN profiles p ON p.id = s.profile_id
+                    WHERE s.id = ?
+                    LIMIT 1
+                `,
+                [parsedSongId]
+            );
+
+            if (songOwners.length > 0) {
+                const owner = songOwners[0];
+                await createNotification({
+                    recipientUserId: owner.owner_user_id,
+                    actorUserId: userId,
+                    type: NOTIFICATION_TYPES.SONG_LIKED,
+                    message: 'Someone liked your uploaded song.',
+                    entityType: 'song',
+                    entityId: parsedSongId,
+                    metadata: {
+                        song_title: owner.title,
+                        owner_profile_id: Number(owner.owner_profile_id),
+                    },
+                });
+            }
+        }
 
         res.status(200).json({ success: true });
     } catch (err) {

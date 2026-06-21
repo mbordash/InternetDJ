@@ -483,6 +483,7 @@ router.get('/me', authenticate, async (req, res) => {
                     u.email,
                     u.name,
                     u.is_admin,
+                    u.email_notifications_enabled,
                     p.id AS profile_id,
                     p.picture_url AS picture
                 FROM users u
@@ -503,6 +504,7 @@ router.get('/me', authenticate, async (req, res) => {
             email: row.email,
             name: row.name || 'Unknown',
             is_admin: row.is_admin === 1,
+            email_notifications_enabled: row.email_notifications_enabled !== 0,
             profile_id: row.profile_id ? Number(row.profile_id) : null,
             picture: row.picture || null,
         };

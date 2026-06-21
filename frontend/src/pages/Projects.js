@@ -122,7 +122,7 @@ const Projects = () => {
     };
 
     return (
-        <div className="container mx-auto px-4 py-8 text-gray-100 pt-20 min-h-screen max-w-7xl">
+        <div className="container mx-auto px-4 py-8 text-gray-100 pt-2 min-h-screen max-w-7xl">
             <Helmet>
                 <title>Projects - InternetDJ Digital Audio Workstation</title>
                 <meta

@@ -1819,7 +1819,7 @@ const MultiTrackSampler = () => {
 
     if (!user) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-lg">Please log in to edit projects.</p>
             </div>
         );
@@ -1827,7 +1827,7 @@ const MultiTrackSampler = () => {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-500 text-lg">{error}</p>
                 <Link to="/projects" className="mt-4 inline-block py-2 px-4 bg-primary-brand text-white font-semibold rounded-md hover:bg-primary-brand-500">
                     Back to Projects
@@ -1838,7 +1838,7 @@ const MultiTrackSampler = () => {
 
     if (!project) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -1851,7 +1851,7 @@ const MultiTrackSampler = () => {
 
     return (
         <DndProvider backend={HTML5Backend}>
-            <div className="w-full min-h-screen text-gray-100 pt-20 px-4">
+            <div className="w-full min-h-screen text-gray-100 pt-2 px-4">
                 <div className="mb-6">
                     <input
                         type="text"

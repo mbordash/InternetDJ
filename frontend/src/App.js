@@ -32,6 +32,8 @@ import Playlists from './pages/Playlists';
 import About from './pages/About';
 import Discover from './pages/Discover';
 import StemGenerator from './pages/AIStems';
+import Collabs from './pages/Collabs';
+import Settings from './pages/Settings';
 import './styles.css';
 import './styles/backgrounds.css';
 import './styles/audioPlayer.css';
@@ -59,7 +61,9 @@ function Layout() {
                     <Route path="/tag/:tag" element={<TagSongs />} />
                     <Route path="/search" element={<Search />} />
                     <Route path="/forum" element={<Forum />} />
+                    <Route path="/collabs" element={<Collabs />} />
                     <Route path="/forum/post/:postId" element={<Post />} />
+                    <Route path="/settings" element={<Settings />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />

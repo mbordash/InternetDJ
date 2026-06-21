@@ -618,7 +618,7 @@ const PublicMultiTrackSampler = () => {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-500 text-lg">{error}</p>
                 <button
                     onClick={() => {
@@ -661,7 +661,7 @@ const PublicMultiTrackSampler = () => {
 
     if (!project) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -673,7 +673,7 @@ const PublicMultiTrackSampler = () => {
     const numMarkers = Math.ceil(timelineDuration / markerInterval);
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-6xl text-gray-100 pt-20">
+        <div className="container mx-auto px-4 py-8 max-w-6xl text-gray-100 pt-2">
             <h1 className="text-3xl font-bold mb-2">{project.title} (Listen Only)</h1>
             <p className="text-sm text-gray-300 mb-2">
                 Created: {new Date(project.created_at).toLocaleDateString()}

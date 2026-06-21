@@ -454,7 +454,7 @@ const ProfilePage = () => {
     if (error === 'Profile not found') {
         if (isOwner) {
             return (
-                <div className="container mx-auto px-4 py-8 max-w-2xl text-gray-100 pt-20">
+                <div className="container mx-auto px-4 py-8 max-w-2xl text-gray-100 pt-2">
                     <h1 className="text-3xl font-bold mb-4">Your Profile</h1>
                     <p className="mb-6">Your profile has not been created yet. Create it below:</p>
                     <form onSubmit={handleSubmit} className="space-y-6 bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
@@ -565,7 +565,7 @@ const ProfilePage = () => {
             );
         } else {
             return (
-                <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+                <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                     <p className="text-lg">This user has not created a profile yet.</p>
                 </div>
             );
@@ -574,7 +574,7 @@ const ProfilePage = () => {
 
     if (error && !isOwner) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-500 text-lg">{error}</p>
             </div>
         );
@@ -582,7 +582,7 @@ const ProfilePage = () => {
 
     if (!profile) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -624,7 +624,7 @@ const ProfilePage = () => {
                 className={`profile-background ${typeof backgroundStyle === 'string' ? backgroundStyle : ''}`}
                 style={typeof backgroundStyle === 'object' ? backgroundStyle : {}}
             ></div>
-            <div className="relative container mx-auto px-4 py-8 max-w-4xl text-gray-100 z-0 pt-20">
+            <div className="relative container mx-auto px-4 py-8 max-w-4xl text-gray-100 z-0 pt-2">
                 <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl mb-8 backdrop-blur-sm">
                     <div className="flex items-center space-x-6">
                         <img

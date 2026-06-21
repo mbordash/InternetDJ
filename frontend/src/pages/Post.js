@@ -380,7 +380,7 @@ function Post() {
     };
 
     return (
-        <div className="text-gray-100 pt-16">
+        <div className="text-gray-100 pt-2">
             <Helmet>
                 <title>InternetDJ Discussion Forum</title>
                 <meta
