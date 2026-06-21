@@ -9,6 +9,7 @@ const NOTIFICATION_TYPES = {
     FORUM_POST_REPLIED: 'forum_post_replied',
     PROFILE_FOLLOWED: 'profile_followed',
     COLLAB_TRACK_ADDED: 'collab_track_added',
+    ARTIST_SONG_UPLOADED: 'artist_song_uploaded',
 };
 
 const FRONTEND_URL =
@@ -55,7 +56,7 @@ const sendEmailNotification = async ({ recipientUserId, actorUserId, type, messa
     }
 
     const [recipient] = await pool.query(
-        'SELECT id, email, name, email_notifications_enabled FROM users WHERE id = ? LIMIT 1',
+        'SELECT id, email, name, email_profile_activity_enabled, email_artist_activity_enabled FROM users WHERE id = ? LIMIT 1',
         [recipientUserId]
     );
 
@@ -63,7 +64,21 @@ const sendEmailNotification = async ({ recipientUserId, actorUserId, type, messa
         return;
     }
 
-    if (recipient.email_notifications_enabled === 0 || recipient.email_notifications_enabled === false) {
+    const isProfileActivityNotification = [
+        NOTIFICATION_TYPES.SONG_LIKED,
+        NOTIFICATION_TYPES.SONG_REVIEWED,
+        NOTIFICATION_TYPES.FORUM_POST_REPLIED,
+        NOTIFICATION_TYPES.PROFILE_FOLLOWED,
+        NOTIFICATION_TYPES.COLLAB_TRACK_ADDED,
+    ].includes(type);
+
+    const isArtistActivityNotification = type === NOTIFICATION_TYPES.ARTIST_SONG_UPLOADED;
+
+    if (isProfileActivityNotification && (recipient.email_profile_activity_enabled === 0 || !recipient.email_profile_activity_enabled)) {
+        return;
+    }
+
+    if (isArtistActivityNotification && (recipient.email_artist_activity_enabled === 0 || !recipient.email_artist_activity_enabled)) {
         return;
     }
 
