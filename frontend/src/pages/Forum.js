@@ -308,7 +308,7 @@ function Forum() {
                     })}
                 </script>
             </Helmet>
-            <div className="text-gray-100 pt-16">
+            <div className="text-gray-100 pt-2">
                 <div className="container mx-auto px-4 py-8">
                     <div className="flex flex-col lg:flex-row lg:space-x-8">
                         {/* Main Content */}

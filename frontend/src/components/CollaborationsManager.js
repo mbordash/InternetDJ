@@ -1015,7 +1015,7 @@ const CollaborationsManager = () => {
 
     if (authLoading || loading) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p>Loading...</p>
             </div>
         );
@@ -1023,14 +1023,14 @@ const CollaborationsManager = () => {
 
     if (!user || error === 'You are not authorized to manage collaborations.') {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-500">{error || 'Unauthorized'}</p>
             </div>
         );
     }
 
     return (
-            <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-20 min-h-screen">
+            <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-2 min-h-screen">
             <h1 className="text-3xl font-bold mb-6 text-white">Collaborations Manager</h1>
             {error && <p className="text-red-400 mb-4">{error}</p>}
 

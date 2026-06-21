@@ -229,6 +229,7 @@ ALTER TABLE users ADD COLUMN is_email_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN verification_token VARCHAR(255) DEFAULT NULL;
 ALTER TABLE users ADD COLUMN reset_password_token VARCHAR(255) DEFAULT NULL;
 ALTER TABLE users ADD COLUMN reset_password_expires DATETIME DEFAULT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN DEFAULT TRUE;
 
 
 ALTER TABLE users ADD COLUMN password VARCHAR(255) DEFAULT NULL;
@@ -303,3 +304,21 @@ CREATE TABLE IF NOT EXISTS idjc_claims (
     CONSTRAINT fk_idjc_claims_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_idjc_claims_profile FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    recipient_user_id INT NOT NULL,
+    actor_user_id INT NOT NULL,
+    type VARCHAR(64) NOT NULL,
+    message VARCHAR(500) NOT NULL,
+    entity_type VARCHAR(64) DEFAULT NULL,
+    entity_id BIGINT DEFAULT NULL,
+    metadata JSON DEFAULT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_notifications_recipient_created (recipient_user_id, created_at),
+    KEY idx_notifications_recipient_read (recipient_user_id, is_read),
+    CONSTRAINT fk_notifications_recipient_user FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_notifications_actor_user FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+

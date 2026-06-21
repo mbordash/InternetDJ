@@ -485,7 +485,7 @@ const SongsManager = () => {
 
     if (loading) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -493,14 +493,14 @@ const SongsManager = () => {
 
     if (!user || error === 'You are not authorized to manage songs for this profile.') {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-500 text-lg">{error || 'Unauthorized access'}</p>
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-20 min-h-screen">
+        <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-2 min-h-screen">
             <h1 className="text-3xl font-bold mb-6 text-white">Songs Manager</h1>
 
             {/* Upload Song Button */}

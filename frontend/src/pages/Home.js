@@ -479,6 +479,7 @@ function Home() {
                                     <Link to="/discover" className="block rounded-lg px-3 py-2 bg-white/10 text-white">Discover</Link>
                                     <Link to="/new" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">New Releases</Link>
                                     <Link to="/browse" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Browse Artists</Link>
+                                    <Link to="/collabs" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Public Collabs</Link>
                                     <Link to="/projects" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Studio / DAW</Link>
                                     <Link to="/stems" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">AI Stems</Link>
                                     <Link to="/forum" className="block rounded-lg px-3 py-2 hover:bg-white/10 text-gray-200">Community Forum</Link>

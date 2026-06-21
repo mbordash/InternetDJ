@@ -438,7 +438,7 @@ const Song = () => {
                 className={`profile-background ${typeof backgroundStyle === 'string' ? backgroundStyle : ''}`}
                 style={typeof backgroundStyle === 'object' ? backgroundStyle : {}}
             ></div>
-            <div className="relative container mx-auto px-4 py-8 max-w-7xl text-gray-100 z-0 pt-20">
+            <div className="relative container mx-auto px-4 py-8 max-w-7xl text-gray-100 z-0 pt-2">
                 {error ? (
                     <div className="text-center">
                         <p className="text-red-400 text-lg">{error}</p>

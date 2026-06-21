@@ -106,7 +106,7 @@ function Search() {
     }
 
     return (
-        <div className="text-gray-100 pt-16">
+        <div className="text-gray-100 pt-2">
             <div className="container mx-auto px-4 py-8">
                 <h1 className="text-3xl font-bold mb-8 text-white">
                     Search Results for "{query || 'No query'}"

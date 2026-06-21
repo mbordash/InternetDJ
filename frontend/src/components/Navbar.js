@@ -253,6 +253,13 @@ function Navbar() {
                                             >
                                                 Collabs
                                             </Link>
+                                            <Link
+                                                to="/settings"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
+                                                onClick={() => setIsDropdownOpen(false)}
+                                            >
+                                                Settings
+                                            </Link>
                                             <button
                                                 onClick={logout}
                                                 className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
@@ -374,11 +381,11 @@ function Navbar() {
                                     Playlists
                                 </Link>
                                 <Link
-                                    to="/collabs/new"
+                                    to={`/profile/${user.profile_id || user.id}/collaborations`}
                                     className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
-                                    New Collab
+                                    My Collabs
                                 </Link>
                                 <Link
                                     to="/projects/new"
