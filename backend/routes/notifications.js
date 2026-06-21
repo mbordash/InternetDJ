@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/preferences', authenticate, async (req, res) => {
     try {
         const [row] = await pool.query(
-            'SELECT email_notifications_enabled FROM users WHERE id = ? LIMIT 1',
+            'SELECT email_profile_activity_enabled, email_artist_activity_enabled FROM users WHERE id = ? LIMIT 1',
             [req.user.id]
         );
 
@@ -17,7 +17,8 @@ router.get('/preferences', authenticate, async (req, res) => {
         }
 
         res.json({
-            email_notifications_enabled: row.email_notifications_enabled !== 0,
+            email_profile_activity_enabled: row.email_profile_activity_enabled !== 0,
+            email_artist_activity_enabled: row.email_artist_activity_enabled !== 0,
         });
     } catch (err) {
         logger.error('Error in GET /notifications/preferences:', err);
@@ -26,19 +27,38 @@ router.get('/preferences', authenticate, async (req, res) => {
 });
 
 router.patch('/preferences', authenticate, async (req, res) => {
-    const { email_notifications_enabled } = req.body;
+    const { email_profile_activity_enabled, email_artist_activity_enabled } = req.body;
 
-    if (typeof email_notifications_enabled !== 'boolean') {
-        return res.status(400).json({ error: 'email_notifications_enabled must be a boolean' });
+    const updates = {};
+    if (email_profile_activity_enabled !== undefined) {
+        if (typeof email_profile_activity_enabled !== 'boolean') {
+            return res.status(400).json({ error: 'email_profile_activity_enabled must be a boolean' });
+        }
+        updates.email_profile_activity_enabled = email_profile_activity_enabled ? 1 : 0;
+    }
+
+    if (email_artist_activity_enabled !== undefined) {
+        if (typeof email_artist_activity_enabled !== 'boolean') {
+            return res.status(400).json({ error: 'email_artist_activity_enabled must be a boolean' });
+        }
+        updates.email_artist_activity_enabled = email_artist_activity_enabled ? 1 : 0;
+    }
+
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: 'No preferences to update' });
     }
 
     try {
+        const setClauses = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+        const values = Object.values(updates);
+        values.push(req.user.id);
+
         await pool.query(
-            'UPDATE users SET email_notifications_enabled = ? WHERE id = ?',
-            [email_notifications_enabled ? 1 : 0, req.user.id]
+            `UPDATE users SET ${setClauses} WHERE id = ?`,
+            values
         );
 
-        res.json({ success: true, email_notifications_enabled });
+        res.json({ success: true, ...updates });
     } catch (err) {
         logger.error('Error in PATCH /notifications/preferences:', err);
         res.status(500).json({ error: 'Failed to update notification preferences' });

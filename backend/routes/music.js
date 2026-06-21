@@ -9,6 +9,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
 const tmp = require('tmp');
 const { buildPublicFileUrl, extractObjectKey } = require('../utils/storage');
+const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 
 // Get client IP, handling proxies
 const getClientIp = (req) => {
@@ -593,6 +594,35 @@ router.post('/upload', authenticate, async (req, res) => {
             plays: 0,
             likes_count: 0,
         };
+
+        try {
+            const followers = await pool.query(
+                `
+                    SELECT DISTINCT f.follower_id
+                    FROM follows f
+                    JOIN profiles p ON f.followed_profile_id = p.id
+                    WHERE p.user_id = ?
+                `,
+                [req.user.id]
+            );
+
+            for (const follower of followers || []) {
+                await createNotification({
+                    recipientUserId: Number(follower.follower_id),
+                    actorUserId: req.user.id,
+                    type: NOTIFICATION_TYPES.ARTIST_SONG_UPLOADED,
+                    message: 'An artist you follow uploaded a new song.',
+                    entityType: 'song',
+                    entityId: Number(result.insertId),
+                    metadata: {
+                        song_title: title,
+                        profile_id: profileId,
+                    },
+                });
+            }
+        } catch (notificationErr) {
+            logger.warn('Failed to send artist activity notifications:', notificationErr.message);
+        }
 
         res.status(200).json({ song });
     } catch (err) {

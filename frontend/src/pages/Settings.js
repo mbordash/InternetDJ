@@ -11,6 +11,8 @@ function Settings() {
     const navigate = useNavigate();
     const baseUrl = SITE_URL;
     const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+    const [emailProfileActivityEnabled, setEmailProfileActivityEnabled] = useState(true);
+    const [emailArtistActivityEnabled, setEmailArtistActivityEnabled] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
@@ -27,7 +29,8 @@ function Settings() {
                 const response = await axios.get(`${API_URL}/notifications/preferences`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                setEmailNotificationsEnabled(response.data.email_notifications_enabled);
+                    setEmailProfileActivityEnabled(response.data.email_profile_activity_enabled);
+                    setEmailArtistActivityEnabled(response.data.email_artist_activity_enabled);
                 setError(null);
             } catch (err) {
                 console.error('Failed to load preferences:', err);
@@ -40,18 +43,38 @@ function Settings() {
         loadPreferences();
     }, [user, navigate]);
 
-    const handleToggleEmailNotifications = async () => {
+    const handleToggleProfileActivity = async () => {
         try {
             const token = localStorage.getItem('token');
-            const newValue = !emailNotificationsEnabled;
+            const newValue = !emailProfileActivityEnabled;
 
             await axios.patch(
                 `${API_URL}/notifications/preferences`,
-                { email_notifications_enabled: newValue },
+                { email_profile_activity_enabled: newValue },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            setEmailNotificationsEnabled(newValue);
+            setEmailProfileActivityEnabled(newValue);
+            setSuccess('Notification preference updated successfully');
+            setTimeout(() => setSuccess(null), 3000);
+        } catch (err) {
+            console.error('Failed to update preferences:', err);
+            setError('Failed to update notification preferences');
+        }
+    };
+
+    const handleToggleArtistActivity = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const newValue = !emailArtistActivityEnabled;
+
+            await axios.patch(
+                `${API_URL}/notifications/preferences`,
+                { email_artist_activity_enabled: newValue },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            setEmailArtistActivityEnabled(newValue);
             setSuccess('Notification preference updated successfully');
             setTimeout(() => setSuccess(null), 3000);
         } catch (err) {
@@ -96,24 +119,44 @@ function Settings() {
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
                                         <div className="flex-1">
-                                            <h3 className="text-white font-medium mb-1">Email Notifications</h3>
+                                                            <h3 className="text-white font-medium mb-1">Profile Activity</h3>
                                             <p className="text-sm text-gray-400">
-                                                Receive email updates when someone interacts with your content
-                                                (likes, reviews, replies, follows, collaboration updates).
+                                                                Receive emails when someone likes, reviews, or replies to your content,
+                                                                follows your profile, or updates a collaboration you own.
                                             </p>
                                         </div>
 
                                         <button
-                                            onClick={handleToggleEmailNotifications}
-                                            className={`ml-4 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                                                emailNotificationsEnabled
+                                                            onClick={handleToggleProfileActivity}
+                                                            className={`ml-4 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                                                                emailProfileActivityEnabled
                                                     ? 'bg-primary-brand-500 text-white hover:bg-primary-brand-600'
                                                     : 'bg-white/10 text-gray-300 hover:bg-white/20'
                                             }`}
                                         >
-                                            {emailNotificationsEnabled ? 'Enabled' : 'Disabled'}
+                                                            {emailProfileActivityEnabled ? 'Enabled' : 'Disabled'}
                                         </button>
                                     </div>
+
+                                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                                                        <div className="flex-1">
+                                                            <h3 className="text-white font-medium mb-1">Artist Activity</h3>
+                                                            <p className="text-sm text-gray-400">
+                                                                Receive emails when artists you follow upload new songs.
+                                                            </p>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={handleToggleArtistActivity}
+                                                            className={`ml-4 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                                                                emailArtistActivityEnabled
+                                                                    ? 'bg-primary-brand-500 text-white hover:bg-primary-brand-600'
+                                                                    : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                                                            }`}
+                                                        >
+                                                            {emailArtistActivityEnabled ? 'Enabled' : 'Disabled'}
+                                                        </button>
+                                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -124,8 +167,8 @@ function Settings() {
                                 <div className="space-y-2 text-sm text-gray-300">
                                     <p>InternetDJ — Create, share, and collaborate on music.</p>
                                     <p className="text-xs text-gray-500">
-                                        All in-app notifications are always delivered. This setting only controls
-                                        whether you receive emails for activity notifications.
+                                            All in-app notifications are always delivered. These settings only control
+                                            whether you receive emails for profile activity and artist activity notifications.
                                     </p>
                                 </div>
                             </div>
