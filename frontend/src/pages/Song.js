@@ -44,6 +44,10 @@ const Song = () => {
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showFeedbackResultsModal, setShowFeedbackResultsModal] = useState(false);
     const [selectedFeedback, setSelectedFeedback] = useState(null);
+    const [activity, setActivity] = useState([]);
+    const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+    const [similarSongs, setSimilarSongs] = useState([]);
+    const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
     // Initialize feedback state
     const initialFeedback = feedbackCriteria.reduce((acc, criterion) => {
@@ -146,6 +150,30 @@ const Song = () => {
             }
         };
 
+        const fetchActivity = async () => {
+            setIsLoadingActivity(true);
+            try {
+                const response = await axios.get(`${API_URL}/music/${songId}/activity`);
+                setActivity(response.data.activity || []);
+            } catch (err) {
+                console.error('Failed to fetch activity:', err);
+            } finally {
+                setIsLoadingActivity(false);
+            }
+        };
+
+        const fetchSimilar = async () => {
+            setIsLoadingSimilar(true);
+            try {
+                const response = await axios.get(`${API_URL}/music/${songId}/similar`);
+                setSimilarSongs(response.data.songs || []);
+            } catch (err) {
+                console.error('Failed to fetch similar songs:', err);
+            } finally {
+                setIsLoadingSimilar(false);
+            }
+        };
+
         setIsLoadingSong(true);
         fetchSong();
         fetchReviews();
@@ -153,6 +181,8 @@ const Song = () => {
         checkIfLiked();
         fetchFollowStatus();
         fetchOtherSongs();
+        fetchActivity();
+        fetchSimilar();
     }, [songId, isAuthenticated, song?.profile_id, user?.profile_id]);
 
     const handleLikeSong = async () => {
@@ -368,6 +398,49 @@ const Song = () => {
             ? { backgroundImage: `url(${song.background})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#f0f0f0' }
             : song.background
         : 'bg-default';
+
+    const getActivityLabel = (item) => {
+        switch (item.type) {
+            case 'song_liked':
+                return 'liked this song';
+            case 'playlist_add':
+                return item.extra ? `added to "${item.extra}"` : 'added to a playlist';
+            case 'song_reviewed':
+                return 'reviewed this song';
+            case 'profile_followed':
+                return `followed ${song?.profile_name || 'this artist'}`;
+            default:
+                return 'did something';
+        }
+    };
+
+    const getActivityIcon = (type) => {
+        switch (type) {
+            case 'song_liked':
+                return <HeartIconSolid className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />;
+            case 'playlist_add':
+                return <PlusIcon className="w-3.5 h-3.5 text-primary-brand-300 flex-shrink-0" />;
+            case 'song_reviewed':
+                return <SpeakerWaveIcon className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />;
+            case 'profile_followed':
+                return (
+                    <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M8 9a3 3 0 100-6 3 3 0 000 6zm6 2a2 2 0 11-4 0 2 2 0 014 0zm-9.5 5.5a.5.5 0 01-.5-.5v-1a4 4 0 018 0v1a.5.5 0 01-.5.5h-7zm11-2a3 3 0 00-3-3h-1.5a4.978 4.978 0 011.5 3.5v.5h3.5a.5.5 0 00.5-.5v-.5z" />
+                    </svg>
+                );
+            default:
+                return null;
+        }
+    };
+
+    const formatRelativeTime = (dateStr) => {
+        const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+        return new Date(dateStr).toLocaleDateString();
+    };
 
     const baseUrl = SITE_URL;
     const cleanDescription = song?.description
@@ -682,8 +755,8 @@ const Song = () => {
                                 </div>
                             </div>
 
-                            {/* Right Column: Other Songs */}
-                            <div className="lg:col-span-1">
+                            {/* Right Column: Other Songs + Activity Feed */}
+                            <div className="lg:col-span-1 space-y-6">
                                 <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl sticky top-20 backdrop-blur-sm">
                                     <h2 className="text-2xl font-bold mb-4">More by {song?.profile_name || 'Artist'}</h2>
                                     {otherSongs.length === 0 ? (
@@ -730,13 +803,129 @@ const Song = () => {
                               </span>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                 </div>
                                             ))}
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Activity Feed */}
+                                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                                    <h2 className="text-xl font-bold mb-4">Activity</h2>
+                                    {isLoadingActivity ? (
+                                        <div className="space-y-3">
+                                            {[...Array(4)].map((_, i) => (
+                                                <div key={i} className="flex items-center gap-3 animate-pulse">
+                                                    <div className="w-7 h-7 rounded-full bg-white/10 flex-shrink-0" />
+                                                    <div className="flex-1 space-y-1">
+                                                        <div className="h-2.5 bg-white/10 rounded w-3/4" />
+                                                        <div className="h-2 bg-white/5 rounded w-1/3" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : activity.length === 0 ? (
+                                        <p className="text-sm text-gray-400">No activity yet. Be the first to like or review!</p>
+                                    ) : (
+                                        <ul className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                                            {activity.map((item, i) => (
+                                                <li key={i} className="flex items-start gap-3">
+                                                    <Link
+                                                        to={item.actor_profile_id ? `/profile/${item.actor_profile_id}` : '#'}
+                                                        className="flex-shrink-0"
+                                                    >
+                                                        <img
+                                                            src={item.actor_picture || getDefaultAvatar(item.actor_profile_id || item.actor_name)}
+                                                            alt={item.actor_name}
+                                                            className="w-7 h-7 rounded-full object-cover"
+                                                            onError={(e) => { e.currentTarget.src = getDefaultAvatar(item.actor_profile_id || item.actor_name); }}
+                                                        />
+                                                    </Link>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm text-gray-200 leading-snug">
+                                                            <Link
+                                                                to={item.actor_profile_id ? `/profile/${item.actor_profile_id}` : '#'}
+                                                                className="font-semibold hover:text-primary-brand-300 hover:underline"
+                                                            >
+                                                                {item.actor_name}
+                                                            </Link>
+                                                            {' '}
+                                                            <span className="inline-flex items-center gap-1">
+                                                                {getActivityIcon(item.type)}
+                                                                <span className="text-gray-400">{getActivityLabel(item)}</span>
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">{formatRelativeTime(item.created_at)}</p>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
                             </div>
                         </div>
+
+                        {/* You Might Also Like */}
+                        {(isLoadingSimilar || similarSongs.length > 0) && (
+                            <div className="mt-6 bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                                <h2 className="text-2xl font-bold mb-5">You might also like</h2>
+                                {isLoadingSimilar ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                                        {[...Array(6)].map((_, i) => (
+                                            <div key={i} className="animate-pulse space-y-2">
+                                                <div className="w-full aspect-square rounded-md bg-white/10" />
+                                                <div className="h-3 bg-white/10 rounded w-3/4" />
+                                                <div className="h-2.5 bg-white/5 rounded w-1/2" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                                        {similarSongs.map((s) => (
+                                            <div
+                                                key={s.id}
+                                                className="group cursor-pointer"
+                                                onClick={() => handleSongNavigation(s.id)}
+                                            >
+                                                <div className="relative aspect-square mb-2 overflow-hidden rounded-md">
+                                                    {s.image_url ? (
+                                                        <img
+                                                            src={s.image_url}
+                                                            alt={s.title}
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-white/10 flex items-center justify-center text-gray-500 text-xs">
+                                                            No Image
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm font-semibold text-gray-100 group-hover:text-primary-brand-300 truncate leading-tight">
+                                                    {s.title}
+                                                </p>
+                                                <Link
+                                                    to={`/profile/${s.profile_id}`}
+                                                    className="text-xs text-gray-400 hover:text-primary-brand-300 hover:underline truncate block"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {s.profile_name}
+                                                </Link>
+                                                <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                                    <span className="inline-flex items-center gap-0.5">
+                                                        {Number(s.plays) || 0}
+                                                        <SpeakerWaveIcon className="w-3 h-3" />
+                                                    </span>
+                                                    <span className="inline-flex items-center gap-0.5">
+                                                        {Number(s.likes_count) || 0}
+                                                        <HeartIconSolid className={`w-3 h-3 ${Number(s.likes_count) > 0 ? 'text-red-500' : ''}`} />
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Feedback Input Modal */}
                         {showFeedbackModal && (
