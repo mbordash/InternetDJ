@@ -19,19 +19,19 @@ function VerifyEmail() {
     }, [searchParams]);
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-                <h1 className="text-3xl font-bold text-gray-900 text-center mb-6">Verify Your Email</h1>
+        <div className="min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-md w-full spotify-surface p-8">
+                <h1 className="text-3xl font-bold text-white text-center mb-6">Verify Your Email</h1>
                 {error && (
-                    <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-400 text-red-300 rounded-md">
                         {error}
                         <p className="mt-2">
-                            Return to <Link to="/login" className="text-blue-600 hover:text-primary-brand-800 font-medium">Login</Link>
+                            Return to <Link to="/login" className="text-primary-brand-300 hover:text-primary-brand-200 font-medium">Login</Link>
                         </p>
                     </div>
                 )}
                 {!error && (
-                    <div className="text-center text-gray-700">
+                    <div className="text-center text-gray-300">
                         Verifying your email, please wait...
                     </div>
                 )}

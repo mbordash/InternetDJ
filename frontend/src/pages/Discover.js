@@ -3,14 +3,12 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { PlayIcon, PauseIcon, HeartIcon, XMarkIcon, ForwardIcon } from '@heroicons/react/24/solid';
 import { AuthContext } from '../context/AuthContext';
-import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
-import {Helmet} from "react-helmet-async";
+import { Helmet } from 'react-helmet-async';
 
 function Discover() {
     const { user } = useContext(AuthContext);
-    const { currentSong, isPlaying } = useContext(AudioPlayerContext);
     const baseUrl = SITE_URL;
     const [recommendedSongs, setRecommendedSongs] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -21,18 +19,92 @@ function Discover() {
     const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
     const [playlists, setPlaylists] = useState([]);
     const [isSongLiked, setIsSongLiked] = useState(false);
-    const [autoplayBlocked, setAutoplayBlocked] = useState(false); // Track autoplay block
+    const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+    const isGuest = !user || !user.id;
+
+    const fetchPersonalizedSongs = async () => {
+        const token = localStorage.getItem('token');
+        if (!token || !user?.id) {
+            throw new Error('No authentication token found');
+        }
+        const response = await axios.get(`${API_URL}/profile/${user.id}/recommended-songs`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        return Array.isArray(response.data) ? response.data : [];
+    };
+
+    const fetchGuestSongs = async () => {
+        const [highestRatedRes, latestRes] = await Promise.allSettled([
+            axios.get(`${API_URL}/music/highest-rated`),
+            axios.get(`${API_URL}/music/latest`),
+        ]);
+
+        const combined = [];
+
+        if (highestRatedRes.status === 'fulfilled' && Array.isArray(highestRatedRes.value.data)) {
+            combined.push(...highestRatedRes.value.data);
+        }
+        if (latestRes.status === 'fulfilled' && Array.isArray(latestRes.value.data)) {
+            combined.push(...latestRes.value.data);
+        }
+
+        return Array.from(new Map(combined.map((song) => [song.id, song])).values());
+    };
+
+    const loadSongs = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const songs = isGuest ? await fetchGuestSongs() : await fetchPersonalizedSongs();
+
+            if (songs.length === 0) {
+                setError(isGuest
+                    ? 'No songs available to preview right now. Please try again.'
+                    : 'No songs available at the moment. Please try again.');
+                setRecommendedSongs([]);
+                return;
+            }
+
+            setRecommendedSongs(songs);
+            setCurrentIndex(0);
+
+            if (!isGuest) {
+                await checkSongLikedStatus(songs[0].id);
+            } else {
+                setIsSongLiked(false);
+            }
+        } catch (err) {
+            setError('Failed to load songs: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const advanceToNextSong = async () => {
+        audioRef.current.pause();
+        setIsPreviewPlaying(false);
+
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < recommendedSongs.length) {
+            const nextSong = recommendedSongs[nextIndex];
+            setCurrentIndex(nextIndex);
+            if (!isGuest) {
+                await checkSongLikedStatus(nextSong.id);
+            }
+            playSong(nextSong);
+            return;
+        }
+
+        await loadSongs();
+    };
 
     useEffect(() => {
-        console.log('AuthContext user:', user);
-        console.log('Token:', localStorage.getItem('token'));
-
         const fetchPlaylists = async () => {
             if (!user || !user.id) return;
             try {
                 const token = localStorage.getItem('token');
                 if (!token) {
-                    throw new Error('No authentication token found');
+                    return;
                 }
                 const response = await axios.get(`${API_URL}/playlists`, {
                     headers: { Authorization: `Bearer ${token}` },
@@ -48,49 +120,11 @@ function Discover() {
             }
         };
 
-        const fetchSongs = async () => {
-            setIsLoading(true);
-            try {
-                if (!user || !user.id) {
-                    throw new Error('User not authenticated');
-                }
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    throw new Error('No authentication token found');
-                }
-                const response = await axios.get(`${API_URL}/profile/${user.id}/recommended-songs`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (response.data.length === 0) {
-                    setError('No songs available at the moment. Please try again.');
-                } else {
-                    setRecommendedSongs(response.data);
-                    if (response.data.length > 0) {
-                        await checkSongLikedStatus(response.data[0].id); // Check liked status, no auto-play
-                    }
-                }
-            } catch (err) {
-                setError('Failed to load songs: ' + (err.response?.data?.error || err.message));
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
         if (user && user.id) {
             fetchPlaylists();
-            fetchSongs();
+            loadSongs();
         } else {
-            const retry = setTimeout(() => {
-                if (localStorage.getItem('token')) {
-                    setError('Authenticating... Please wait.');
-                    setIsLoading(true);
-                } else {
-                    setError('Please log in to discover songs.');
-                    setIsLoading(false);
-                }
-            }, 1000);
-            return () => clearTimeout(retry);
+            loadSongs();
         }
 
         return () => {
@@ -100,7 +134,10 @@ function Discover() {
     }, [user]);
 
     const checkSongLikedStatus = async (songId) => {
-        if (!user || !user.id || !songId) return;
+        if (!user || !user.id || !songId) {
+            setIsSongLiked(false);
+            return;
+        }
         try {
             const token = localStorage.getItem('token');
             const likesPlaylist = playlists.find(pl => pl.name.toLowerCase() === 'likes');
@@ -120,7 +157,7 @@ function Discover() {
 
     const handleLikeSong = async (songId, isLiked) => {
         if (!user || !user.id) {
-            setLikeError('You must be logged in to like a song');
+            setLikeError('Log in to save likes and get more accurate recommendations.');
             return;
         }
 
@@ -214,34 +251,19 @@ function Discover() {
 
     const handlePreference = async (songId, isLiked) => {
         try {
+            if (isGuest) {
+                if (isLiked) {
+                    setLikeError('Log in to save likes and improve your Discover feed.');
+                } else {
+                    setLikeError(null);
+                }
+                await advanceToNextSong();
+                return;
+            }
+
             await handleLikeSong(songId, isLiked);
             if (!isLiked) {
-                audioRef.current.pause();
-                setIsPreviewPlaying(false);
-
-                const nextIndex = currentIndex + 1;
-                if (nextIndex < recommendedSongs.length) {
-                    setCurrentIndex(nextIndex);
-                    await checkSongLikedStatus(recommendedSongs[nextIndex].id);
-                    playSong(recommendedSongs[nextIndex]);
-                } else {
-                    setCurrentIndex(0);
-                    setIsLoading(true);
-                    const token = localStorage.getItem('token');
-                    const response = await axios.get(`${API_URL}/profile/${user.id}/recommended-songs`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-
-                    if (response.data.length === 0) {
-                        setError('No more songs available. Please try again.');
-                        setRecommendedSongs([]);
-                    } else {
-                        setRecommendedSongs(response.data);
-                        await checkSongLikedStatus(response.data[0].id);
-                        playSong(response.data[0]);
-                    }
-                    setIsLoading(false);
-                }
+                await advanceToNextSong();
             }
         } catch (err) {
             console.error('Error in handlePreference:', err);
@@ -251,32 +273,7 @@ function Discover() {
 
     const handleSkip = async () => {
         try {
-            audioRef.current.pause();
-            setIsPreviewPlaying(false);
-
-            const nextIndex = currentIndex + 1;
-            if (nextIndex < recommendedSongs.length) {
-                setCurrentIndex(nextIndex);
-                await checkSongLikedStatus(recommendedSongs[nextIndex].id);
-                playSong(recommendedSongs[nextIndex]);
-            } else {
-                setCurrentIndex(0);
-                setIsLoading(true);
-                const token = localStorage.getItem('token');
-                const response = await axios.get(`${API_URL}/profile/${user.id}/recommended-songs`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (response.data.length === 0) {
-                    setError('No more songs available. Please try again.');
-                    setRecommendedSongs([]);
-                } else {
-                    setRecommendedSongs(response.data);
-                    await checkSongLikedStatus(response.data[0].id);
-                    playSong(response.data[0]);
-                }
-                setIsLoading(false);
-            }
+            await advanceToNextSong();
         } catch (err) {
             console.error('Error in handleSkip:', err);
             setError('Failed to advance to next song. Please try again.');
@@ -285,9 +282,9 @@ function Discover() {
 
     if (isLoading) {
         return (
-            <div className="bg-white text-gray-800 pt-16 min-h-screen flex items-center justify-center">
+            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
                 <div className="container mx-auto px-4 py-8 text-center">
-                    <p className="text-gray-600 text-lg">Loading songs...</p>
+                    <p className="text-gray-300 text-lg">Loading songs...</p>
                 </div>
             </div>
         );
@@ -295,47 +292,25 @@ function Discover() {
 
     if (error) {
         return (
-            <div className="bg-white text-gray-800 pt-16 min-h-screen flex items-center justify-center">
-                <div className="container mx-auto px-4 py-8 text-center">
+            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
+                <div className="container mx-auto px-4 py-8 text-center spotify-surface max-w-xl">
                     <p className="text-red-400 text-lg">{error}</p>
                     {likeError && <p className="text-red-400 text-sm mt-2">{likeError}</p>}
                     {!user ? (
                         <Link
                             to="/login"
-                            className="inline-block bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors mt-4"
+                            className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors mt-4"
                         >
-                            Log In
+                            Log In For Personalized Discover
                         </Link>
                     ) : (
                         <button
                             onClick={() => {
                                 setError(null);
                                 setLikeError(null);
-                                setIsLoading(true);
-                                const fetchSongs = async () => {
-                                    try {
-                                        const token = localStorage.getItem('token');
-                                        const response = await axios.get(`${API_URL}/profile/${user.id}/recommended-songs`, {
-                                            headers: { Authorization: `Bearer ${token}` },
-                                        });
-
-                                        if (response.data.length === 0) {
-                                            setError('No songs available at the moment. Please try again.');
-                                        } else {
-                                            setRecommendedSongs(response.data);
-                                            if (response.data.length > 0) {
-                                                await checkSongLikedStatus(response.data[0].id);
-                                            }
-                                        }
-                                    } catch (err) {
-                                        setError('Failed to load songs: ' + (err.response?.data?.error || err.message));
-                                    } finally {
-                                        setIsLoading(false);
-                                    }
-                                };
-                                fetchSongs();
+                                loadSongs();
                             }}
-                            className="inline-block bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors mt-4"
+                            className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors mt-4"
                         >
                             Try Again
                         </button>
@@ -347,38 +322,16 @@ function Discover() {
 
     if (recommendedSongs.length === 0) {
         return (
-            <div className="bg-white text-gray-800 pt-16 min-h-screen flex items-center justify-center">
-                <div className="container mx-auto px-4 py-8 text-center">
-                    <p className="text-gray-600 text-lg">No songs available to discover.</p>
+            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
+                <div className="container mx-auto px-4 py-8 text-center spotify-surface max-w-xl">
+                    <p className="text-gray-300 text-lg">No songs available to discover.</p>
                     <button
                         onClick={() => {
                             setError(null);
                             setLikeError(null);
-                            setIsLoading(true);
-                            const fetchSongs = async () => {
-                                try {
-                                    const token = localStorage.getItem('token');
-                                    const response = await axios.get(`${API_URL}/profile/${user.id}/recommended-songs`, {
-                                        headers: { Authorization: `Bearer ${token}` },
-                                    });
-
-                                    if (response.data.length === 0) {
-                                        setError('No songs available at the moment. Please try again.');
-                                    } else {
-                                        setRecommendedSongs(response.data);
-                                        if (response.data.length > 0) {
-                                            await checkSongLikedStatus(response.data[0].id);
-                                        }
-                                    }
-                                } catch (err) {
-                                    setError('Failed to load songs: ' + (err.response?.data?.error || err.message));
-                                } finally {
-                                    setIsLoading(false);
-                                }
-                            };
-                            fetchSongs();
+                            loadSongs();
                         }}
-                        className="inline-block bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors mt-4"
+                        className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors mt-4"
                     >
                         Try Again
                     </button>
@@ -390,7 +343,7 @@ function Discover() {
     const selectedSong = recommendedSongs[currentIndex];
 
     return (
-        <div className="bg-white text-gray-800 pt-16 min-h-screen">
+        <div className="text-gray-100 pt-2 min-h-screen">
             <Helmet>
                 <title>Auto AI DJ Discover Music</title>
                 <meta
@@ -408,8 +361,23 @@ function Discover() {
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-8 text-black text-center">Discover New Music</h1>
-                <div className="max-w-md mx-auto bg-gray-100 rounded-xl shadow-lg p-6">
+                <h1 className="text-3xl font-bold mb-6 text-white text-center">Discover New Music</h1>
+
+                {isGuest && (
+                    <div className="max-w-2xl mx-auto mb-6 spotify-surface px-4 py-3 text-center">
+                        <p className="text-sm text-gray-200">
+                            You are browsing a preview mix. Log in to unlock smarter recommendations based on your likes and skips.
+                        </p>
+                        <Link
+                            to="/login"
+                            className="inline-block mt-3 spotify-pill px-4 py-2 rounded-full text-sm transition-colors"
+                        >
+                            Log In For Better Discover Results
+                        </Link>
+                    </div>
+                )}
+
+                <div className="max-w-md mx-auto spotify-surface p-6">
                     <div className="relative mb-4">
                         <Link to={`/song/${selectedSong.id}`}>
                             {selectedSong.image_url ? (
@@ -417,11 +385,11 @@ function Discover() {
                                     src={selectedSong.image_url}
                                     alt={selectedSong.title}
                                     className="w-full h-auto aspect-square object-cover rounded-md"
-                                    onError={(e) => console.error('Song image failed to load:', selectedSong.image_url)}
+                                    onError={() => console.error('Song image failed to load:', selectedSong.image_url)}
                                     loading="lazy"
                                 />
                             ) : (
-                                <div className="w-full h-auto aspect-square rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
+                                <div className="w-full h-auto aspect-square rounded-md bg-zinc-800 flex items-center justify-center text-gray-400 text-xs">
                                     No Image
                                 </div>
                             )}
@@ -452,11 +420,11 @@ function Discover() {
                     <div className="text-center">
                         <Link
                             to={`/song/${selectedSong.id}`}
-                            className="text-xl font-semibold text-black hover:underline"
+                            className="text-xl font-semibold text-white hover:underline"
                         >
                             {selectedSong.title}
                         </Link>
-                        <p className="text-gray-600">
+                        <p className="text-gray-300">
                             <Link
                                 to={`/profile/${selectedSong.profile_id}`}
                                 className="hover:underline"
@@ -474,21 +442,24 @@ function Discover() {
                                             <Link
                                                 key={index}
                                                 to={`/tag/${genre.trim()}`}
-                                                className="inline-block bg-primary-brand-100 text-primary-brand-800 text-sm font-semibold px-2 py-1 rounded-md hover:bg-primary-brand-200 transition-colors"
+                                                className="inline-block bg-white/10 text-gray-100 text-sm font-semibold px-2 py-1 rounded-md hover:bg-white/20 transition-colors"
                                             >
                                                 {genre.trim()}
                                             </Link>
                                         ))}
                                 </div>
                             ) : (
-                                <p className="text-sm text-gray-600">No genres specified</p>
+                                <p className="text-sm text-gray-400">No genres specified</p>
                             )}
                         </div>
                     </div>
                     {autoplayBlocked && (
-                        <p className="text-yellow-600 text-sm mt-2 text-center">
+                        <p className="text-yellow-400 text-sm mt-2 text-center">
                             Please click the play button to start the song.
                         </p>
+                    )}
+                    {likeError && (
+                        <p className="text-primary-brand-300 text-sm mt-2 text-center">{likeError}</p>
                     )}
                     <div className="mt-6 flex justify-between">
                         <button
@@ -500,14 +471,14 @@ function Discover() {
                         </button>
                         <button
                             onClick={() => handleSkip()}
-                            className="p-4 bg-primary-brand rounded-full hover:bg-primary-brand-500"
+                            className="p-4 bg-primary-brand-500 rounded-full hover:bg-primary-brand-400"
                             aria-label="Skip to next song"
                         >
                             <ForwardIcon className="w-8 h-8 text-white" />
                         </button>
                         <button
                             onClick={() => handlePreference(selectedSong.id, !isSongLiked)}
-                            className={`p-4 ${isSongLiked ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-500 hover:bg-gray-600'} rounded-full`}
+                            className={`p-4 ${(isSongLiked && !isGuest) ? 'bg-primary-brand-500 hover:bg-primary-brand-600' : 'bg-gray-500 hover:bg-gray-600'} rounded-full`}
                             aria-label={isSongLiked ? 'Unlike song' : 'Like song'}
                         >
                             <HeartIcon className="w-8 h-8 text-white" />

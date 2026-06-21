@@ -485,7 +485,7 @@ const SongsManager = () => {
 
     if (loading) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -493,22 +493,22 @@ const SongsManager = () => {
 
     if (!user || error === 'You are not authorized to manage songs for this profile.') {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-red-500 text-lg">{error || 'Unauthorized access'}</p>
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-800 pt-20">
-            <h1 className="text-3xl font-bold mb-6">Songs Manager</h1>
+        <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-20 min-h-screen">
+            <h1 className="text-3xl font-bold mb-6 text-white">Songs Manager</h1>
 
             {/* Upload Song Button */}
             {!showUploadForm && (
                 <div className="mb-8">
-                    <button
+                        <button
                         onClick={() => setShowUploadForm(true)}
-                        className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                     >
                         Upload New Song
                     </button>
@@ -517,24 +517,24 @@ const SongsManager = () => {
 
             {/* Song Upload Section */}
             {showUploadForm && (
-                <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+                <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold">Upload a Song</h2>
+                        <h2 className="text-2xl font-bold text-white">Upload a Song</h2>
                         <button
                             onClick={() => setShowUploadForm(false)}
-                            className="text-blue-600 hover:text-primary-brand-800 focus:outline-none"
+                            className="text-primary-brand-300 hover:text-primary-brand-200 focus:outline-none"
                             aria-label="Close upload form"
                         >
                             <XMarkIcon className="w-6 h-6" />
                         </button>
                     </div>
-                    {error && <p className="text-red-500 text-sm mb-4" aria-live="polite">{error}</p>}
+                    {error && <p className="text-red-400 text-sm mb-4" aria-live="polite">{error}</p>}
                     {uploadCompleted ? (
                         <div className="text-center space-y-4">
-                            <p className="text-lg text-green-600">Song uploaded successfully!</p>
+                            <p className="text-lg text-emerald-400">Song uploaded successfully!</p>
                             <button
                                 onClick={handleUploadMore}
-                                className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800"
+                                className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm hover:bg-primary-brand-700"
                             >
                                 Upload More
                             </button>
@@ -542,20 +542,20 @@ const SongsManager = () => {
                     ) : (
                         <form onSubmit={handleSongSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium">Song Title</label>
+                                <label className="block text-sm font-medium text-gray-200">Song Title</label>
                                 <input
                                     type="text"
                                     name="title"
                                     value={songForm.title}
                                     onChange={handleSongInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Genres (up to 3, comma-separated)</label>
+                                <label className="block text-sm font-medium text-gray-200">Genres (up to 3, comma-separated)</label>
                                 <div
-                                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus-within:ring-2 focus-within:ring-gray-500 focus-within:border-gray-500 flex flex-wrap items-center gap-1 min-h-[38px] bg-white"
+                                    className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm focus-within:ring-2 focus-within:ring-primary-brand-500 focus-within:border-primary-brand-500 flex flex-wrap items-center gap-1 min-h-[38px] bg-white/5"
                                 >
                                     {songForm.genres.map((tag, index) => (
                                         <span
@@ -566,7 +566,7 @@ const SongsManager = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => removeSongGenreTag(tag)}
-                                                className="ml-1 text-blue-600 hover:text-primary-brand-800 focus:outline-none"
+                                                className="ml-1 text-primary-brand-300 hover:text-primary-brand-200 focus:outline-none"
                                                 aria-label={`Remove ${tag} genre`}
                                             >
                                                 <XMarkIcon className="w-4 h-4" />
@@ -579,24 +579,24 @@ const SongsManager = () => {
                                         value={songForm.genreInput}
                                         onChange={handleSongInputChange}
                                         placeholder={songForm.genres.length === 0 ? "e.g., Rock, Drum 'n' Bass, Electronic" : ""}
-                                        className="flex-1 outline-none border-none p-0 m-1 min-w-[100px] text-sm bg-transparent"
+                                            className="flex-1 outline-none border-none p-0 m-1 min-w-[100px] text-sm bg-transparent text-white placeholder:text-gray-500"
                                         ref={songGenreInputRef}
                                     />
                                 </div>
-                                <p className="mt-1 text-sm text-gray-500">Enter genres and press comma to add (max 3).</p>
+                                        <p className="mt-1 text-sm text-gray-400">Enter genres and press comma to add (max 3).</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Description</label>
+                                        <label className="block text-sm font-medium text-gray-200">Description</label>
                                 <textarea
                                     name="description"
                                     value={songForm.description}
                                     onChange={handleSongInputChange}
                                     rows="4"
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">MP3 (320kbps) File</label>
+                                <label className="block text-sm font-medium text-gray-200">MP3 (320kbps) File</label>
                                 <input
                                     type="file"
                                     name="mp3"
@@ -604,24 +604,24 @@ const SongsManager = () => {
                                     accept="audio/mp3"
                                     required
                                     ref={mp3InputRef}
-                                    className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">Song Image (Optional, JPEG or PNG)</label>
+                                <label className="block text-sm font-medium text-gray-200">Song Image (Optional, JPEG or PNG)</label>
                                 <input
                                     type="file"
                                     name="image"
                                     onChange={handleSongFileChange}
                                     accept="image/jpeg,image/png"
                                     ref={imageInputRef}
-                                    className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                                 />
                             </div>
                             {isUploading && (
-                                <div className="relative w-full bg-gray-200 rounded-full h-6">
+                                <div className="relative w-full bg-white/10 rounded-full h-6">
                                     <div
-                                        className="bg-black h-6 rounded-full flex items-center justify-center text-sm text-white px-2"
+                                        className="bg-primary-brand-500 h-6 rounded-full flex items-center justify-center text-sm text-white px-2"
                                         style={{ width: `${uploadProgress}%` }}
                                     >
                                         {uploadProgress > 10 && uploadProgress < 100 && `${uploadProgress}%`}
@@ -632,10 +632,10 @@ const SongsManager = () => {
                             <button
                                 type="submit"
                                 disabled={isUploading}
-                                className={`w-full py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm ${
+                                className={`w-full py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm ${
                                     isUploading
                                         ? 'opacity-50 cursor-not-allowed'
-                                        : 'hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700'
+                                        : 'hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand'
                                 }`}
                             >
                                 {isUploading ? 'Uploading...' : 'Upload Song'}
@@ -646,14 +646,14 @@ const SongsManager = () => {
             )}
 
             {/* Songs List */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-2xl font-bold mb-4">Your Songs</h2>
+            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md text-gray-100">
+                <h2 className="text-2xl font-bold mb-4 text-white">Your Songs</h2>
                 {songs.length === 0 ? (
-                    <p>No songs uploaded yet.</p>
+                    <p className="text-gray-300">No songs uploaded yet.</p>
                 ) : (
                     <div className="space-y-6">
                         {songs.map((song) => (
-                            <div key={song.id} className="p-4 bg-gray-50 rounded-md shadow-sm">
+                            <div key={song.id} className="p-4 bg-white/5 border border-white/10 rounded-xl shadow-sm">
                                 <div className="flex items-center space-x-4">
                                     {song.image_url ? (
                                         <Link to={`/song/${song.id}`}>
@@ -664,18 +664,18 @@ const SongsManager = () => {
                                             />
                                         </Link>
                                     ) : (
-                                        <div className="w-16 h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
+                                        <div className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-sm">
                                             No Image
                                         </div>
                                     )}
                                     <div className="flex-1">
                                         <Link
                                             to={`/song/${song.id}`}
-                                            className="text-lg font-semibold text-black hover:underline"
+                                            className="text-lg font-semibold text-white hover:underline"
                                         >
                                             {song.title}
                                         </Link>
-                                        <div className="text-sm text-gray-600 flex items-center gap-x-2">
+                                        <div className="text-sm text-gray-300 flex items-center gap-x-2">
                                             {song.genre ? (
                                                 <div className="flex flex-wrap gap-1">
                                                     {song.genre.split(',').slice(0, 3).map((tag, index) => (
@@ -694,7 +694,7 @@ const SongsManager = () => {
                                             <span className="inline-flex items-center">
                                                 {Number(song.plays) || 0}
                                                 <SpeakerWaveIcon
-                                                    className={`w-4 h-4 ml-1 ${Number(song.plays) > 0 ? 'text-black' : 'text-gray-500'}`}
+                                                    className={`w-4 h-4 ml-1 ${Number(song.plays) > 0 ? 'text-white' : 'text-gray-500'}`}
                                                 />
                                             </span>
                                             <span> | </span>
@@ -702,7 +702,7 @@ const SongsManager = () => {
                                                 {typeof song.avg_rating === 'number' && song.avg_rating > 0 ? (
                                                     <>
                                                         {song.avg_rating.toFixed(1)}
-                                                        <StarIcon className="w-4 h-4 text-black ml-1" />
+                                                        <StarIcon className="w-4 h-4 text-white ml-1" />
                                                     </>
                                                 ) : (
                                                     <>
@@ -758,20 +758,20 @@ const SongsManager = () => {
                                 {editSongId === song.id && (
                                     <form onSubmit={handleEditSubmit} className="mt-4 space-y-6">
                                         <div>
-                                            <label className="block text-sm font-medium">Title</label>
+                                                <label className="block text-sm font-medium text-gray-200">Title</label>
                                             <input
                                                 type="text"
                                                 name="title"
                                                 value={editFormData.title}
                                                 onChange={handleEditInputChange}
                                                 required
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium">Genres (up to 3, comma-separated)</label>
+                                            <label className="block text-sm font-medium text-gray-200">Genres (up to 3, comma-separated)</label>
                                             <div
-                                                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus-within:ring-2 focus-within:ring-gray-500 focus-within:border-gray-500 flex flex-wrap items-center gap-1 min-h-[38px] bg-white"
+                                                className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm focus-within:ring-2 focus-within:ring-primary-brand-500 focus-within:border-primary-brand-500 flex flex-wrap items-center gap-1 min-h-[38px] bg-white/5"
                                             >
                                                 {editFormData.genres.map((tag, index) => (
                                                     <span
@@ -782,7 +782,7 @@ const SongsManager = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => removeEditGenreTag(tag)}
-                                                            className="ml-1 text-blue-600 hover:text-primary-brand-800 focus:outline-none"
+                                                            className="ml-1 text-primary-brand-300 hover:text-primary-brand-200 focus:outline-none"
                                                             aria-label={`Remove ${tag} genre`}
                                                         >
                                                             <XMarkIcon className="w-4 h-4" />
@@ -795,48 +795,48 @@ const SongsManager = () => {
                                                     value={editFormData.genreInput}
                                                     onChange={handleEditInputChange}
                                                     placeholder={editFormData.genres.length === 0 ? "e.g., Rock, Drum 'n' Bass, Electronic" : ""}
-                                                    className="flex-1 outline-none border-none p-0 m-1 min-w-[100px] text-sm bg-transparent"
+                                                    className="flex-1 outline-none border-none p-0 m-1 min-w-[100px] text-sm bg-transparent text-white placeholder:text-gray-500"
                                                     ref={editGenreInputRef}
                                                 />
                                             </div>
-                                            <p className="mt-1 text-sm text-gray-500">Enter genres and press comma to add (max 3).</p>
+                                            <p className="mt-1 text-sm text-gray-400">Enter genres and press comma to add (max 3).</p>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium">Description</label>
+                                            <label className="block text-sm font-medium text-gray-200">Description</label>
                                             <textarea
                                                 name="description"
                                                 value={editFormData.description}
                                                 onChange={handleEditInputChange}
                                                 rows="4"
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium">MP3 File (Optional)</label>
+                                            <label className="block text-sm font-medium text-gray-200">MP3 File (Optional)</label>
                                             <input
                                                 type="file"
                                                 name="mp3"
                                                 onChange={handleEditFileChange}
                                                 accept="audio/mp3"
                                                 ref={editMp3InputRef}
-                                                className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium">Song Image (Optional, JPEG or PNG)</label>
+                                            <label className="block text-sm font-medium text-gray-200">Song Image (Optional, JPEG or PNG)</label>
                                             <input
                                                 type="file"
                                                 name="image"
                                                 onChange={handleEditFileChange}
                                                 accept="image/jpeg,image/png"
                                                 ref={editImageInputRef}
-                                                className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                                             />
                                         </div>
                                         <div className="flex space-x-4">
                                             <button
                                                 type="submit"
-                                                className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800"
+                                                className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm hover:bg-primary-brand-700"
                                             >
                                                 Save Changes
                                             </button>
@@ -848,7 +848,7 @@ const SongsManager = () => {
                                                     if (editMp3InputRef.current) editMp3InputRef.current.value = '';
                                                     if (editImageInputRef.current) editImageInputRef.current.value = '';
                                                 }}
-                                                className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800"
+                                                className="py-2 px-4 bg-white/10 text-white font-semibold rounded-full shadow-sm hover:bg-white/15"
                                             >
                                                 Cancel
                                             </button>
@@ -864,16 +864,16 @@ const SongsManager = () => {
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                        <h2 className="text-xl font-bold mb-4">Confirm Deletion</h2>
-                        <p className="mb-6">Are you sure you want to delete this song? This action cannot be undone.</p>
+                    <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+                        <h2 className="text-xl font-bold mb-4 text-white">Confirm Deletion</h2>
+                        <p className="mb-6 text-gray-300">Are you sure you want to delete this song? This action cannot be undone.</p>
                         <div className="flex justify-end space-x-4">
                             <button
                                 onClick={() => {
                                     setShowDeleteConfirm(false);
                                     setSongToDelete(null);
                                 }}
-                                className="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400"
+                                className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
                             >
                                 Cancel
                             </button>
@@ -891,25 +891,25 @@ const SongsManager = () => {
             {/* Stats Modal */}
             {showStatsModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-3xl w-full">
-                        <h2 className="text-xl font-bold mb-4">Song Statistics</h2>
+                    <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-3xl w-full text-gray-100">
+                        <h2 className="text-xl font-bold mb-4 text-white">Song Statistics</h2>
                         <div className="mb-4 flex space-x-4">
                             <div>
-                                <label className="block text-sm font-medium">Start Date</label>
+                                <label className="block text-sm font-medium text-gray-200">Start Date</label>
                                 <input
                                     type="date"
                                     value={startDate}
                                     onChange={(e) => setStartDate(e.target.value)}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium">End Date</label>
+                                <label className="block text-sm font-medium text-gray-200">End Date</label>
                                 <input
                                     type="date"
                                     value={endDate}
                                     onChange={(e) => setEndDate(e.target.value)}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 />
                             </div>
                             <div className="flex items-end">

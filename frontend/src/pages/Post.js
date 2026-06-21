@@ -259,7 +259,7 @@ function Post() {
         return comments.map((comment) => (
             <div
                 key={comment.id}
-                className={`ml-${level * 4} border border-gray-300 rounded-md p-4 bg-white mb-4`}
+                className={`ml-${level * 4} border border-white/10 rounded-md p-4 bg-white/5 mb-4`}
             >
                 <div className="flex justify-between">
                     <div className="flex-1">
@@ -277,7 +277,7 @@ function Post() {
                                 />
                             ) : (
                                 <div
-                                    className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                    className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-400 text-xs"
                                     style={{ display: comment.user_picture ? 'none' : 'flex' }}
                                 >
                                     ?
@@ -286,11 +286,11 @@ function Post() {
                             <div>
                                 <Link
                                     to={`/profile/${comment.profile_id}`}
-                                    className="text-black hover:underline"
+                                    className="text-white hover:underline"
                                 >
                                     {comment.user_name}
                                 </Link>
-                                <div className="text-sm text-gray-600">
+                                <div className="text-sm text-gray-300">
                                     {formatDate(comment.created_at)}
                                     {comment.edited_at && (
                                         <span> (Edited {formatDate(comment.edited_at)})</span>
@@ -298,7 +298,7 @@ function Post() {
                                 </div>
                             </div>
                         </div>
-                        <div className="prose max-w-none text-gray-800">{parse(comment.content)}</div>
+                        <div className="prose prose-invert max-w-none text-gray-100">{parse(comment.content)}</div>
                         {comment.image_url && (
                             <div className="mt-4">
                                 <img
@@ -315,14 +315,14 @@ function Post() {
                         <div className="flex space-x-2 mt-2">
                             <button
                                 onClick={() => handleReply(comment.id)}
-                                className="text-blue-600 hover:text-primary-brand-800 text-sm"
+                                className="text-primary-brand-300 hover:text-primary-brand-200 text-sm"
                             >
                                 Reply
                             </button>
                             {user && comment.user_id === user.id && canEditComment(comment) && (
                                 <button
                                     onClick={() => handleEditComment(comment)}
-                                    className="text-blue-600 hover:text-primary-brand-800 text-sm"
+                                    className="text-primary-brand-300 hover:text-primary-brand-200 text-sm"
                                 >
                                     Edit
                                 </button>
@@ -348,7 +348,7 @@ function Post() {
 
     if (error && !post) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100">
                 <p className="text-red-400 text-lg">{error}</p>
             </div>
         );
@@ -356,7 +356,7 @@ function Post() {
 
     if (!post) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100">
                 <p>Loading...</p>
             </div>
         );
@@ -380,7 +380,7 @@ function Post() {
     };
 
     return (
-        <div className="bg-white text-gray-800 pt-16">
+        <div className="text-gray-100 pt-16">
             <Helmet>
                 <title>InternetDJ Discussion Forum</title>
                 <meta
@@ -398,7 +398,7 @@ function Post() {
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8">
-                <Link to="/forum" className="text-blue-600 hover:underline mb-4 inline-block">
+                <Link to="/forum" className="text-primary-brand-300 hover:underline mb-4 inline-block">
                     ← Back to Forum
                 </Link>
                 <div className="flex justify-between items-center mb-4">
@@ -408,7 +408,7 @@ function Post() {
                             {canEditPost(post) && (
                                 <button
                                     onClick={() => navigate('/forum', { state: { editPostId: post.id } })}
-                                    className="text-blue-600 hover:text-primary-brand-800"
+                                    className="text-primary-brand-300 hover:text-primary-brand-200"
                                     title="Edit post"
                                 >
                                     <PencilIcon className="w-6 h-6" />
@@ -424,7 +424,7 @@ function Post() {
                         </div>
                     )}
                 </div>
-                <div className="mb-8 border border-gray-300 rounded-md p-4 bg-gray-50">
+                <div className="mb-8 border border-white/10 rounded-md p-4 bg-white/5">
                     <div className="flex items-center space-x-2 mb-2">
                         {post.user_picture ? (
                             <img
@@ -439,7 +439,7 @@ function Post() {
                             />
                         ) : (
                             <div
-                                className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-gray-400 text-xs"
                                 style={{ display: post.user_picture ? 'none' : 'flex' }}
                             >
                                 ?
@@ -448,11 +448,11 @@ function Post() {
                         <div>
                             <Link
                                 to={`/profile/${post.profile_id}`}
-                                className="text-black hover:underline"
+                                className="text-white hover:underline"
                             >
                                 {post.user_name}
                             </Link>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-gray-300">
                                 {formatDate(post.created_at)}
                                 {post.edited_at && (
                                     <span> (Edited {formatDate(post.edited_at)})</span>
@@ -460,7 +460,7 @@ function Post() {
                             </div>
                         </div>
                     </div>
-                    <div className="prose max-w-none text-gray-800">{parse(post.content)}</div>
+                    <div className="prose prose-invert max-w-none text-gray-100">{parse(post.content)}</div>
                     {post.image_url && (
                         <div className="mt-4">
                             <img
@@ -499,12 +499,12 @@ function Post() {
                                 onChange={(content) => setNewComment({ ...newComment, content })}
                                 modules={quillModules}
                                 placeholder="Your comment..."
-                                className="bg-white"
+                                className="bg-white/5 text-white border border-white/10 rounded-md"
                             />
                         </div>
                         {!editingComment && (
                             <div>
-                                <label htmlFor="comment-image-upload" className="text-gray-700 mr-2">
+                                <label htmlFor="comment-image-upload" className="text-gray-300 mr-2">
                                     Image
                                 </label>
                                 <input
@@ -512,7 +512,7 @@ function Post() {
                                     type="file"
                                     accept="image/jpeg,image/png,image/gif"
                                     onChange={handleImageChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    className="w-full px-3 py-2 border border-white/10 rounded-md bg-white/5 text-gray-200"
                                 />
                                 {imagePreview && (
                                     <div className="mt-2">
@@ -538,7 +538,7 @@ function Post() {
                                         setNewComment({ ...newComment, content: '', parent_comment_id: null });
                                         setEditingComment(null);
                                     }}
-                                    className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+                                    className="bg-white/10 text-white px-4 py-2 rounded-md hover:bg-white/15 transition-colors"
                                 >
                                     Cancel
                                 </button>

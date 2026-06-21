@@ -99,23 +99,23 @@ function Search() {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100">
                 <p className="text-red-400 text-lg">{error}</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-white text-gray-800 pt-16">
+        <div className="text-gray-100 pt-16">
             <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-8">
+                <h1 className="text-3xl font-bold mb-8 text-white">
                     Search Results for "{query || 'No query'}"
                 </h1>
 
                 <section className="mb-12">
-                    <h2 className="text-2xl font-bold mb-4">Songs</h2>
+                    <h2 className="text-2xl font-bold mb-4 text-white">Songs</h2>
                     {songs.length === 0 ? (
-                        <p>No songs found.</p>
+                        <p className="text-gray-300">No songs found.</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full">
@@ -123,7 +123,7 @@ function Search() {
                                 {songs.map((song, index) => (
                                     <tr
                                         key={song.id}
-                                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                                        className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'}
                                     >
                                         <td className="px-4 py-2 flex items-center space-x-2">
                                             <button
@@ -137,9 +137,9 @@ function Search() {
                                                 className="focus:outline-none"
                                             >
                                                 {currentSong?.id === song.id && isPlaying ? (
-                                                    <PauseIcon className="w-8 h-8 text-black hover:text-gray-700" />
+                                                    <PauseIcon className="w-8 h-8 text-white hover:text-gray-300" />
                                                 ) : (
-                                                    <PlayIcon className="w-8 h-8 text-black hover:text-gray-700" />
+                                                    <PlayIcon className="w-8 h-8 text-white hover:text-gray-300" />
                                                 )}
                                             </button>
                                             <div className="flex items-center space-x-2">
@@ -160,7 +160,7 @@ function Search() {
                                                     />
                                                 ) : (
                                                     <div
-                                                        className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                                        className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
                                                         style={{ display: song.image_url ? 'none' : 'flex' }}
                                                     >
                                                         ?
@@ -169,11 +169,11 @@ function Search() {
                                                 <div>
                                                     <Link
                                                         to={`/song/${song.id}`}
-                                                        className="text-black hover:underline"
+                                                        className="text-white hover:text-primary-brand-300 hover:underline"
                                                     >
                                                         {song.title}
                                                     </Link>
-                                                    <div className="text-sm text-gray-600">
+                                                    <div className="text-sm text-gray-300">
                                                         <Link
                                                             to={
                                                                 song.profile_id
@@ -182,7 +182,7 @@ function Search() {
                                                             }
                                                             className={
                                                                 song.profile_id
-                                                                    ? 'text-black hover:underline'
+                                                                        ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
                                                                     : 'text-gray-500 cursor-not-allowed'
                                                             }
                                                         >
@@ -192,18 +192,18 @@ function Search() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-2">{song.genre || 'Unknown'}</td>
+                                                            <td className="px-4 py-2 text-gray-300">{song.genre || 'Unknown'}</td>
                                         <td className="px-4 py-2">
                         <span className="inline-flex items-center">
                           {Number(song.plays) || 0}
-                            <SpeakerWaveIcon className="w-4 h-4 text-black ml-1" />
+                            <SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" />
                         </span>
                                         </td>
                                         <td className="px-4 py-2">
                         <span className="inline-flex items-center">
                           {Number(song.likes_count) || 0}
                             <HeartIconSolid
-                                className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                                className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
                             />
                         </span>
                                         </td>
@@ -216,9 +216,9 @@ function Search() {
                 </section>
 
                 <section>
-                    <h2 className="text-2xl font-bold mb-4">Profiles</h2>
+                    <h2 className="text-2xl font-bold mb-4 text-white">Profiles</h2>
                     {profiles.length === 0 ? (
-                        <p>No profiles found.</p>
+                        <p className="text-gray-300">No profiles found.</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full">
@@ -226,7 +226,7 @@ function Search() {
                                 {profiles.map((profile, index) => (
                                     <tr
                                         key={profile.id}
-                                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                                        className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'}
                                     >
                                         <td className="px-4 py-2 flex items-center space-x-2">
                                             <img
@@ -240,17 +240,17 @@ function Search() {
                                             />
                                             <Link
                                                 to={`/profile/${profile.id}`}
-                                                className="text-black hover:underline"
+                                                className="text-white hover:text-primary-brand-300 hover:underline"
                                             >
                                                 {profile.name}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-2">{profile.genre || 'Unknown'}</td>
-                                        <td className="px-4 py-2">{formatDate(profile.created_at)}</td>
+                                        <td className="px-4 py-2 text-gray-300">{profile.genre || 'Unknown'}</td>
+                                        <td className="px-4 py-2 text-gray-300">{formatDate(profile.created_at)}</td>
                                         <td className="px-4 py-2">
                         <span className="inline-flex items-center">
                           {Number(profile.total_plays) || 0}
-                            <SpeakerWaveIcon className="w-4 h-4 text-black ml-1" />
+                            <SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" />
                         </span>
                                         </td>
                                     </tr>

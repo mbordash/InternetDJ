@@ -3,7 +3,6 @@ import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import API_URL from '../utils/api';
 import IDJHeaderLogo from '../assets/internetdj-logo-header.png';
-import { UserCircleIcon } from '@heroicons/react/24/solid';
 
 function Navbar() {
     const [user, setUser] = useState(null);
@@ -80,9 +79,27 @@ function Navbar() {
         return initials.toUpperCase();
     };
 
+    const navItems = [
+        { to: '/discover', label: 'Discover' },
+        { to: '/browse', label: 'Browse' },
+        { to: '/projects', label: 'DAW' },
+        { to: '/stems', label: 'AI Stems' },
+        { to: '/forum', label: 'Forum' },
+    ];
+
+    const isActive = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+    const getNavLinkClass = (path) => (
+        `text-sm font-medium px-3 py-2 rounded-full transition-colors ${
+            isActive(path)
+                ? 'bg-white/10 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-white/5'
+        }`
+    );
+
     return (
-        <nav className="fixed top-0 left-0 right-0 bg-black text-white shadow-lg z-10">
-            <div className="container mx-auto px-4 py-4">
+        <nav className="fixed top-0 left-0 right-0 bg-black/85 backdrop-blur-md border-b border-white/10 text-white shadow-lg z-30">
+            <div className="container mx-auto px-4 py-3">
                 <div className="flex items-center justify-between">
                     {/* Left Section: Logo, Search, and Nav Links */}
                     <div className="flex items-center space-x-4">
@@ -98,18 +115,18 @@ function Navbar() {
                         <div className="w-20 md:w-20"></div>
 
                         {/* Search Bar and Navigation Links */}
-                        <div className="hidden md:flex items-center space-x-4">
+                        <div className="hidden md:flex items-center space-x-3">
                             <form onSubmit={handleSearch} className="flex items-center">
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Search songs or profiles..."
-                                    className="bg-gray-800 text-white px-3 py-1 rounded-l-md border-none focus:outline-none focus:ring-2 focus:ring-primary-brand w-64 md:w-72"
+                                    className="h-10 bg-white/10 text-white px-3 rounded-l-full border border-white/10 border-r-0 focus:outline-none focus:ring-2 focus:ring-primary-brand-400 w-64 md:w-72 placeholder:text-gray-300"
                                 />
                                 <button
                                     type="submit"
-                                    className="bg-primary-brand-500 hover:bg-primary-brand-700 text-white px-3 py-1 rounded-r-md transition-colors"
+                                    className="h-10 spotify-pill px-4 rounded-r-full transition-colors inline-flex items-center justify-center"
                                 >
                                     <svg
                                         className="w-5 h-5"
@@ -127,36 +144,11 @@ function Navbar() {
                                     </svg>
                                 </button>
                             </form>
-                            <Link
-                                to="/discover"
-                                className="text-gray-300 hover:text-primary-brand transition-colors"
-                            >
-                                Discover
-                            </Link>
-                            <Link
-                                to="/browse"
-                                className="text-gray-300 hover:text-primary-brand transition-colors"
-                            >
-                                Browse
-                            </Link>
-                            <Link
-                                to="/projects"
-                                className="text-gray-300 hover:text-primary-brand transition-colors"
-                            >
-                                DAW
-                            </Link>
-                            <Link
-                                to="/stems"
-                                className="text-gray-300 hover:text-primary-brand transition-colors"
-                            >
-                                AI Stems
-                            </Link>
-                            <Link
-                                to="/forum"
-                                className="text-gray-300 hover:text-primary-brand transition-colors"
-                            >
-                                Forum
-                            </Link>
+                            {navItems.map((item) => (
+                                <Link key={item.to} to={item.to} className={getNavLinkClass(item.to)}>
+                                    {item.label}
+                                </Link>
+                            ))}
                         </div>
                     </div>
 
@@ -205,7 +197,7 @@ function Navbar() {
                                     >
                                         {getInitials(user.name)}
                                     </div>
-                                    <span className="text-gray-300">{user.name || 'User'}</span>
+                                    <span className="text-gray-200 text-sm">{user.name || 'User'}</span>
                                     <svg
                                         className={`w-4 h-4 text-gray-300 transform ${isDropdownOpen ? 'rotate-180' : ''}`}
                                         fill="none"
@@ -223,47 +215,47 @@ function Navbar() {
                             ) : (
                                 <button
                                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                    className="bg-primary-brand-500 hover:bg-primary-brand-500 text-white px-4 py-2 rounded-md transition-colors"
+                                    className="spotify-pill px-4 py-2 rounded-full transition-colors"
                                 >
                                     Account
                                 </button>
                             )}
 
                             {isDropdownOpen && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                                <div className="absolute right-0 mt-2 w-52 bg-zinc-900 border border-white/10 rounded-xl shadow-lg py-1 z-10">
                                     {user ? (
                                         <>
                                             <Link
                                                 to={`/profile/${user.profile_id || user.id}`}
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Profile
                                             </Link>
                                             <Link
                                                 to={`/profile/${user.profile_id || user.id}/songs-manager`}
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Songs Manager
                                             </Link>
                                             <Link
                                                 to="/playlists"
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Playlists
                                             </Link>
                                             <Link
                                                 to={`/profile/${user.profile_id || user.id}/collaborations`}
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Collabs
                                             </Link>
                                             <button
                                                 onClick={logout}
-                                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                             >
                                                 Logout
                                             </button>
@@ -272,21 +264,21 @@ function Navbar() {
                                         <>
                                             <Link
                                                 to="/login"
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Login
                                             </Link>
                                             <Link
                                                 to="/register"
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Register
                                             </Link>
                                             <a
                                                 href={`${API_URL}/auth/google`}
-                                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-primary-brand-50 hover:text-primary-brand-600"
+                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
                                                 Login with Google
@@ -301,18 +293,18 @@ function Navbar() {
 
                 {/* Mobile Menu */}
                 {isOpen && (
-                    <div className="md:hidden mt-4 pb-4">
+                    <div className="md:hidden mt-4 pb-4 bg-black/70 border border-white/10 rounded-xl p-3">
                         <form onSubmit={handleSearch} className="mb-4 flex items-center">
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search songs or profiles..."
-                                className="bg-gray-800 text-white px-3 py-1 rounded-l-md border-none focus:outline-none focus:ring-2 focus:ring-primary-brand w-full"
+                                className="h-10 bg-white/10 text-white px-3 rounded-l-full border border-white/10 border-r-0 focus:outline-none focus:ring-2 focus:ring-primary-brand-400 w-full placeholder:text-gray-300"
                             />
                             <button
                                 type="submit"
-                                className="bg-primary-brand-500 hover:bg-primary-brand-700 text-white px-3 py-1 rounded-r-md transition-colors"
+                                className="h-10 spotify-pill px-3 rounded-r-full transition-colors inline-flex items-center justify-center"
                             >
                                 <svg
                                     className="w-5 h-5"
@@ -332,28 +324,28 @@ function Navbar() {
                         </form>
                         <Link
                             to="/new"
-                            className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                            className="block py-2 text-gray-300 hover:text-white transition-colors"
                             onClick={() => setIsOpen(false)}
                         >
                             New
                         </Link>
                         <Link
                             to="/browse"
-                            className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                            className="block py-2 text-gray-300 hover:text-white transition-colors"
                             onClick={() => setIsOpen(false)}
                         >
                             Browse
                         </Link>
                         <Link
                             to="/forum"
-                            className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                            className="block py-2 text-gray-300 hover:text-white transition-colors"
                             onClick={() => setIsOpen(false)}
                         >
                             Forum
                         </Link>
                         <Link
                             to="/collabs"
-                            className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                            className="block py-2 text-gray-300 hover:text-white transition-colors"
                             onClick={() => setIsOpen(false)}
                         >
                             Collabs
@@ -362,35 +354,35 @@ function Navbar() {
                             <>
                                 <Link
                                     to={`/profile/${user.profile_id || user.id}`}
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Profile
                                 </Link>
                                 <Link
                                     to={`/profile/${user.profile_id || user.id}/songs-manager`}
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Songs Manager
                                 </Link>
                                 <Link
                                     to="/playlists"
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Playlists
                                 </Link>
                                 <Link
                                     to="/collabs/new"
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     New Collab
                                 </Link>
                                 <Link
                                     to="/projects/new"
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     New Project
@@ -400,7 +392,7 @@ function Navbar() {
                                         logout();
                                         setIsOpen(false);
                                     }}
-                                    className="block w-full text-left py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors"
                                 >
                                     Logout
                                 </button>
@@ -409,21 +401,21 @@ function Navbar() {
                             <>
                                 <Link
                                     to="/login"
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Login
                                 </Link>
                                 <Link
                                     to="/register"
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Register
                                 </Link>
                                 <a
                                     href={`${API_URL}/auth/google`}
-                                    className="block py-2 text-gray-300 hover:text-primary-brand transition-colors"
+                                    className="block py-2 text-gray-300 hover:text-white transition-colors"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Login with Google

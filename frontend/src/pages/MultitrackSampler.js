@@ -88,7 +88,7 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
     return (
         <div
             ref={drag}
-            className={`absolute h-12 flex items-center p-1 bg-gray-50 rounded-md shadow-sm hover:bg-gray-100 ${
+            className={`absolute h-12 flex items-center p-1 bg-white/5 border border-white/10 rounded-md shadow-sm hover:bg-white/10 ${
                 isDragging ? 'opacity-50' : 'opacity-100'
             } ${isLoadingDurations ? 'cursor-not-allowed' : 'cursor-move'}`}
             style={{
@@ -98,7 +98,7 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
             onClick={handleClick}
         >
             {isLoadingDurations ? (
-                <div className="flex-1 h-10 bg-gray-200 animate-pulse" />
+                <div className="flex-1 h-10 bg-white/10 animate-pulse" />
             ) : (
                 <div ref={waveformRef} className={`flex-1 h-10 ${waveformColor}`} />
             )}
@@ -125,8 +125,8 @@ const SampleDeleteDropZone = ({ onDelete, isLoadingDurations }) => {
             ref={drop}
             className={`flex items-center justify-center w-72 h-10 border-2 border-dashed rounded-md text-sm font-medium transition-colors ${
                 isOver && !isLoadingDurations
-                    ? 'border-red-500 bg-red-100 text-red-700'
-                    : 'border-gray-400 bg-gray-100 text-gray-600'
+                    ? 'border-red-500 bg-red-500/20 text-red-300'
+                    : 'border-white/20 bg-white/5 text-gray-300'
             } ${isLoadingDurations ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
         >
             Drop Sample Here to Delete from Track
@@ -199,13 +199,13 @@ const DraggableSample = ({ sample, name, sampleId }) => {
     return (
         <div
             ref={drag}
-            className={`flex items-center space-x-2 p-2 bg-gray-100 rounded-md cursor-move ${
+            className={`flex items-center space-x-2 p-2 bg-white/5 border border-white/10 rounded-md cursor-move ${
                 isDragging ? 'opacity-50' : 'opacity-100'
             }`}
         >
             <button
                 onClick={handlePlay}
-                className="text-gray-800 hover:text-gray-600 focus:outline-none flex-shrink-0"
+                className="text-gray-200 hover:text-white focus:outline-none flex-shrink-0"
             >
                 {isPlaying ? '❚❚' : '▶'}
             </button>
@@ -285,7 +285,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                 drop(node);
             }}
             id={`timeline-${trackId}`}
-            className={`relative h-12 border border-gray-300 bg-gray-50 ${isOver ? 'bg-gray-200' : ''}`}
+            className={`relative h-12 border border-white/10 bg-white/5 ${isOver ? 'bg-white/10' : ''}`}
             style={{ width: `${timelineDuration * zoom}px` }}
         >
             {Array.from({ length: numMinorMarkers }, (_, i) => {
@@ -546,10 +546,16 @@ const MultiTrackSampler = () => {
                 }
             });
             wavesurfersRef.current = {};
-            toneTransportRef.current.cancel();
-            Tone.context.close().catch(err => {
-                console.warn('Error closing Tone.js context:', err.message);
-            });
+            try {
+                toneTransportRef.current.cancel();
+            } catch (err) {
+                console.warn('Error cancelling Tone transport:', err.message);
+            }
+            // NOTE: Do NOT close Tone.context here. It is a shared singleton used
+            // across the whole app/page. Closing it (especially under React 18
+            // StrictMode double-invoke in dev) leaves Tone with a permanently
+            // closed AudioContext, which causes "Cannot resume a closed
+            // AudioContext" on the next Tone.start() call.
         };
     }, []);
 
@@ -1030,7 +1036,36 @@ const MultiTrackSampler = () => {
         } else {
             setIsPlaying(true);
             isPlayingRef.current = true;
-            await Tone.start();
+
+            // Defensive guard: if Tone's shared AudioContext has been closed
+            // (e.g. by a prior unmount or React 18 StrictMode double-invoke),
+            // calling Tone.start() will throw "Cannot resume a closed
+            // AudioContext". Swap in a fresh Tone context before starting.
+            try {
+                const rawCtx = Tone.context && Tone.context.rawContext;
+                if (!Tone.context || (rawCtx && rawCtx.state === 'closed')) {
+                    Tone.setContext(new Tone.Context());
+                }
+            } catch (err) {
+                console.warn('Error verifying Tone context, recreating:', err.message);
+                try { Tone.setContext(new Tone.Context()); } catch (_) {}
+            }
+
+            try {
+                await Tone.start();
+            } catch (err) {
+                console.warn('Tone.start() failed, recreating Tone context and retrying:', err.message);
+                try {
+                    Tone.setContext(new Tone.Context());
+                    await Tone.start();
+                } catch (err2) {
+                    console.error('Failed to start Tone audio:', err2);
+                    setError('Failed to start audio. Please click Play again.');
+                    setIsPlaying(false);
+                    isPlayingRef.current = false;
+                    return;
+                }
+            }
 
             if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
                 audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -1784,7 +1819,7 @@ const MultiTrackSampler = () => {
 
     if (!user) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-lg">Please log in to edit projects.</p>
             </div>
         );
@@ -1792,7 +1827,7 @@ const MultiTrackSampler = () => {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-red-500 text-lg">{error}</p>
                 <Link to="/projects" className="mt-4 inline-block py-2 px-4 bg-primary-brand text-white font-semibold rounded-md hover:bg-primary-brand-500">
                     Back to Projects
@@ -1803,7 +1838,7 @@ const MultiTrackSampler = () => {
 
     if (!project) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-20">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-20">
                 <p className="text-lg">Loading...</p>
             </div>
         );
@@ -1816,7 +1851,7 @@ const MultiTrackSampler = () => {
 
     return (
         <DndProvider backend={HTML5Backend}>
-            <div className="w-full min-h-screen bg-white text-gray-800 pt-20 px-4">
+            <div className="w-full min-h-screen text-gray-100 pt-20 px-4">
                 <div className="mb-6">
                     <input
                         type="text"
@@ -1824,7 +1859,7 @@ const MultiTrackSampler = () => {
                         onChange={(e) => setEditTitle(e.target.value)}
                         onBlur={handleSaveTitle}
                         onKeyPress={(e) => e.key === 'Enter' && handleSaveTitle()}
-                        className="text-3xl font-bold w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                        className="text-3xl font-bold w-full px-2 py-1 border border-white/10 bg-white/5 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500"
                         placeholder="Enter project title"
                     />
                 </div>
@@ -1909,7 +1944,7 @@ const MultiTrackSampler = () => {
                 </div>
                 <div className="flex mb-6">
                     {/* Track Settings Column (Static) */}
-                    <div className="w-[224px] flex-shrink-0 sticky top-20 z-10 bg-white">
+                    <div className="w-[224px] flex-shrink-0 sticky top-20 z-10 bg-[#0f0f0f] border-r border-white/10">
                         <div className="h-12"></div> {/* Empty div to align with top timeline */}
                         <div className="space-y-1">
                             {tracks.map((track) => {
@@ -2066,13 +2101,13 @@ const MultiTrackSampler = () => {
                                 value={newTrackName}
                                 onChange={(e) => setNewTrackName(e.target.value)}
                                 placeholder="Track name"
-                                className="w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="w-64 px-3 py-2 border border-white/10 bg-white/5 text-white rounded-md shadow-sm focus:outline-none focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 disabled={isLoadingDurations}
                             />
                             <select
                                 value={newTrackType}
                                 onChange={(e) => setNewTrackType(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                                className="px-3 py-2 border border-white/10 bg-white/5 text-white rounded-md shadow-sm focus:outline-none focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 disabled={isLoadingDurations}
                             >
                                 <option value="sample">Sample</option>
@@ -2080,7 +2115,7 @@ const MultiTrackSampler = () => {
                             </select>
                             <button
                                 type="submit"
-                                className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                                className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                                 disabled={isLoadingDurations}
                             >
                                 +
@@ -2093,9 +2128,9 @@ const MultiTrackSampler = () => {
                                 onChange={handleTogglePublic}
                                 disabled={isLoadingDurations}
                                 id="public-toggle"
-                                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-300 rounded disabled:opacity-50"
+                                className="h-4 w-4 text-primary-brand-400 focus:ring-primary-brand-500 border-white/20 bg-white/10 rounded disabled:opacity-50"
                             />
-                            <label htmlFor="public-toggle" className="text-sm text-gray-800">Allow public to view</label>
+                            <label htmlFor="public-toggle" className="text-sm text-gray-200">Allow public to view</label>
                         </div>
                         <SampleDeleteDropZone onDelete={handleDeleteSample} isLoadingDurations={isLoadingDurations} />
                     </div>
@@ -2123,7 +2158,7 @@ const MultiTrackSampler = () => {
                         multiple
                         onChange={handleFileUpload}
                         ref={fileInputRef}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-800 hover:file:bg-gray-200"
+                        className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                     />
                 </div>
                 {selectedTrack && (

@@ -97,14 +97,14 @@ function Browse() {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center bg-white text-gray-800 pt-16">
+            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-16">
                 <p className="text-red-400 text-lg">{error}</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-white text-gray-800 pt-16">
+        <div className="text-gray-100 pt-16">
             <Helmet>
                 <title>Browse Music Genres</title>
                 <meta
@@ -124,34 +124,34 @@ function Browse() {
             <div className="container mx-auto px-4 py-8">
                 <div className="flex flex-col md:flex-row md:space-x-4">
                     <div className="w-full md:w-3/4">
-                        <h1 className="text-3xl font-bold mb-8 text-black">Browse by Genre Tag</h1>
+                        <h1 className="text-3xl font-bold mb-8 text-white">Browse by Genre Tag</h1>
                         {tags.length === 0 ? (
-                            <p className="text-gray-600">No tags available.</p>
+                            <p className="text-gray-300">No tags available.</p>
                         ) : (
                             <div className="space-y-12">
                                 {tags.map((tag) => (
-                                    <section key={tag.tag} className="mb-12">
+                                    <section key={tag.tag} className="mb-12 spotify-surface p-4">
                                         <div className="flex justify-between items-center mb-4">
-                                            <h2 className="text-2xl font-bold capitalize text-black">{tag.tag}</h2>
+                                            <h2 className="text-2xl font-bold capitalize text-white">{tag.tag}</h2>
                                             <Link
                                                 to={`/tag/${encodeURIComponent(tag.tag)}`}
-                                                className="px-4 py-2 border border-black text-black rounded-md hover:bg-black hover:text-white transition-colors"
+                                                className="px-4 py-2 spotify-pill rounded-full transition-colors"
                                                 aria-label={`View all songs in ${tag.tag} genre`}
                                             >
                                                 View All
                                             </Link>
                                         </div>
                                         {tag.songs.length === 0 ? (
-                                            <p className="text-gray-600">No songs available for this tag.</p>
+                                            <p className="text-gray-300">No songs available for this tag.</p>
                                         ) : (
                                             <div className="md:overflow-x-auto">
                                                 {/* Table for Desktop */}
                                                 <table className="min-w-full hidden md:table table-fixed">
                                                     <thead>
-                                                    <tr className="bg-gray-100">
-                                                        <th className="px-4 py-2 text-left text-gray-800 w-[60%]">Song</th>
-                                                        <th className="px-4 py-2 text-left text-gray-800 w-[20%]">Plays</th>
-                                                        <th className="px-4 py-2 text-left text-gray-800 w-[20%]">Likes</th>
+                                                    <tr className="bg-white/5">
+                                                        <th className="px-4 py-2 text-left text-gray-300 w-[60%]">Song</th>
+                                                        <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Plays</th>
+                                                        <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Likes</th>
                                                     </tr>
                                                     </thead>
                                                     <tbody>
@@ -159,8 +159,8 @@ function Browse() {
                                                         <tr
                                                             key={song.id}
                                                             className={`${
-                                                                index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                                            } hover:bg-gray-100 transition-colors`}
+                                                                index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'
+                                                            } hover:bg-white/10 transition-colors`}
                                                         >
                                                             <td className="px-4 py-2 flex items-center space-x-2">
                                                                 <div className="relative flex-shrink-0 w-12 h-12">
@@ -183,7 +183,7 @@ function Browse() {
                                                                         </Link>
                                                                     ) : (
                                                                         <div
-                                                                            className="w-12 h-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                                                            className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
                                                                             style={{
                                                                                 display: song.image_url ? 'none' : 'flex',
                                                                             }}
@@ -215,17 +215,17 @@ function Browse() {
                                                                     <div className="min-w-0 flex-1">
                                                                         <Link
                                                                             to={`/song/${song.id}`}
-                                                                            className="text-black hover:text-gray-600 hover:underline font-medium block truncate"
+                                                                            className="text-white hover:text-primary-brand-300 hover:underline font-medium block truncate"
                                                                             title={song.title}
                                                                         >
                                                                             {song.title}
                                                                         </Link>
-                                                                        <div className="text-sm text-gray-600 truncate">
+                                                                        <div className="text-sm text-gray-300 truncate">
                                                                             <Link
                                                                                 to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
                                                                                 className={
                                                                                     song.profile_id
-                                                                                        ? 'text-black hover:text-gray-600 hover:underline'
+                                                                                        ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
                                                                                         : 'text-gray-500 cursor-not-allowed'
                                                                                 }
                                                                                 title={song.profile_name}
@@ -239,14 +239,14 @@ function Browse() {
                                                             <td className="px-4 py-2">
                                   <span className="inline-flex items-center">
                                     {Number(song.plays) || 0}
-                                      <SpeakerWaveIcon className="w-4 h-4 text-gray-600 ml-1" />
+                                      <SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" />
                                   </span>
                                                             </td>
                                                             <td className="px-4 py-2">
                                   <span className="inline-flex items-center">
                                     {Number(song.likes_count) || 0}
                                       <HeartIconSolid
-                                          className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                                          className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
                                       />
                                   </span>
                                                             </td>
@@ -260,7 +260,7 @@ function Browse() {
                                                     {tag.songs.map((song) => (
                                                         <div
                                                             key={song.id}
-                                                            className="bg-white p-4 rounded-md shadow-sm hover:shadow-md transition-shadow"
+                                                                    className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors"
                                                         >
                                                             <div className="flex items-center space-x-4">
                                                                 <div className="relative flex-shrink-0 w-16 h-16">
@@ -283,7 +283,7 @@ function Browse() {
                                                                         </Link>
                                                                     ) : (
                                                                         <div
-                                                                            className="w-16 h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                                                            className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
                                                                             style={{
                                                                                 display: song.image_url ? 'none' : 'flex',
                                                                             }}
@@ -314,30 +314,30 @@ function Browse() {
                                                                 <div className="flex-1">
                                                                     <Link
                                                                         to={`/song/${song.id}`}
-                                                                        className="text-black hover:text-gray-600 hover:underline font-medium"
+                                                                        className="text-white hover:text-primary-brand-300 hover:underline font-medium"
                                                                     >
                                                                         {song.title}
                                                                     </Link>
-                                                                    <div className="text-sm text-gray-600">
+                                                                    <div className="text-sm text-gray-300">
                                                                         <Link
                                                                             to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
                                                                             className={
                                                                                 song.profile_id
-                                                                                    ? 'text-black hover:text-gray-600 hover:underline'
+                                                                                    ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
                                                                                     : 'text-gray-500 cursor-not-allowed'
                                                                             }
                                                                         >
                                                                             {song.profile_name}
                                                                         </Link>
                                                                     </div>
-                                                                    <div className="text-sm text-gray-600 mt-1">
+                                                                    <div className="text-sm text-gray-300 mt-1">
                                                                         Plays: {Number(song.plays) || 0}
-                                                                        <SpeakerWaveIcon className="w-4 h-4 text-gray-600 inline ml-1" />
+                                                                        <SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" />
                                                                     </div>
-                                                                    <div className="text-sm text-gray-600">
+                                                                    <div className="text-sm text-gray-300">
                                                                         Likes: {Number(song.likes_count) || 0}
                                                                         <HeartIconSolid
-                                                                            className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                                                                            className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
                                                                         />
                                                                     </div>
                                                                 </div>
@@ -355,9 +355,9 @@ function Browse() {
 
                     <aside className="w-full md:w-1/4 mt-8 md:mt-0 md:pl-4">
                         <div className="mb-8">
-                            <h2 className="text-xl font-bold mb-4 text-black">Featured Song</h2>
+                            <h2 className="text-xl font-bold mb-4 text-white">Featured Song</h2>
                             {featuredSong ? (
-                                <div className="bg-black p-4 rounded-md shadow-sm hover:bg-gray-800 transition-colors">
+                                <div className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors">
                                     <div className="relative">
                                         <Link to={`/song/${featuredSong.id}`} tabIndex={0}>
                                             <img
@@ -418,20 +418,20 @@ function Browse() {
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-gray-600">No featured song available.</p>
+                                <p className="text-gray-300">No featured song available.</p>
                             )}
                         </div>
 
                         <div>
-                            <h2 className="text-xl font-bold mb-4 text-black">Songs Awaiting Reviews</h2>
+                            <h2 className="text-xl font-bold mb-4 text-white">Songs Awaiting Reviews</h2>
                             {unreviewedSongs.length === 0 ? (
-                                <p className="text-gray-600">No unreviewed songs available.</p>
+                                <p className="text-gray-300">No unreviewed songs available.</p>
                             ) : (
                                 <ul className="space-y-4">
                                     {unreviewedSongs.map((song) => (
                                         <li
                                             key={song.id}
-                                            className="bg-white p-4 rounded-md shadow-sm hover:shadow-md transition-shadow"
+                                            className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors"
                                         >
                                             <div className="flex items-center space-x-2">
                                                 <div className="relative flex-shrink-0 w-16 h-16">
@@ -454,7 +454,7 @@ function Browse() {
                                                         </Link>
                                                     ) : (
                                                         <div
-                                                            className="w-16 h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs"
+                                                            className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
                                                             style={{
                                                                 display: song.image_url ? 'none' : 'flex',
                                                             }}
@@ -485,37 +485,37 @@ function Browse() {
                                                 <div className="flex-1">
                                                     <Link
                                                         to={`/song/${song.id}`}
-                                                        className="text-black hover:text-gray-600 hover:underline font-medium"
+                                                        className="text-white hover:text-primary-brand-300 hover:underline font-medium"
                                                     >
                                                         {song.title}
                                                     </Link>
-                                                    <div className="text-sm text-gray-600">
+                                                    <div className="text-sm text-gray-300">
                                                         <Link
                                                             to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
                                                             className={
                                                                 song.profile_id
-                                                                    ? 'text-black hover:text-gray-600 hover:underline'
+                                                                    ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
                                                                     : 'text-gray-500 cursor-not-allowed'
                                                             }
                                                         >
                                                             {song.profile_name}
                                                         </Link>
                                                     </div>
-                                                    <div className="text-sm text-gray-600">
+                                                    <div className="text-sm text-gray-300">
                             <span className="inline-flex items-center">
                               Plays: {Number(song.plays) || 0}
-                                <SpeakerWaveIcon className="w-4 h-4 text-gray-600 inline ml-1" />
+                                <SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" />
                             </span>
                                                         <span className="inline-flex items-center ml-4">
                               Likes: {Number(song.likes_count) || 0}
                                                             <HeartIconSolid
-                                                                className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
+                                                                className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
                                                             />
                             </span>
                                                     </div>
                                                     <Link
                                                         to={`/song/${song.id}#review`}
-                                                        className="text-gray-700 hover:text-gray-900 hover:underline text-sm font-medium"
+                                                        className="text-primary-brand-300 hover:text-primary-brand-200 hover:underline text-sm font-medium"
                                                     >
                                                         Write a Review
                                                     </Link>

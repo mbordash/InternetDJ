@@ -124,18 +124,18 @@ function Login() {
     const googleLoginUrl = `${API_URL}/auth/google?return=${encodeURIComponent(returnUrl)}`;
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-                <h1 className="text-3xl font-bold text-gray-900 text-center mb-6">Login to InternetDJ</h1>
+        <div className="min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-md w-full spotify-surface p-8">
+                <h1 className="text-3xl font-bold text-white text-center mb-6">Login to InternetDJ</h1>
                 {error && (
-                    <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-400 text-red-300 rounded-md">
                         {error}
                     </div>
                 )}
 
                 <form onSubmit={handleEmailLogin} className="space-y-6 mb-4">
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-300">
                             Email
                         </label>
                         <input
@@ -143,13 +143,13 @@ function Login() {
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
+                            className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
                             placeholder="Enter your email"
                             required
                         />
                     </div>
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-300">
                             Password
                         </label>
                         <input
@@ -157,7 +157,7 @@ function Login() {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
+                            className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
                             placeholder="Enter your password"
                             required
                         />
@@ -178,7 +178,7 @@ function Login() {
                 </form>
 
                 <div className="text-center mb-4">
-                    <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-primary-brand-800 font-medium">
+                    <Link to="/forgot-password" className="text-sm text-primary-brand-300 hover:text-primary-brand-200 font-medium">
                         Forgot Password?
                     </Link>
                 </div>
@@ -195,9 +195,9 @@ function Login() {
                 </a>
 
                 <div className="text-center">
-                    <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-300">
                         Don't have an account?{' '}
-                        <Link to="/register" className="text-blue-600 hover:text-primary-brand-800 font-medium">
+                            <Link to="/register" className="text-primary-brand-300 hover:text-primary-brand-200 font-medium">
                             Register
                         </Link>
                     </p>

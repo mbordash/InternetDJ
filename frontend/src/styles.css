@@ -56,3 +56,29 @@ footer {
     z-index: auto !important;
     bottom: auto !important;
 }
+
+body {
+    background: radial-gradient(circle at top, #1b1b1b 0%, #121212 45%, #090909 100%);
+    color: #f3f4f6;
+}
+
+.app-shell {
+    background: linear-gradient(180deg, rgba(20, 20, 20, 0.94) 0%, rgba(9, 9, 9, 0.98) 50%, #090909 100%);
+}
+
+.spotify-surface {
+    background: rgba(24, 24, 24, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+}
+
+.spotify-pill {
+    background: #008dcb;
+    color: #f5fbff;
+    font-weight: 700;
+}
+
+.spotify-pill:hover {
+    background: #0078b5;
+}

@@ -724,18 +724,18 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   };
 
   return (
-      <div className="w-full bg-white p-4 rounded-md shadow-sm relative">
+      <div className="w-full bg-[#0f0f0f] border border-white/10 p-4 rounded-xl shadow-sm relative text-gray-100">
         <style>
           {`
           .wavesurfer canvas {
             pointer-events: none;
           }
-          input[type="range"][orient="vertical"] {
+            input[type="range"][orient="vertical"] {
             writing-mode: vertical-lr;
             direction: rtl;
             width: 8px;
             height: 100px;
-            background: #e5e7eb;
+            background: #1f2937;
             border-radius: 5px;
             outline: none;
           }
@@ -743,14 +743,14 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
             -webkit-appearance: none;
             width: 16px;
             height: 16px;
-            background: #1f2937;
+            background: #60a5fa;
             border-radius: 50%;
             cursor: pointer;
           }
           input[type="range"][orient="vertical"]::-moz-range-thumb {
             width: 16px;
             height: 16px;
-            background: #1f2937;
+            background: #60a5fa;
             border-radius: 50%;
             cursor: pointer;
           }
@@ -759,9 +759,9 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         <div className="relative">
           <div ref={waveformRef} className="w-full relative z-0" />
           {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-20">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-20 rounded-xl">
                 <svg
-                    className="animate-spin h-8 w-8 text-gray-600"
+                    className="animate-spin h-8 w-8 text-primary-brand-300"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -816,15 +816,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           >
             <AdjustmentsVerticalIcon className="h-6 w-6" />
           </button>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-300">
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
         {showMasteringModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-red-100 p-6 rounded-lg w-[400px]">
+              <div className="bg-[#111827] border border-white/10 p-6 rounded-xl w-[400px] text-gray-100 shadow-2xl">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Auto Mastering</h3>
+                  <h3 className="text-lg font-semibold text-white">Auto Mastering</h3>
                   <button
                       onClick={() => {
                         setShowMasteringModal(false);
@@ -832,7 +832,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                         setMasteringType(null);
                         setMasteringError(null);
                       }}
-                      className="p-1 text-gray-600 hover:text-gray-800"
+                      className="p-1 text-gray-400 hover:text-white"
                   >
                     <XMarkIcon className="h-5 w-5" />
                   </button>
@@ -840,7 +840,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
                 {!masteredUrl && (
                     <div className="space-y-4">
-                      <p className="text-gray-600">Select mastering intensity:</p>
+                      <p className="text-gray-300">Select mastering intensity:</p>
                       <div className="flex space-x-2">
                         {['light', 'middle', 'heavy'].map((type) => (
                             <button
@@ -849,7 +849,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                                 disabled={isMastering}
                                 className={`flex-1 py-2 px-4 rounded-md ${
                                     isMastering
-                                        ? 'bg-gray-300 cursor-not-allowed'
+                                        ? 'bg-white/10 text-gray-500 cursor-not-allowed'
                                         : 'bg-primary-brand-500 text-white hover:bg-primary-brand-700'
                                 }`}
                             >
@@ -863,7 +863,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                 {isMastering && !masteredUrl && (
                     <div className="flex justify-center">
                       <svg
-                          className="animate-spin h-6 w-6 text-gray-600"
+                          className="animate-spin h-6 w-6 text-primary-brand-300"
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
                           viewBox="0 0 24 24"
@@ -876,7 +876,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
                 {masteredUrl && (
                     <div className="space-y-4">
-                      <p className="text-gray-600">Preview mastered track:</p>
+                      <p className="text-gray-300">Preview mastered track:</p>
                       <audio controls src={masteredUrl} className="w-full" />
                       <div className="flex space-x-2">
                         <button
@@ -884,8 +884,8 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                             disabled={isSaving}
                             className={`flex-1 py-2 px-4 rounded-md ${
                                 isSaving
-                                    ? 'bg-gray-300 cursor-not-allowed'
-                                    : 'bg-green-600 text-white hover:bg-green-700'
+                                    ? 'bg-white/10 text-gray-500 cursor-not-allowed'
+                                    : 'bg-primary-brand-500 text-white hover:bg-primary-brand-700'
                             }`}
                         >
                           {isSaving ? 'Saving...' : 'Save Mastered Track'}
@@ -895,7 +895,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                               setMasteredUrl(null);
                               setMasteringType(null);
                             }}
-                            className="flex-1 py-2 px-4 rounded-md bg-gray-600 text-white hover:bg-gray-700"
+                            className="flex-1 py-2 px-4 rounded-md bg-white/10 text-white hover:bg-white/15"
                         >
                           Try Another
                         </button>
@@ -909,7 +909,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                       {masteringError.includes('Too many') && (
                           <button
                               onClick={() => handleMastering(masteringType)}
-                              className="ml-2 text-blue-600 underline hover:text-primary-brand-800"
+                              className="ml-2 text-primary-brand-300 underline hover:text-primary-brand-200"
                           >
                             Try Again
                           </button>
@@ -922,11 +922,11 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         )}
 
         {showSuccessNotification && newSongId && (
-            <div className="fixed top-4 right-4 bg-green-600 text-white p-4 rounded-md shadow-lg z-50 flex items-center space-x-2">
+            <div className="fixed top-4 right-4 bg-primary-brand-600 text-white p-4 rounded-md shadow-lg z-50 flex items-center space-x-2 border border-white/10">
               <span>Mastered track saved successfully!</span>
               <a
                   href={`/song/${newSongId}`}
-                  className="underline hover:text-gray-200"
+                  className="underline hover:text-white"
               >
                 View Track
               </a>
@@ -942,7 +942,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         {showEQ && (
             <div
                 ref={modalRef}
-                className="fixed bg-gray-200 p-4 rounded-lg shadow-md w-full max-w-[90vw] sm:max-w-[600px] z-50 border border-black"
+                className="fixed bg-[#111827] p-4 rounded-xl shadow-md w-full max-w-[90vw] sm:max-w-[600px] z-50 border border-white/10 text-gray-100"
                 style={{
                   top: `${modalPosition.top}px`,
                   left: `${modalPosition.left}px`,
@@ -953,10 +953,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                   className="flex justify-between items-center mb-4 cursor-move"
                   onMouseDown={handleDragStart}
               >
-                <h3 className="text-lg font-semibold text-gray-800">Equalizer</h3>
+                <h3 className="text-lg font-semibold text-white">Equalizer</h3>
                 <button
                     onClick={toggleEQModal}
-                    className="p-1 text-gray-600 hover:text-gray-800 focus:outline-none"
+                    className="p-1 text-gray-400 hover:text-white focus:outline-none"
                 >
                   <XMarkIcon className="h-5 w-5" />
                 </button>
@@ -964,7 +964,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
               {eqLoading && !filtersInitialized && (
                   <div className="flex justify-center mb-4">
                     <svg
-                        className="animate-spin h-6 w-6 text-gray-600"
+                        className="animate-spin h-6 w-6 text-primary-brand-300"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
                         viewBox="0 0 24 24"
@@ -975,7 +975,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                   </div>
               )}
               {!eqLoading && !filtersInitialized && (
-                  <div className="text-center mb-4 text-gray-600">
+                  <div className="text-center mb-4 text-gray-300">
                     Unable to initialize equalizer. Please try playing the audio first.
                   </div>
               )}
@@ -993,15 +993,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                           className="w-8 h-24"
                           disabled={!filtersInitialized || eqLoading}
                       />
-                      <span className="text-xs text-gray-600 mt-2">{band} Hz</span>
-                      <span className="text-xs text-gray-600">{eqGains[band].toFixed(1)} dB</span>
+                      <span className="text-xs text-gray-300 mt-2">{band} Hz</span>
+                      <span className="text-xs text-gray-300">{eqGains[band].toFixed(1)} dB</span>
                     </div>
                 ))}
               </div>
               <div className="mt-4 flex justify-end space-x-2">
                 <button
                     onClick={resetEQ}
-                    className="py-1 px-3 bg-gray-800 text-white rounded-md hover:bg-gray-700 focus:outline-none"
+                    className="py-1 px-3 bg-white/10 text-white rounded-md hover:bg-white/15 focus:outline-none"
                     disabled={!filtersInitialized || eqLoading}
                 >
                   Reset EQ
@@ -1011,7 +1011,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                     className={`py-1 px-3 rounded-md focus:outline-none ${
                         isAuthenticated
                             ? 'bg-primary-brand-500 text-white hover:bg-primary-brand-700'
-                            : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                            : 'bg-white/10 text-gray-500 cursor-not-allowed'
                     }`}
                     disabled={!isAuthenticated || isSaving || eqLoading || !filtersInitialized}
                 >
