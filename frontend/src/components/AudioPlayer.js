@@ -517,8 +517,8 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       console.log(`[DEBUG] Creating new WaveSurfer instance for songId: ${songId}`);
       wavesurferRef.current = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: 'rgb(79 70 229)',
-        progressColor: 'rgb(100, 0, 100)',
+        waveColor: '#73cbf0',
+        progressColor: '#008dcb',
         cursorColor: '#000',
         barWidth: 2,
         barRadius: 2,

@@ -133,6 +133,173 @@ router.get('/:songId/stats', authenticate, async (req, res) => {
     }
 });
 
+// GET /music/:songId/similar – "You might also like" based on shared genre tags
+router.get('/:songId/similar', async (req, res) => {
+    const songId = parseInt(req.params.songId);
+    if (!songId) return res.status(400).json({ error: 'Invalid song ID' });
+
+    try {
+        // Fetch the current song's genre and profile_id
+        const songRows = await pool.query('SELECT genre, profile_id FROM songs WHERE id = ?', [songId]);
+        if (!songRows || songRows.length === 0) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
+        const { genre, profile_id } = songRows[0];
+        const tags = genre ? genre.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+        if (tags.length === 0) {
+            // No genres – fall back to most-played songs by other artists
+            const fallback = await pool.query(`
+                SELECT s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
+                       p.name AS profile_name,
+                       (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
+                        WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+                FROM songs s
+                LEFT JOIN profiles p ON s.profile_id = p.id
+                WHERE s.id != ? AND s.profile_id != ?
+                ORDER BY s.plays DESC
+                LIMIT 6
+            `, [songId, profile_id]);
+
+            return res.json({ songs: fallback.map(r => ({ ...r, id: Number(r.id), profile_id: Number(r.profile_id), plays: Number(r.plays) || 0, likes_count: Number(r.likes_count) || 0 })) });
+        }
+
+        // Build a LIKE condition per tag so partial genre strings still match
+        const likeConditions = tags.map(() => 's.genre LIKE ?').join(' OR ');
+        const likeParams = tags.map(t => `%${t}%`);
+
+        const rows = await pool.query(`
+            SELECT s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
+                   p.name AS profile_name,
+                   (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
+                    WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+            FROM songs s
+            LEFT JOIN profiles p ON s.profile_id = p.id
+            WHERE s.id != ?
+              AND s.profile_id != ?
+              AND (${likeConditions})
+            ORDER BY s.plays DESC, likes_count DESC
+            LIMIT 8
+        `, [songId, profile_id, ...likeParams]);
+
+        res.json({
+            songs: rows.map(r => ({
+                id: Number(r.id),
+                title: r.title,
+                image_url: r.image_url,
+                plays: Number(r.plays) || 0,
+                genre: r.genre,
+                profile_id: Number(r.profile_id),
+                profile_name: r.profile_name || 'Unknown',
+                likes_count: Number(r.likes_count) || 0,
+            }))
+        });
+    } catch (err) {
+        logger.error('Error in GET /music/:songId/similar:', err);
+        res.status(500).json({ error: 'Failed to fetch similar songs' });
+    }
+});
+
+// GET /music/:songId/activity – public activity feed for a song
+router.get('/:songId/activity', async (req, res) => {
+    const songId = parseInt(req.params.songId);
+    if (!songId) return res.status(400).json({ error: 'Invalid song ID' });
+
+    try {
+        // Look up the song's profile_id so we can also include artist-follow events
+        const songRows = await pool.query('SELECT profile_id FROM songs WHERE id = ?', [songId]);
+        if (!songRows || songRows.length === 0) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+        const profileId = Number(songRows[0].profile_id);
+
+        // 1. Likes – playlist_songs in a "Likes" playlist
+        const likes = await pool.query(`
+            SELECT
+                'song_liked' AS type,
+                p.id          AS actor_profile_id,
+                p.name        AS actor_name,
+                p.picture_url AS actor_picture,
+                ps.added_at   AS created_at,
+                NULL          AS extra
+            FROM playlist_songs ps
+            JOIN playlists pl ON ps.playlist_id = pl.id
+            JOIN profiles p   ON pl.profile_id  = p.id
+            WHERE ps.song_id = ? AND LOWER(pl.name) = 'likes'
+            ORDER BY ps.added_at DESC
+            LIMIT 20
+        `, [songId]);
+
+        // 2. Added to any non-Likes playlist
+        const playlistAdds = await pool.query(`
+            SELECT
+                'playlist_add'  AS type,
+                p.id            AS actor_profile_id,
+                p.name          AS actor_name,
+                p.picture_url   AS actor_picture,
+                ps.added_at     AS created_at,
+                pl.name         AS extra
+            FROM playlist_songs ps
+            JOIN playlists pl ON ps.playlist_id = pl.id
+            JOIN profiles p   ON pl.profile_id  = p.id
+            WHERE ps.song_id = ? AND LOWER(pl.name) != 'likes'
+            ORDER BY ps.added_at DESC
+            LIMIT 20
+        `, [songId]);
+
+        // 3. Reviews
+        const reviews = await pool.query(`
+            SELECT
+                'song_reviewed' AS type,
+                p.id            AS actor_profile_id,
+                p.name          AS actor_name,
+                p.picture_url   AS actor_picture,
+                r.created_at    AS created_at,
+                NULL            AS extra
+            FROM reviews r
+            JOIN profiles p ON r.profile_id = p.id
+            WHERE r.song_id = ?
+            ORDER BY r.created_at DESC
+            LIMIT 20
+        `, [songId]);
+
+        // 4. Artist follows (people who followed this song's artist)
+        const follows = await pool.query(`
+            SELECT
+                'profile_followed' AS type,
+                follower_p.id      AS actor_profile_id,
+                follower_p.name    AS actor_name,
+                follower_p.picture_url AS actor_picture,
+                f.created_at       AS created_at,
+                NULL               AS extra
+            FROM follows f
+            JOIN profiles follower_p ON follower_p.user_id = f.follower_id
+            WHERE f.followed_profile_id = ?
+            ORDER BY f.created_at DESC
+            LIMIT 20
+        `, [profileId]);
+
+        // Merge, sort by date desc, cap at 30
+        const all = [...likes, ...playlistAdds, ...reviews, ...follows]
+            .map(row => ({
+                type: row.type,
+                actor_profile_id: row.actor_profile_id != null ? Number(row.actor_profile_id) : null,
+                actor_name: row.actor_name || 'Someone',
+                actor_picture: row.actor_picture || null,
+                created_at: row.created_at,
+                extra: row.extra || null,
+            }))
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 30);
+
+        res.json({ activity: all });
+    } catch (err) {
+        logger.error('Error in GET /music/:songId/activity:', err);
+        res.status(500).json({ error: 'Failed to fetch activity' });
+    }
+});
+
 router.get('/featured', async (req, res) => {
     try {
         // Pick a random song with listens and at least one positive review signal.
