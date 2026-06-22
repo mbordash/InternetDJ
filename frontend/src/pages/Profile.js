@@ -725,14 +725,14 @@ const ProfilePage = () => {
     const followerProfileIdSet = new Set(followers.map((p) => Number(p.profile_id)));
     const followingProfileIdSet = new Set(followingProfiles.map((p) => Number(p.profile_id)));
     const socialLinks = [
-        { key: 'x_url', label: 'X', href: profile.x_url, icon: ChatBubbleLeftRightIcon },
-        { key: 'facebook_url', label: 'Facebook', href: profile.facebook_url, icon: LinkIcon },
-        { key: 'youtube_url', label: 'YouTube', href: profile.youtube_url, icon: PlayCircleIcon },
-        { key: 'website_url', label: 'Website', href: profile.website_url, icon: GlobeAltIcon },
-        { key: 'instagram_url', label: 'Instagram', href: profile.instagram_url, icon: CameraIcon },
-        { key: 'donation_link', label: 'Donate', href: profile.donation_link, icon: HeartIconSolid },
+        { key: 'x_url', label: 'X', href: profile?.x_url, icon: ChatBubbleLeftRightIcon },
+        { key: 'facebook_url', label: 'Facebook', href: profile?.facebook_url, icon: LinkIcon },
+        { key: 'youtube_url', label: 'YouTube', href: profile?.youtube_url, icon: PlayCircleIcon },
+        { key: 'website_url', label: 'Website', href: profile?.website_url, icon: GlobeAltIcon },
+        { key: 'instagram_url', label: 'Instagram', href: profile?.instagram_url, icon: CameraIcon },
+        { key: 'donation_link', label: 'Donate', href: profile?.donation_link, icon: HeartIconSolid },
     ].filter((link) => typeof link.href === 'string' && link.href.trim().length > 0);
-    const shouldClampArtistInfo = (profile.description || '').length > 320 || socialLinks.length > 4;
+    const shouldClampArtistInfo = ((profile?.description || '').length > 320) || socialLinks.length > 4;
 
     if (error === 'Profile not found') {
         if (isOwner) {
