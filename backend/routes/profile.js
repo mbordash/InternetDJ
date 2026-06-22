@@ -234,12 +234,26 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
 });
 
 router.post('/', authenticate, async (req, res) => {
-  const { name, genre, description, background, donation_link, solana_address } = req.body;
+  const {
+    name,
+    genre,
+    description,
+    background,
+    donation_link,
+    solana_address,
+    website_url,
+    x_url,
+    facebook_url,
+    youtube_url,
+    instagram_url,
+  } = req.body;
   const picture = req.files?.picture;
   const backgroundImage = req.files?.backgroundImage;
+  const heroBackgroundImage = req.files?.heroBackgroundImage;
   try {
     let pictureUrl = null;
     let backgroundValue = background || null;
+    let heroBackgroundUrl = null;
 
     // Handle picture upload
     if (picture) {
@@ -265,15 +279,34 @@ router.post('/', authenticate, async (req, res) => {
       logger.debug('Generated backgroundValue:', backgroundValue);
     }
 
+    if (heroBackgroundImage) {
+      const uploadParams = {
+        Bucket: process.env.BUCKET_NAME,
+        Key: `hero-backgrounds/${req.user.id}-${Date.now()}.jpg`,
+        Body: heroBackgroundImage.data,
+      };
+      await s3Client.send(new PutObjectCommand(uploadParams));
+      heroBackgroundUrl = buildPublicFileUrl(uploadParams.Key);
+      logger.debug('Generated heroBackgroundUrl:', heroBackgroundUrl);
+    }
+
     // Fetch existing profile data
     const existingProfiles = await pool.query(
-        'SELECT picture_url, background, donation_link, solana_address FROM profiles WHERE user_id = ?',
+        `SELECT picture_url, background, hero_background, donation_link, solana_address,
+                website_url, x_url, facebook_url, youtube_url, instagram_url
+         FROM profiles WHERE user_id = ?`,
         [req.user.id]
     );
     const currentPictureUrl = existingProfiles.length > 0 ? existingProfiles[0].picture_url : null;
     const currentBackground = existingProfiles.length > 0 ? existingProfiles[0].background : null;
+    const currentHeroBackground = existingProfiles.length > 0 ? existingProfiles[0].hero_background : null;
     const currentDonationLink = existingProfiles.length > 0 ? existingProfiles[0].donation_link : null;
     const currentSolanaAddress = existingProfiles.length > 0 ? existingProfiles[0].solana_address : null;
+    const currentWebsiteUrl = existingProfiles.length > 0 ? existingProfiles[0].website_url : null;
+    const currentXUrl = existingProfiles.length > 0 ? existingProfiles[0].x_url : null;
+    const currentFacebookUrl = existingProfiles.length > 0 ? existingProfiles[0].facebook_url : null;
+    const currentYoutubeUrl = existingProfiles.length > 0 ? existingProfiles[0].youtube_url : null;
+    const currentInstagramUrl = existingProfiles.length > 0 ? existingProfiles[0].instagram_url : null;
 
     // Validate Solana address (optional, basic check for 44-character Base58)
     if (solana_address && !/^[1-9A-HJ-NP-Za-km-z]{44}$/.test(solana_address)) {
@@ -282,7 +315,24 @@ router.post('/', authenticate, async (req, res) => {
 
     // Update or insert profile
     await pool.query(
-        'INSERT INTO profiles (user_id, name, genre, picture_url, description, background, donation_link, solana_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, genre = ?, picture_url = COALESCE(?, picture_url), description = ?, background = ?, donation_link = ?, solana_address = ?',
+        `INSERT INTO profiles (
+            user_id, name, genre, picture_url, description, background, hero_background, donation_link, solana_address,
+            website_url, x_url, facebook_url, youtube_url, instagram_url
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            name = ?,
+            genre = ?,
+            picture_url = COALESCE(?, picture_url),
+            description = ?,
+            background = ?,
+            hero_background = ?,
+            donation_link = ?,
+            solana_address = ?,
+            website_url = ?,
+            x_url = ?,
+            facebook_url = ?,
+            youtube_url = ?,
+            instagram_url = ?`,
         [
           req.user.id,
           name,
@@ -290,15 +340,27 @@ router.post('/', authenticate, async (req, res) => {
           pictureUrl || currentPictureUrl,
           description,
           backgroundValue || currentBackground,
+          heroBackgroundUrl || currentHeroBackground,
           donation_link || currentDonationLink,
           solana_address || currentSolanaAddress,
+          website_url || currentWebsiteUrl,
+          x_url || currentXUrl,
+          facebook_url || currentFacebookUrl,
+          youtube_url || currentYoutubeUrl,
+          instagram_url || currentInstagramUrl,
           name,
           genre,
           pictureUrl,
           description,
           backgroundValue,
+          heroBackgroundUrl || currentHeroBackground,
           donation_link,
           solana_address,
+          website_url,
+          x_url,
+          facebook_url,
+          youtube_url,
+          instagram_url,
         ]
     );
 
@@ -387,7 +449,7 @@ router.get('/:profileId', async (req, res, next) => {
       return res.status(500).json({ error: 'Invalid profile data' });
     }
     const songs = await pool.query(`
-      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, p.user_id, p.name as profile_name,
+      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.is_featured, p.user_id, p.name as profile_name,
              (SELECT COUNT(*)
               FROM playlist_songs ps
                      JOIN playlists pl ON ps.playlist_id = pl.id
@@ -401,6 +463,7 @@ router.get('/:profileId', async (req, res, next) => {
       id: Number(song.id),
       profile_id: Number(song.profile_id),
       plays: Number(song.plays) || 0,
+      is_featured: Boolean(song.is_featured),
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
       likes_count: Number(song.likes_count) || 0,
@@ -417,7 +480,29 @@ router.get('/:profileId', async (req, res, next) => {
     // Calculate unpaid
     const unpaid = total_idjc_earned - total_paid;
 
-    res.json({ profile: { ...profile, total_idjc_earned, total_paid, unpaid }, songs: sanitizedSongs });
+    const followerCountResult = await pool.query(
+      'SELECT COUNT(*) as follower_count FROM follows WHERE followed_profile_id = ?',
+      [profileId]
+    );
+    const follower_count = Number(followerCountResult[0].follower_count) || 0;
+
+    const followingCountResult = await pool.query(
+      'SELECT COUNT(*) as following_count FROM follows WHERE follower_id = ?',
+      [profile.user_id]
+    );
+    const following_count = Number(followingCountResult[0].following_count) || 0;
+
+    res.json({
+      profile: {
+        ...profile,
+        total_idjc_earned,
+        total_paid,
+        unpaid,
+        follower_count,
+        following_count,
+      },
+      songs: sanitizedSongs,
+    });
   } catch (err) {
     logger.error('Error in GET /profile/:profileId:', {
       message: err.message,
@@ -425,6 +510,55 @@ router.get('/:profileId', async (req, res, next) => {
       profileId: req.params.profileId,
     });
     res.status(500).json({ error: 'Failed to fetch profile: ' + err.message });
+  }
+});
+
+router.patch('/:profileId/featured-song', authenticate, async (req, res) => {
+  const { profileId } = req.params;
+  const { songId } = req.body;
+  const parsedProfileId = Number(profileId);
+
+  if (!Number.isInteger(parsedProfileId)) {
+    return res.status(400).json({ error: 'Invalid profile ID' });
+  }
+
+  try {
+    const profiles = await pool.query('SELECT id, user_id FROM profiles WHERE id = ?', [parsedProfileId]);
+    if (!profiles.length) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const targetProfile = profiles[0];
+    if (Number(targetProfile.user_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    await pool.query('UPDATE songs SET is_featured = FALSE WHERE profile_id = ?', [parsedProfileId]);
+
+    if (songId !== null && songId !== undefined && songId !== '') {
+      const parsedSongId = Number(songId);
+      if (!Number.isInteger(parsedSongId)) {
+        return res.status(400).json({ error: 'Invalid song ID' });
+      }
+
+      const songs = await pool.query('SELECT id FROM songs WHERE id = ? AND profile_id = ?', [parsedSongId, parsedProfileId]);
+      if (!songs.length) {
+        return res.status(404).json({ error: 'Song not found for this profile' });
+      }
+
+      await pool.query('UPDATE songs SET is_featured = TRUE WHERE id = ? AND profile_id = ?', [parsedSongId, parsedProfileId]);
+    }
+
+    return res.status(200).json({ message: 'Featured song updated successfully' });
+  } catch (err) {
+    logger.error('Error in PATCH /profile/:profileId/featured-song:', {
+      message: err.message,
+      stack: err.stack,
+      profileId,
+      userId: req.user.id,
+      songId,
+    });
+    return res.status(500).json({ error: 'Failed to update featured song: ' + err.message });
   }
 });
 
@@ -590,6 +724,199 @@ router.get('/:profileId/follow-status', authenticate, async (req, res) => {
   }
 });
 
+// Get followers for a profile
+router.get('/:profileId/followers', async (req, res) => {
+  const parsedProfileId = Number(req.params.profileId);
+
+  if (!Number.isInteger(parsedProfileId)) {
+    return res.status(400).json({ error: 'Invalid profile ID' });
+  }
+
+  try {
+    const rows = await pool.query(`
+      SELECT
+        p.id AS profile_id,
+        p.user_id,
+        p.name,
+        p.picture_url,
+        f.created_at
+      FROM follows f
+      JOIN profiles p ON p.user_id = f.follower_id
+      WHERE f.followed_profile_id = ?
+      ORDER BY f.created_at DESC
+    `, [parsedProfileId]);
+
+    const followers = rows.map((row) => ({
+      profile_id: Number(row.profile_id),
+      user_id: Number(row.user_id),
+      name: row.name || 'Unknown',
+      picture_url: row.picture_url || null,
+      created_at: row.created_at,
+    }));
+
+    res.status(200).json(followers);
+  } catch (err) {
+    logger.error('Error in GET /profile/:profileId/followers:', {
+      message: err.message,
+      stack: err.stack,
+      profileId: req.params.profileId,
+    });
+    res.status(500).json({ error: 'Failed to fetch followers: ' + err.message });
+  }
+});
+
+// Get profiles this artist is following
+router.get('/:profileId/following', async (req, res) => {
+  const parsedProfileId = Number(req.params.profileId);
+
+  if (!Number.isInteger(parsedProfileId)) {
+    return res.status(400).json({ error: 'Invalid profile ID' });
+  }
+
+  try {
+    const profiles = await pool.query('SELECT user_id FROM profiles WHERE id = ?', [parsedProfileId]);
+    if (!profiles.length) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const followerUserId = Number(profiles[0].user_id);
+    const rows = await pool.query(`
+      SELECT
+        p.id AS profile_id,
+        p.user_id,
+        p.name,
+        p.picture_url,
+        f.created_at
+      FROM follows f
+      JOIN profiles p ON p.id = f.followed_profile_id
+      WHERE f.follower_id = ?
+      ORDER BY f.created_at DESC
+    `, [followerUserId]);
+
+    const following = rows.map((row) => ({
+      profile_id: Number(row.profile_id),
+      user_id: Number(row.user_id),
+      name: row.name || 'Unknown',
+      picture_url: row.picture_url || null,
+      created_at: row.created_at,
+    }));
+
+    res.status(200).json(following);
+  } catch (err) {
+    logger.error('Error in GET /profile/:profileId/following:', {
+      message: err.message,
+      stack: err.stack,
+      profileId: req.params.profileId,
+    });
+    res.status(500).json({ error: 'Failed to fetch following: ' + err.message });
+  }
+});
+
+// Get songs this artist liked from other artists
+router.get('/:profileId/liked-songs-public', async (req, res) => {
+  const parsedProfileId = Number(req.params.profileId);
+
+  if (!Number.isInteger(parsedProfileId)) {
+    return res.status(400).json({ error: 'Invalid profile ID' });
+  }
+
+  try {
+    const rows = await pool.query(`
+      SELECT
+        s.id,
+        s.title,
+        s.mp3_url,
+        s.image_url,
+        s.profile_id,
+        p.name AS profile_name,
+        (
+          SELECT COUNT(*)
+          FROM playlist_songs ps2
+          JOIN playlists pl2 ON ps2.playlist_id = pl2.id
+          WHERE pl2.name = 'Likes' AND ps2.song_id = s.id
+        ) AS likes_count,
+        ps.added_at
+      FROM playlists pl
+      JOIN playlist_songs ps ON ps.playlist_id = pl.id
+      JOIN songs s ON s.id = ps.song_id
+      LEFT JOIN profiles p ON p.id = s.profile_id
+      WHERE pl.profile_id = ?
+        AND pl.name = 'Likes'
+        AND s.profile_id <> ?
+      ORDER BY RAND()
+      LIMIT 3
+    `, [parsedProfileId, parsedProfileId]);
+
+    const likedSongs = rows.map((row) => ({
+      id: Number(row.id),
+      title: row.title || 'Untitled',
+      mp3_url: row.mp3_url || null,
+      image_url: row.image_url || null,
+      profile_id: Number(row.profile_id),
+      profile_name: row.profile_name || 'Unknown Artist',
+      likes_count: Number(row.likes_count) || 0,
+      added_at: row.added_at,
+    }));
+
+    res.status(200).json(likedSongs);
+  } catch (err) {
+    logger.error('Error in GET /profile/:profileId/liked-songs-public:', {
+      message: err.message,
+      stack: err.stack,
+      profileId: req.params.profileId,
+    });
+    res.status(500).json({ error: 'Failed to fetch liked songs: ' + err.message });
+  }
+});
+
+// Get latest reviews this artist made on other artists' songs
+router.get('/:profileId/recent-reviews', async (req, res) => {
+  const parsedProfileId = Number(req.params.profileId);
+
+  if (!Number.isInteger(parsedProfileId)) {
+    return res.status(400).json({ error: 'Invalid profile ID' });
+  }
+
+  try {
+    const rows = await pool.query(`
+      SELECT
+        r.id,
+        r.review,
+        r.created_at,
+        s.id AS song_id,
+        s.title AS song_title,
+        s.profile_id AS song_profile_id,
+        p.name AS song_artist_name
+      FROM reviews r
+      JOIN songs s ON s.id = r.song_id
+      LEFT JOIN profiles p ON p.id = s.profile_id
+      WHERE r.profile_id = ?
+        AND s.profile_id <> ?
+      ORDER BY r.created_at DESC
+      LIMIT 6
+    `, [parsedProfileId, parsedProfileId]);
+
+    const reviews = rows.map((row) => ({
+      id: Number(row.id),
+      review: row.review || '',
+      created_at: row.created_at,
+      song_id: Number(row.song_id),
+      song_title: row.song_title || 'Untitled',
+      song_profile_id: Number(row.song_profile_id),
+      song_artist_name: row.song_artist_name || 'Unknown Artist',
+    }));
+
+    res.status(200).json(reviews);
+  } catch (err) {
+    logger.error('Error in GET /profile/:profileId/recent-reviews:', {
+      message: err.message,
+      stack: err.stack,
+      profileId: req.params.profileId,
+    });
+    res.status(500).json({ error: 'Failed to fetch recent reviews: ' + err.message });
+  }
+});
+
 // Get latest songs from followed profiles
 router.get('/:userId/followed-songs', authenticate, async (req, res) => {
   const { userId } = req.params;
@@ -717,6 +1044,29 @@ router.post('/background/remove', authenticate, async (req, res) => {
       userId: req.user.id,
     });
     res.status(500).json({ error: 'Failed to remove background: ' + err.message });
+  }
+});
+
+// Remove profile hero background (revert hero block to default)
+router.post('/hero-background/remove', authenticate, async (req, res) => {
+  try {
+    await pool.query('UPDATE profiles SET hero_background = NULL WHERE user_id = ?', [req.user.id]);
+
+    const profiles = await pool.query('SELECT * FROM profiles WHERE user_id = ?', [req.user.id]);
+    if (!profiles || profiles.length === 0) {
+      logger.error('No profile found after removing hero background for user_id:', req.user.id);
+      return res.status(500).json({ error: 'Failed to retrieve updated profile' });
+    }
+
+    const profile = profiles[0];
+    res.status(200).json({ profile, hero_background: null });
+  } catch (err) {
+    logger.error('Error in POST /profile/hero-background/remove:', {
+      message: err.message,
+      stack: err.stack,
+      userId: req.user.id,
+    });
+    res.status(500).json({ error: 'Failed to remove hero background: ' + err.message });
   }
 });
 
