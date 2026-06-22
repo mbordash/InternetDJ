@@ -108,7 +108,7 @@ function Navbar() {
                             <img
                                 src={IDJHeaderLogo}
                                 alt="Internet DJ Logo"
-                                className="h-20 w-auto absolute top-0.5 z-20 object-contain"
+                                className="h-20 w-auto absolute top-1 z-20 object-contain"
                             />
                         </Link>
 

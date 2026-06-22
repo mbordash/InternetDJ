@@ -35,7 +35,7 @@
     background-repeat: repeat;
 }
 .bg-default {
-    background: #ffffff;
+    background: radial-gradient(circle at top, #1b1b1b 0%, #121212 45%, #090909 100%);
 }
 .profile-background {
     position: fixed;
