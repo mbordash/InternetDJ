@@ -236,6 +236,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   const {
     name,
+    location,
     genre,
     description,
     background,
@@ -292,7 +293,7 @@ router.post('/', authenticate, async (req, res) => {
 
     // Fetch existing profile data
     const existingProfiles = await pool.query(
-        `SELECT picture_url, background, hero_background, donation_link, solana_address,
+        `SELECT picture_url, background, hero_background, donation_link, solana_address, location,
                 website_url, x_url, facebook_url, youtube_url, instagram_url
          FROM profiles WHERE user_id = ?`,
         [req.user.id]
@@ -302,6 +303,7 @@ router.post('/', authenticate, async (req, res) => {
     const currentHeroBackground = existingProfiles.length > 0 ? existingProfiles[0].hero_background : null;
     const currentDonationLink = existingProfiles.length > 0 ? existingProfiles[0].donation_link : null;
     const currentSolanaAddress = existingProfiles.length > 0 ? existingProfiles[0].solana_address : null;
+    const currentLocation = existingProfiles.length > 0 ? existingProfiles[0].location : null;
     const currentWebsiteUrl = existingProfiles.length > 0 ? existingProfiles[0].website_url : null;
     const currentXUrl = existingProfiles.length > 0 ? existingProfiles[0].x_url : null;
     const currentFacebookUrl = existingProfiles.length > 0 ? existingProfiles[0].facebook_url : null;
@@ -316,11 +318,12 @@ router.post('/', authenticate, async (req, res) => {
     // Update or insert profile
     await pool.query(
         `INSERT INTO profiles (
-            user_id, name, genre, picture_url, description, background, hero_background, donation_link, solana_address,
+            user_id, name, location, genre, picture_url, description, background, hero_background, donation_link, solana_address,
             website_url, x_url, facebook_url, youtube_url, instagram_url
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
             name = ?,
+            location = ?,
             genre = ?,
             picture_url = COALESCE(?, picture_url),
             description = ?,
@@ -336,6 +339,7 @@ router.post('/', authenticate, async (req, res) => {
         [
           req.user.id,
           name,
+          location || currentLocation,
           genre,
           pictureUrl || currentPictureUrl,
           description,
@@ -349,6 +353,7 @@ router.post('/', authenticate, async (req, res) => {
           youtube_url || currentYoutubeUrl,
           instagram_url || currentInstagramUrl,
           name,
+          location,
           genre,
           pictureUrl,
           description,
