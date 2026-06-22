@@ -4,7 +4,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import AudioPlayer from '../components/AudioPlayer';
-import { SpeakerWaveIcon, PlusIcon, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import IconActionButton from '../components/IconActionButton';
+import { SpeakerWaveIcon, PlusIcon, HeartIcon as HeartIconSolid, LinkIcon, UserPlusIcon, UserMinusIcon } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import sanitizeHtml from 'sanitize-html';
 import API_URL from '../utils/api';
@@ -43,11 +44,13 @@ const Song = () => {
     const [otherSongs, setOtherSongs] = useState([]);
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [showFeedbackResultsModal, setShowFeedbackResultsModal] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
     const [selectedFeedback, setSelectedFeedback] = useState(null);
     const [activity, setActivity] = useState([]);
     const [isLoadingActivity, setIsLoadingActivity] = useState(false);
     const [similarSongs, setSimilarSongs] = useState([]);
     const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+    const [shareStatus, setShareStatus] = useState('');
 
     // Initialize feedback state
     const initialFeedback = feedbackCriteria.reduce((acc, criterion) => {
@@ -66,7 +69,6 @@ const Song = () => {
         }),
         [songId, song?.mp3_url, song?.user_id, user?.id]
     );
-
     useEffect(() => {
         const fetchSong = async () => {
             try {
@@ -261,6 +263,16 @@ const Song = () => {
             setFollowError(null);
         } catch (err) {
             setFollowError(`Failed to ${isFollowing ? 'unfollow' : 'follow'} artist: ${err.response?.data?.error || err.message}`);
+        }
+    };
+
+    const handleCopyShareLink = async () => {
+        try {
+            await navigator.clipboard.writeText(songShareUrl);
+            setShareStatus('Song link copied!');
+        } catch (err) {
+            console.error('Failed to copy song share link:', err);
+            setShareStatus('Copy failed. You can still copy the link below.');
         }
     };
 
@@ -508,6 +520,7 @@ const Song = () => {
     };
 
     const baseUrl = SITE_URL;
+    const songShareUrl = `${baseUrl}/song/${songId}`;
     const cleanDescription = song?.description
         ? sanitizeHtml(song.description, { allowedTags: [], allowedAttributes: {} })
         : 'Listen to this amazing song on InternetDJ.';
@@ -609,41 +622,38 @@ const Song = () => {
                                     </div>
                                     {/* Buttons */}
                                     <div className="flex flex-wrap gap-2">
+                                        <IconActionButton
+                                            icon={LinkIcon}
+                                            label="Share song"
+                                            onClick={() => {
+                                                setShareStatus('');
+                                                setShowShareModal(true);
+                                            }}
+                                            className="bg-white/10 hover:bg-white/15"
+                                        />
                                         {isAuthenticated && (
-                                            <button
+                                            <IconActionButton
+                                                icon={PlusIcon}
+                                                label="Add to playlist"
                                                 onClick={() => setShowPlaylistModal(true)}
-                                                className="inline-flex items-center px-3 py-1.5 bg-primary-brand-500 text-white font-semibold rounded-md shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:ring-offset-2 transition-colors duration-200 whitespace-nowrap"
-                                            >
-                                                <PlusIcon className="w-4 h-4 mr-1" />
-                                                Playlist
-                                            </button>
+                                                className="bg-primary-brand-500 hover:bg-primary-brand-700"
+                                            />
                                         )}
                                         {isAuthenticated && (
-                                            <button
+                                            <IconActionButton
+                                                icon={isLiked ? HeartIconSolid : HeartIconOutline}
+                                                label={isLiked ? 'Unlike song' : 'Like song'}
                                                 onClick={handleLikeSong}
-                                                className={`inline-flex items-center px-3 py-1.5 ${
-                                                    isLiked ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-brand-300 hover:bg-primary-brand-500'
-                                                } text-white font-semibold rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200 whitespace-nowrap`}
-                                            >
-                                                {isLiked ? (
-                                                    <HeartIconSolid className="w-4 h-4 mr-1" />
-                                                ) : (
-                                                    <HeartIconOutline className="w-4 h-4 mr-1 text-white" />
-                                                )}
-                                                {isLiked ? 'Unlike' : 'Like'}
-                                            </button>
+                                                className={isLiked ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-brand-300 hover:bg-primary-brand-500'}
+                                            />
                                         )}
                                         {isAuthenticated && song?.profile_id && user?.id !== song?.user_id && (
-                                            <button
+                                            <IconActionButton
+                                                icon={isFollowing ? UserMinusIcon : UserPlusIcon}
+                                                label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
                                                 onClick={handleFollowToggle}
-                                                className={`inline-flex items-center px-3 py-1.5 ${
-                                                    isFollowing
-                                                        ? 'bg-gray-500 text-white hover:bg-gray-600'
-                                                        : 'bg-black text-white hover:bg-gray-800'
-                                                } font-semibold rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition-colors duration-200 whitespace-nowrap`}
-                                            >
-                                                {isFollowing ? 'Unfollow' : 'Follow'}
-                                            </button>
+                                                className={isFollowing ? 'bg-gray-500 hover:bg-gray-600 focus:ring-gray-700' : 'bg-black hover:bg-gray-800 focus:ring-gray-700'}
+                                            />
                                         )}
                                     </div>
                                     {/* Plays, Likes */}
@@ -1014,6 +1024,51 @@ const Song = () => {
                         </div>
 
                         {/* Feedback Input Modal */}
+                        {showShareModal && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-lg w-full text-gray-100">
+                                    <h2 className="text-xl font-bold mb-2">Share Song</h2>
+                                    <p className="text-sm text-gray-300 mb-4">Copy or open the direct link to this song.</p>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <input
+                                            type="text"
+                                            value={songShareUrl}
+                                            readOnly
+                                            className="flex-1 px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none sm:text-sm"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyShareLink}
+                                            className="py-2 px-4 bg-primary-brand text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                        >
+                                            Copy Link
+                                        </button>
+                                    </div>
+                                    {shareStatus && <p className="mt-3 text-sm text-primary-brand-200">{shareStatus}</p>}
+                                    <div className="flex justify-end gap-3 mt-6">
+                                        <a
+                                            href={songShareUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                                        >
+                                            Open Link
+                                        </a>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowShareModal(false);
+                                                setShareStatus('');
+                                            }}
+                                            className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                                        >
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {showFeedbackModal && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                                 <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">

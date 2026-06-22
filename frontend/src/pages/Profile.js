@@ -8,6 +8,11 @@ import {
     PlayIcon,
     PauseIcon,
     HeartIcon as HeartIconSolid,
+    PencilSquareIcon,
+    UserPlusIcon,
+    UserMinusIcon,
+    PaperAirplaneIcon,
+    BanknotesIcon,
     GlobeAltIcon,
     LinkIcon,
     PlayCircleIcon,
@@ -21,6 +26,7 @@ import { Buffer } from 'buffer';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
+import IconActionButton from '../components/IconActionButton';
 import sanitizeHtml from 'sanitize-html';
 import {Helmet} from "react-helmet-async";
 
@@ -36,6 +42,7 @@ const ProfilePage = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
+        location: '',
         genre: '',
         description: '',
         picture: null,
@@ -63,13 +70,16 @@ const ProfilePage = () => {
     const [memberFollowActionIds, setMemberFollowActionIds] = useState([]);
     const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState(false);
     const [isSendCoinModalOpen, setIsSendCoinModalOpen] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [sendAmount, setSendAmount] = useState('');
     const [sendError, setSendError] = useState(null);
     const [sendSuccess, setSendSuccess] = useState(null);
+    const [shareStatus, setShareStatus] = useState('');
     const [isArtistInfoExpanded, setIsArtistInfoExpanded] = useState(false);
     const backgroundImageInputRef = useRef(null);
 
     const baseUrl = SITE_URL;
+    const profileShareUrl = `${baseUrl}/profile/${profileId}`;
 
     const backgroundOptions = [
         { id: 'bg-gradient-1', name: 'Blue Gradient', class: 'bg-gradient-1' },
@@ -170,6 +180,7 @@ const ProfilePage = () => {
 
                 setFormData({
                     name: response.data.profile.name || '',
+                    location: response.data.profile.location || '',
                     genre: response.data.profile.genre || '',
                     description: response.data.profile.description || '',
                     picture: null,
@@ -233,6 +244,16 @@ const ProfilePage = () => {
         }
         setSendAmount(value);
         setSendError(null);
+    };
+
+    const handleCopyShareLink = async () => {
+        try {
+            await navigator.clipboard.writeText(profileShareUrl);
+            setShareStatus('Profile link copied!');
+        } catch (err) {
+            console.error('Failed to copy profile share link:', err);
+            setShareStatus('Copy failed. You can still copy the link below.');
+        }
     };
 
     const handleSendCoin = async () => {
@@ -366,6 +387,7 @@ const ProfilePage = () => {
         }
         const form = new FormData();
         form.append('name', formData.name);
+        form.append('location', formData.location);
         form.append('genre', formData.genre);
         form.append('description', formData.description);
         form.append('donation_link', formData.donation_link);
@@ -402,6 +424,7 @@ const ProfilePage = () => {
             setProfile(response.data.profile);
             setFormData({
                 ...formData,
+                location: response.data.profile.location || '',
                 picture: null,
                 background: response.data.profile.background && !response.data.profile.background.startsWith('http') ? response.data.profile.background : '',
                 backgroundImage: null,
@@ -764,6 +787,17 @@ const ProfilePage = () => {
                             />
                         </div>
                         <div>
+                            <label className="block text-sm font-medium text-gray-300">Location</label>
+                            <input
+                                type="text"
+                                name="location"
+                                value={formData.location}
+                                onChange={handleInputChange}
+                                placeholder="City, State / Country"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                            />
+                        </div>
+                        <div>
                             <label className="block text-sm font-medium text-gray-300">Description</label>
                             <textarea
                                 name="description"
@@ -971,6 +1005,7 @@ const ProfilePage = () => {
                         />
                         <div>
                             <h1 className="text-3xl font-bold">{profile.name}</h1>
+                            {profile.location && <p className="text-base text-gray-300">{profile.location}</p>}
                             <p className="text-lg">Genre: {profile.genre}</p>
                             <Link to="/idj-coin" className="text-lg text-primary-brand-300 hover:underline">
                                 IDJC Earned: {profile.total_idjc_earned || 0}
@@ -978,54 +1013,47 @@ const ProfilePage = () => {
                         </div>
                     </div>
 
-                    <div className="mt-4 flex space-x-4">
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
                         {isOwner && !isEditing && (
-                            <>
-                                <button
-                                    onClick={() => setIsEditing(true)}
-                                    className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
-                                >
-                                    Edit Profile
-                                </button>
-                            </>
+                            <IconActionButton
+                                icon={PencilSquareIcon}
+                                label="Edit profile"
+                                onClick={() => setIsEditing(true)}
+                                className="bg-black hover:bg-gray-800 focus:ring-gray-700"
+                            />
                         )}
                         {user && !isOwner && (
-                            <button
+                            <IconActionButton
+                                icon={isFollowing ? UserMinusIcon : UserPlusIcon}
+                                label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
                                 onClick={handleFollowToggle}
-                                className={`py-2 px-4 font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 ${
-                                    isFollowing
-                                        ? 'bg-gray-500 text-white hover:bg-gray-600'
-                                        : 'bg-black text-white hover:bg-gray-800'
-                                }`}
-                            >
-                                {isFollowing ? 'Unfollow' : 'Follow'}
-                            </button>
+                                className={isFollowing ? 'bg-gray-500 hover:bg-gray-600 focus:ring-gray-700' : 'bg-black hover:bg-gray-800 focus:ring-gray-700'}
+                            />
                         )}
-                        {profile.donation_link && (
-                            <a
-                                href={profile.donation_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="py-2 px-4 bg-green-500 text-white font-semibold rounded-md shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                            >
-                                Donate
-                            </a>
-                        )}
+                        <IconActionButton
+                            icon={LinkIcon}
+                            label="Share profile"
+                            onClick={() => {
+                                setShareStatus('');
+                                setIsShareModalOpen(true);
+                            }}
+                            className="bg-white/10 hover:bg-white/15"
+                        />
                         {profile.solana_address && (
-                            <button
+                            <IconActionButton
+                                icon={PaperAirplaneIcon}
+                                label="Send IDJ Coin"
                                 onClick={() => setIsSendCoinModalOpen(true)}
-                                className="py-2 px-4 bg-purple-500 text-white font-semibold rounded-md shadow-sm hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                            >
-                                Send IDJ Coin
-                            </button>
+                                className="bg-purple-500 hover:bg-purple-600 focus:ring-purple-500"
+                            />
                         )}
                         {user && user.is_admin && (
-                            <button
+                            <IconActionButton
+                                icon={BanknotesIcon}
+                                label={`Pay owed IDJC (${profile.unpaid})`}
                                 onClick={handlePayOwed}
-                                className="py-2 px-4 bg-primary-brand text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
-                            >
-                                Pay Owed IDJC ({profile.unpaid})
-                            </button>
+                                className="bg-primary-brand hover:bg-primary-brand-500"
+                            />
                         )}
                     </div>
 
@@ -1050,6 +1078,17 @@ const ProfilePage = () => {
                                     value={formData.genre}
                                     onChange={handleInputChange}
                                     required
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Location</label>
+                                <input
+                                    type="text"
+                                    name="location"
+                                    value={formData.location}
+                                    onChange={handleInputChange}
+                                    placeholder="City, State / Country"
                                     className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
                                 />
                             </div>
@@ -1650,6 +1689,51 @@ const ProfilePage = () => {
                         >
                             Close
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {isShareModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                    <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-lg w-full text-gray-100">
+                        <h2 className="text-xl font-bold mb-2">Share Profile</h2>
+                        <p className="text-sm text-gray-300 mb-4">Copy or open the direct link to this artist profile.</p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <input
+                                type="text"
+                                value={profileShareUrl}
+                                readOnly
+                                className="flex-1 px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none sm:text-sm"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleCopyShareLink}
+                                className="py-2 px-4 bg-primary-brand text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                            >
+                                Copy Link
+                            </button>
+                        </div>
+                        {shareStatus && <p className="mt-3 text-sm text-primary-brand-200">{shareStatus}</p>}
+                        <div className="flex justify-end gap-3 mt-6">
+                            <a
+                                href={profileShareUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                            >
+                                Open Link
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsShareModalOpen(false);
+                                    setShareStatus('');
+                                }}
+                                className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
