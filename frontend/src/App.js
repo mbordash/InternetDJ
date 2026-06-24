@@ -34,6 +34,8 @@ import Discover from './pages/Discover';
 import StemGenerator from './pages/AIStems';
 import Collabs from './pages/Collabs';
 import Settings from './pages/Settings';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import './styles.css';
 import './styles/backgrounds.css';
 import './styles/audioPlayer.css';
@@ -55,6 +57,8 @@ function Layout() {
                 <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/about" element={<About />} />
+                    <Route path="/privacy" element={<PrivacyPolicy />} />
+                    <Route path="/terms" element={<TermsOfService />} />
                     <Route path="/discover" element={<Discover />} />
                     <Route path="/browse" element={<Browse />} />
                     <Route path="/new" element={<New />} />

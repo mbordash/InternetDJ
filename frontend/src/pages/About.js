@@ -156,6 +156,29 @@ function About() {
                         Get Started
                     </Link>
                 </section>
+
+                <section className="mt-12 pt-6 border-t border-white/10">
+                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Legal</h2>
+                    <p className="text-gray-600 mb-4">
+                        Review the policies that govern your use of InternetDJ:
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                        <Link
+                            to="/privacy"
+                            className="text-primary-brand-500 hover:text-primary-brand-700 underline font-semibold"
+                            aria-label="Read the InternetDJ Privacy Policy"
+                        >
+                            Privacy Policy
+                        </Link>
+                        <Link
+                            to="/terms"
+                            className="text-primary-brand-500 hover:text-primary-brand-700 underline font-semibold"
+                            aria-label="Read the InternetDJ Terms of Service"
+                        >
+                            Terms of Service
+                        </Link>
+                    </div>
+                </section>
             </div>
         </div>
     );
