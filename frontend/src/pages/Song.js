@@ -629,14 +629,14 @@ const Song = () => {
                                                 setShareStatus('');
                                                 setShowShareModal(true);
                                             }}
-                                            className="bg-white/10 hover:bg-white/15"
+                                            className="bg-[#008dcb]/16 border-[#73cbf0]/40 hover:bg-[#008dcb]/26"
                                         />
                                         {isAuthenticated && (
                                             <IconActionButton
                                                 icon={PlusIcon}
                                                 label="Add to playlist"
                                                 onClick={() => setShowPlaylistModal(true)}
-                                                className="bg-primary-brand-500 hover:bg-primary-brand-700"
+                                                className="bg-[#008dcb]/20 border-[#73cbf0]/45 hover:bg-[#008dcb]/30"
                                             />
                                         )}
                                         {isAuthenticated && (
@@ -644,7 +644,7 @@ const Song = () => {
                                                 icon={isLiked ? HeartIconSolid : HeartIconOutline}
                                                 label={isLiked ? 'Unlike song' : 'Like song'}
                                                 onClick={handleLikeSong}
-                                                className={isLiked ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-brand-300 hover:bg-primary-brand-500'}
+                                                className={isLiked ? 'bg-[#008dcb]/30 border-[#73cbf0]/50 hover:bg-[#008dcb]/40' : 'bg-[#73cbf0]/16 border-[#73cbf0]/45 hover:bg-[#73cbf0]/24'}
                                             />
                                         )}
                                         {isAuthenticated && song?.profile_id && user?.id !== song?.user_id && (
@@ -652,7 +652,7 @@ const Song = () => {
                                                 icon={isFollowing ? UserMinusIcon : UserPlusIcon}
                                                 label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
                                                 onClick={handleFollowToggle}
-                                                className={isFollowing ? 'bg-gray-500 hover:bg-gray-600 focus:ring-gray-700' : 'bg-black hover:bg-gray-800 focus:ring-gray-700'}
+                                                className={isFollowing ? 'bg-[#008dcb]/28 border-[#73cbf0]/50 hover:bg-[#008dcb]/38' : 'bg-[#008dcb]/18 border-[#73cbf0]/40 hover:bg-[#008dcb]/28'}
                                             />
                                         )}
                                     </div>

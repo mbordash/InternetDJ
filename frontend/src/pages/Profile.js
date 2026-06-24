@@ -1019,7 +1019,7 @@ const ProfilePage = () => {
                                 icon={PencilSquareIcon}
                                 label="Edit profile"
                                 onClick={() => setIsEditing(true)}
-                                className="bg-black hover:bg-gray-800 focus:ring-gray-700"
+                                className="bg-[#008dcb]/18 border-[#73cbf0]/40 hover:bg-[#008dcb]/28"
                             />
                         )}
                         {user && !isOwner && (
@@ -1027,7 +1027,7 @@ const ProfilePage = () => {
                                 icon={isFollowing ? UserMinusIcon : UserPlusIcon}
                                 label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
                                 onClick={handleFollowToggle}
-                                className={isFollowing ? 'bg-gray-500 hover:bg-gray-600 focus:ring-gray-700' : 'bg-black hover:bg-gray-800 focus:ring-gray-700'}
+                                className={isFollowing ? 'bg-[#008dcb]/28 border-[#73cbf0]/50 hover:bg-[#008dcb]/38' : 'bg-[#008dcb]/18 border-[#73cbf0]/40 hover:bg-[#008dcb]/28'}
                             />
                         )}
                         <IconActionButton
@@ -1037,14 +1037,14 @@ const ProfilePage = () => {
                                 setShareStatus('');
                                 setIsShareModalOpen(true);
                             }}
-                            className="bg-white/10 hover:bg-white/15"
+                            className="bg-[#008dcb]/16 border-[#73cbf0]/40 hover:bg-[#008dcb]/26"
                         />
                         {profile.solana_address && (
                             <IconActionButton
                                 icon={PaperAirplaneIcon}
                                 label="Send IDJ Coin"
                                 onClick={() => setIsSendCoinModalOpen(true)}
-                                className="bg-purple-500 hover:bg-purple-600 focus:ring-purple-500"
+                                className="bg-[#73cbf0]/16 border-[#73cbf0]/45 hover:bg-[#73cbf0]/24"
                             />
                         )}
                         {user && user.is_admin && (
@@ -1052,7 +1052,7 @@ const ProfilePage = () => {
                                 icon={BanknotesIcon}
                                 label={`Pay owed IDJC (${profile.unpaid})`}
                                 onClick={handlePayOwed}
-                                className="bg-primary-brand hover:bg-primary-brand-500"
+                                className="bg-[#008dcb]/30 border-[#73cbf0]/50 hover:bg-[#008dcb]/40"
                             />
                         )}
                     </div>
