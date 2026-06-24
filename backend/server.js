@@ -21,6 +21,7 @@ const idjcRouter = require('./routes/idjc');
 const notificationsRouter = require('./routes/notifications');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 const initializeSocket = require('./socket');
 const { isCrawler, extractMetadata, fetchSongMetadata, fetchProfileMetadata, injectOGMetaTags } = require('./middleware/ogMetaTags');
 require('dotenv').config();
@@ -148,6 +149,15 @@ const staticPath = path.join(__dirname, '../frontend/build');
 logger.debug('Serving static files from:', staticPath);
 app.use(express.static(staticPath));
 
+const sendHtml200 = (res, html) => {
+    const payload = Buffer.from(html, 'utf8');
+    res.status(200);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Content-Length', payload.byteLength.toString());
+    res.set('Accept-Ranges', 'none');
+    res.send(payload);
+};
+
 // Catch-all route for frontend (must be after all API routes)
 app.get(/(.*)/, async (req, res) => {
     const filePath = path.join(staticPath, 'index.html');
@@ -168,7 +178,6 @@ app.get(/(.*)/, async (req, res) => {
             
             if (ogMetadata) {
                 // Read the HTML file and inject OG tags
-                const fs = require('fs');
                 fs.readFile(filePath, 'utf8', (err, data) => {
                     if (err) {
                         logger.error('Error reading index.html:', err);
@@ -177,20 +186,21 @@ app.get(/(.*)/, async (req, res) => {
                     
                     const baseUrl = `${req.protocol}://${req.get('host')}`;
                     const modifiedHtml = injectOGMetaTags(data, ogMetadata, baseUrl);
-                    res.set('Content-Type', 'text/html; charset=utf-8');
-                    res.send(modifiedHtml);
+                    sendHtml200(res, modifiedHtml);
                 });
                 return;
             }
         }
     }
     
-    // Default: serve index.html as-is
-    res.sendFile(filePath, (err) => {
+    // Default: serve index.html as a full-body 200 response
+    fs.readFile(filePath, 'utf8', (err, data) => {
         if (err) {
             logger.error('Error serving index.html:', err);
             res.status(500).json({ error: 'Failed to serve frontend' });
+            return;
         }
+        sendHtml200(res, data);
     });
 });
 

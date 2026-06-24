@@ -41,7 +41,7 @@ const extractMetadata = (urlPath) => {
 
 const fetchSongMetadata = async (songId) => {
     try {
-        const [songs] = await pool.query(`
+        const songs = await pool.query(`
             SELECT 
                 s.id,
                 s.title,
@@ -77,7 +77,7 @@ const fetchSongMetadata = async (songId) => {
 
 const fetchProfileMetadata = async (username) => {
     try {
-        const [users] = await pool.query(`
+        const users = await pool.query(`
             SELECT 
                 u.id,
                 u.username,
