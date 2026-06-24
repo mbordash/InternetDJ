@@ -22,6 +22,7 @@ const notificationsRouter = require('./routes/notifications');
 const path = require('path');
 const http = require('http');
 const initializeSocket = require('./socket');
+const { isCrawler, extractMetadata, fetchSongMetadata, fetchProfileMetadata, injectOGMetaTags } = require('./middleware/ogMetaTags');
 require('dotenv').config();
 
 const app = express();
@@ -146,9 +147,46 @@ app.use('/api/notifications', notificationsRouter);
 const staticPath = path.join(__dirname, '../frontend/build');
 logger.debug('Serving static files from:', staticPath);
 app.use(express.static(staticPath));
+
 // Catch-all route for frontend (must be after all API routes)
-app.get(/(.*)/, (req, res) => {
-    res.sendFile(path.join(staticPath, 'index.html'), (err) => {
+app.get(/(.*)/, async (req, res) => {
+    const filePath = path.join(staticPath, 'index.html');
+    
+    // Check if this is a crawler request and if so, inject OG tags
+    const userAgent = req.get('user-agent') || '';
+    if (isCrawler(userAgent)) {
+        const metadata = extractMetadata(req.path);
+        if (metadata) {
+            logger.debug(`Crawler detected: ${userAgent}, extracting metadata for ${metadata.type}/${metadata.id}`);
+            
+            let ogMetadata = null;
+            if (metadata.type === 'song') {
+                ogMetadata = await fetchSongMetadata(metadata.id);
+            } else if (metadata.type === 'profile') {
+                ogMetadata = await fetchProfileMetadata(metadata.id);
+            }
+            
+            if (ogMetadata) {
+                // Read the HTML file and inject OG tags
+                const fs = require('fs');
+                fs.readFile(filePath, 'utf8', (err, data) => {
+                    if (err) {
+                        logger.error('Error reading index.html:', err);
+                        return res.status(500).json({ error: 'Failed to serve frontend' });
+                    }
+                    
+                    const baseUrl = `${req.protocol}://${req.get('host')}`;
+                    const modifiedHtml = injectOGMetaTags(data, ogMetadata, baseUrl);
+                    res.set('Content-Type', 'text/html; charset=utf-8');
+                    res.send(modifiedHtml);
+                });
+                return;
+            }
+        }
+    }
+    
+    // Default: serve index.html as-is
+    res.sendFile(filePath, (err) => {
         if (err) {
             logger.error('Error serving index.html:', err);
             res.status(500).json({ error: 'Failed to serve frontend' });
