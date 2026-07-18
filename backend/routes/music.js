@@ -954,7 +954,7 @@ router.get('/this-month', async (req, res) => {
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+            WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 180 DAY)
             ORDER BY s.created_at DESC
             LIMIT 20
         `);
