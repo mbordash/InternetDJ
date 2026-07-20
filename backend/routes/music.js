@@ -954,9 +954,8 @@ router.get('/this-month', async (req, res) => {
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+            WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR)
             ORDER BY s.created_at DESC
-            LIMIT 20
         `);
         const sanitizedRows = rows.map((row) => ({
             ...row,
@@ -970,7 +969,7 @@ router.get('/this-month', async (req, res) => {
         res.json(Array.isArray(sanitizedRows) ? sanitizedRows : []);
     } catch (err) {
         logger.error('Error in GET /music/this-month:', err);
-        res.status(500).json({ error: 'Failed to fetch songs from this month' });
+        res.status(500).json({ error: 'Failed to fetch recently uploaded songs' });
     }
 });
 

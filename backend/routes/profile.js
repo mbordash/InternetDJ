@@ -966,7 +966,7 @@ router.get('/:userId/followed-songs', authenticate, async (req, res) => {
              JOIN songs s ON p.id = s.profile_id
       WHERE f.follower_id = ? AND p.user_id IS NOT NULL
       ORDER BY s.created_at DESC
-        LIMIT 5
+        LIMIT 6
     `, [parsedUserId]);
 
     const sanitizedSongs = songs.map((song) => ({

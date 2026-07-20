@@ -78,25 +78,25 @@ function New() {
     return (
         <div className="text-gray-100 pt-2">
             <Helmet>
-                <title>InternetDJ New Music This Month</title>
+                <title>InternetDJ New Music Recently Uploaded</title>
                 <meta
                     name="description"
-                    content="New electronic music uploaded this month"
+                    content="New electronic music uploaded recently"
                 />
                 <link rel="canonical" href={`${baseUrl}/new`} />
-                <meta property="og:title" content="New Music This Month" />
-                <meta property="og:description" content="New electronic music uploaded this month" />
+                <meta property="og:title" content="Recently Uploaded Music" />
+                <meta property="og:description" content="New electronic music uploaded recently" />
                 <meta property="og:url" content={`${baseUrl}/new`} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content="New Music This Month" />
-                <meta name="twitter:description" content="New electronic music uploaded this month" />
+                <meta name="twitter:title" content="Recently Uploaded Music" />
+                <meta name="twitter:description" content="New electronic music uploaded recently" />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-8 text-white">New Songs This Month</h1>
+                <h1 className="text-3xl font-bold mb-8 text-white">Recently uploaded songs</h1>
                 {songs.length === 0 ? (
-                    <p className="text-gray-300">No new songs available this month.</p>
+                    <p className="text-gray-300">No new songs available recently.</p>
                 ) : (
                     <div className="md:overflow-x-auto">
                         {/* Table for Desktop */}
