@@ -25,7 +25,7 @@ function Home() {
     const baseUrl = window.location.origin;
     const description = "Discover, create, and share music on InternetDJ - the ultimate platform for music creators, DJs, and enthusiasts.";
 
-    // Dismissible welcome
+    // Dismissible welcome banner
     useEffect(() => {
         if (user) {
             if (localStorage.getItem('homeWelcomeDismissed') === 'true') setShowWelcome(false);
@@ -37,7 +37,10 @@ function Home() {
         setShowWelcome(false);
     };
 
-    const shuffleAndLimit = (array, limit) => [...array].sort(() => Math.random() - 0.5).slice(0, limit);
+    const shuffleAndLimit = (array, limit) => {
+        const shuffled = [...array].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, Math.min(limit, shuffled.length));
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -53,21 +56,46 @@ function Home() {
 
                 if (user) {
                     const token = localStorage.getItem('token');
-                    requests.push(axios.get(`${API_URL}/profile/${user.id}/followed-songs`, {
-                        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
-                    }));
+                    requests.push(
+                        axios.get(`${API_URL}/profile/${user.id}/followed-songs`, {
+                            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+                        })
+                    );
                 }
 
-                const res = await Promise.all(requests);
-                const [most, high, latest, newProf, popProf, forum, followed] = res;
+                const [
+                    mostPlayedRes, highestRatedRes, latestSongsRes,
+                    latestProfilesRes, popularProfilesRes, recentlyCommentedRes,
+                    followedSongsRes
+                ] = await Promise.all(requests);
 
-                setMostPlayed(shuffleAndLimit(most.data || [], 6));
-                setHighestRated(shuffleAndLimit(high.data || [], 6));
-                setLatestSongs(shuffleAndLimit(latest.data || [], 6));
-                setLatestProfiles(newProf.data || []);
-                setPopularProfiles(popProf.data || []);
-                setRecentlyCommentedPosts(forum.data.posts || []);
-                if (user && followed) setFollowedSongs(shuffleAndLimit(followed.data || [], 6));
+                const normalizeProfiles = (data) => {
+                    let profiles = data;
+                    if (!Array.isArray(data)) {
+                        if (data.profiles) profiles = data.profiles;
+                        else if (data.profile) profiles = [data.profile];
+                        else if (data && typeof data === 'object') profiles = [data];
+                        else return [];
+                    }
+                    return profiles.map(p => ({
+                        user_id: Number(p.user_id || 0),
+                        profile_id: Number(p.profile_id || 0),
+                        name: p.name || p.email || 'Unknown',
+                        created_at: p.created_at || null,
+                        total_plays: Number(p.total_plays) || 0,
+                        picture_url: p.picture_url || null,
+                    }));
+                };
+
+                setMostPlayed(shuffleAndLimit(mostPlayedRes.data || [], 6));
+                setHighestRated(shuffleAndLimit(highestRatedRes.data || [], 6));
+                setLatestSongs(shuffleAndLimit(latestSongsRes.data || [], 6));
+                setLatestProfiles(normalizeProfiles(latestProfilesRes.data));
+                setPopularProfiles(normalizeProfiles(popularProfilesRes.data));
+                setRecentlyCommentedPosts(recentlyCommentedRes.data.posts || []);
+                if (user && followedSongsRes) {
+                    setFollowedSongs(shuffleAndLimit(followedSongsRes.data || [], 6));
+                }
             } catch (err) {
                 setError('Failed to load data');
             }
@@ -75,24 +103,88 @@ function Home() {
         fetchData();
     }, [user]);
 
-    const renderSongCard = (song) => (
-        <div key={song.id} className="bg-zinc-900/80 border border-white/10 rounded-xl p-4 hover:bg-zinc-800/90 transition">
-            <div className="relative w-full aspect-square mb-3">
-                {song.image_url ? (
-                    <img src={song.image_url} alt={song.title} className="w-full h-full rounded-md object-cover" />
-                ) : <div className="w-full h-full bg-zinc-800 rounded-md" />}
-                {song.mp3_url && (
-                    <button onClick={() => handleSongPlay(song)} className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 rounded-md">
-                        {currentSong?.id === song.id && isPlaying ? <PauseIcon className="w-10 h-10" /> : <PlayIcon className="w-10 h-10" />}
-                    </button>
-                )}
-            </div>
-            <Link to={`/song/${song.id}`} className="font-semibold text-white hover:underline block truncate">{song.title}</Link>
-            <Link to={`/profile/${song.profile_id}`} className="text-sm text-gray-300 hover:underline">{song.profile_name}</Link>
-        </div>
-    );
+    // ==================== PLAY FUNCTION (RESTORED) ====================
+    const handleSongPlay = async (song) => {
+        const playedKey = `played_${song.id}`;
+        if (!sessionStorage.getItem(playedKey)) {
+            try {
+                const token = localStorage.getItem('token');
+                await axios.post(`${API_URL}/music/play/${song.id}`, {}, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                sessionStorage.setItem(playedKey, 'true');
 
-    const handleSongPlay = (song) => { /* keep your existing play logic */ };
+                // Update play counts in state
+                const updatePlayCount = (songs) =>
+                    songs.map(s => s.id === song.id ? { ...s, plays: (Number(s.plays) || 0) + 1 } : s);
+
+                setMostPlayed(updatePlayCount);
+                setHighestRated(updatePlayCount);
+                setLatestSongs(updatePlayCount);
+                setFollowedSongs(updatePlayCount);
+            } catch (err) {
+                console.error('Error recording play:', err);
+            }
+        }
+
+        playSong({
+            id: song.id,
+            title: song.title,
+            mp3_url: song.mp3_url,
+            image_url: song.image_url,
+            profile_id: song.profile_id,
+            profile_name: song.profile_name || 'Unknown Artist',
+        });
+    };
+
+    // ==================== RENDER SONG CARD ====================
+    const renderSongCard = (song, size = 'default') => {
+        const isSmall = size === 'small';
+        const imageSize = isSmall ? 'w-36 h-36' : 'w-48 h-48';
+
+        return (
+            <div key={song.id} className="bg-zinc-900/80 border border-white/10 rounded-xl p-4 flex flex-col hover:bg-zinc-800/90 transition-colors">
+                <div className={`relative ${imageSize} mb-4 mx-auto`}>
+                    {song.image_url ? (
+                        <img
+                            src={song.image_url}
+                            alt={song.title}
+                            className="w-full h-full rounded-md object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                    ) : (
+                        <div className="w-full h-full rounded-md bg-zinc-800 flex items-center justify-center text-gray-400">?</div>
+                    )}
+
+                    {song.mp3_url && (
+                        <button
+                            onClick={() => handleSongPlay(song)}
+                            className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 rounded-md transition-opacity"
+                        >
+                            {currentSong?.id === song.id && isPlaying ? (
+                                <PauseIcon className="w-10 h-10 text-white" />
+                            ) : (
+                                <PlayIcon className="w-10 h-10 text-white" />
+                            )}
+                        </button>
+                    )}
+                </div>
+
+                <div className="text-center">
+                    <Link to={`/song/${song.id}`} className="font-semibold text-white hover:underline block truncate">
+                        {song.title}
+                    </Link>
+                    <Link to={`/profile/${song.profile_id}`} className="text-sm text-gray-300 hover:underline">
+                        {song.profile_name || 'Unknown Artist'}
+                    </Link>
+                </div>
+            </div>
+        );
+    };
+
+    if (error) {
+        return <div className="container mx-auto px-4 py-8 text-center text-red-400">{error}</div>;
+    }
 
     return (
         <>
@@ -106,12 +198,23 @@ function Home() {
 
                     {/* HERO / WELCOME */}
                     {!user ? (
-                        <section className="mb-12 bg-gradient-to-br from-zinc-950 via-black to-zinc-900 border border-white/10 rounded-3xl p-8 md:p-16 text-center">
-                            <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6">AI Music.<br />Made Simple.</h1>
-                            <p className="text-2xl text-gray-300 max-w-2xl mx-auto mb-8">Generate royalty-free stems • Online DAW • Collaborate • Discover</p>
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                                <Link to="/register" className="px-10 py-4 bg-white text-black font-semibold rounded-2xl text-xl">Start as Artist (Free)</Link>
-                                <Link to="/discover" className="px-10 py-4 border-2 border-white/50 hover:bg-white/10 rounded-2xl text-xl">Discover Music</Link>
+                        <section className="mb-12 bg-gradient-to-br from-zinc-950 via-black to-zinc-900 border border-white/10 rounded-3xl p-8 md:p-16 text-center relative overflow-hidden">
+                            <div className="absolute inset-0 bg-[radial-gradient(#22d3ee_0.5px,transparent_1px)] [background-size:20px_20px] opacity-20"></div>
+                            <div className="relative">
+                                <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6 leading-none">
+                                    AI Music.<br />Made Simple.
+                                </h1>
+                                <p className="text-2xl text-gray-300 max-w-3xl mx-auto mb-10">
+                                    Generate royalty-free stems • Online DAW • Collaborate • Discover
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                                    <Link to="/register" className="px-10 py-4 bg-white text-black font-semibold rounded-2xl text-xl hover:bg-gray-200 transition">
+                                        Start as Artist (Free)
+                                    </Link>
+                                    <Link to="/discover" className="px-10 py-4 border-2 border-white/50 hover:bg-white/10 rounded-2xl text-xl transition">
+                                        Discover Music
+                                    </Link>
+                                </div>
                             </div>
                         </section>
                     ) : showWelcome && (
@@ -121,16 +224,16 @@ function Home() {
                                     <h2 className="text-2xl font-semibold">Welcome back, {user.name?.split(' ')[0] || 'there'} 👋</h2>
                                     <p className="text-gray-300">What are we creating today?</p>
                                 </div>
-                                <div className="flex gap-3">
-                                    <Link to="/stems" className="px-6 py-3 bg-primary-brand-500 rounded-xl font-medium">Generate AI Stems</Link>
-                                    <Link to="/projects" className="px-6 py-3 border border-white/30 rounded-xl font-medium">Open DAW</Link>
-                                    <button onClick={dismissWelcome} className="px-4 py-3 text-sm text-gray-400 hover:text-white underline">Hide</button>
+                                <div className="flex flex-wrap gap-3">
+                                    <Link to="/stems" className="px-6 py-3 bg-primary-brand-500 hover:bg-primary-brand-600 rounded-xl font-medium">Generate AI Stems</Link>
+                                    <Link to="/projects" className="px-6 py-3 border border-white/30 hover:bg-white/10 rounded-xl font-medium">Open DAW</Link>
+                                    <button onClick={dismissWelcome} className="px-4 py-3 text-sm text-gray-400 hover:text-white underline">Hide this</button>
                                 </div>
                             </div>
                         </section>
                     )}
 
-                    {/* === PROPER 3 COLUMN GRID === */}
+                    {/* === 3 COLUMN GRID === */}
                     <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_360px] gap-8">
 
                         {/* LEFT SIDEBAR */}
@@ -148,14 +251,14 @@ function Home() {
                             </div>
                         </aside>
 
-                        {/* CENTER COLUMN - MAIN CONTENT */}
+                        {/* CENTER - MAIN CONTENT */}
                         <div className="space-y-12">
 
                             {/* Followed Songs */}
                             {user && followedSongs.length > 0 && (
                                 <section>
                                     <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-2xl font-bold">From Artists You Follow</h2>
+                                        <h2 className="text-2xl font-bold tracking-tight">From Artists You Follow</h2>
                                         <Link to="/browse" className="text-sm text-gray-400 hover:text-white">See more →</Link>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -167,7 +270,7 @@ function Home() {
                             {/* New Releases */}
                             <section>
                                 <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-2xl font-bold">New Releases</h2>
+                                    <h2 className="text-2xl font-bold tracking-tight">New Releases</h2>
                                     <Link to="/new" className="text-sm text-gray-400 hover:text-white">See all →</Link>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -178,7 +281,7 @@ function Home() {
                             {/* Trending */}
                             <section>
                                 <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-2xl font-bold">Trending Right Now</h2>
+                                    <h2 className="text-2xl font-bold tracking-tight">Trending Right Now</h2>
                                     <Link to="/browse" className="text-sm text-gray-400 hover:text-white">Explore more →</Link>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -195,7 +298,7 @@ function Home() {
                                 <h3 className="font-semibold mb-3">New Members</h3>
                                 {latestProfiles.slice(0,5).map(p => (
                                     <Link key={p.profile_id} to={`/profile/${p.profile_id}`} className="flex items-center gap-3 py-1 hover:bg-white/5 rounded">
-                                        <img src={p.picture_url || getDefaultAvatar(p.profile_id)} className="w-8 h-8 rounded-full" />
+                                        <img src={p.picture_url || getDefaultAvatar(p.profile_id)} className="w-8 h-8 rounded-full object-cover" />
                                         <span className="text-sm">{p.name}</span>
                                     </Link>
                                 ))}
@@ -205,7 +308,7 @@ function Home() {
                                 <h3 className="font-semibold mb-3">Popular Artists</h3>
                                 {popularProfiles.slice(0,5).map(p => (
                                     <Link key={p.profile_id} to={`/profile/${p.profile_id}`} className="flex items-center gap-3 py-1 hover:bg-white/5 rounded">
-                                        <img src={p.picture_url || getDefaultAvatar(p.profile_id)} className="w-8 h-8 rounded-full" />
+                                        <img src={p.picture_url || getDefaultAvatar(p.profile_id)} className="w-8 h-8 rounded-full object-cover" />
                                         <span className="text-sm flex-1">{p.name}</span>
                                     </Link>
                                 ))}
