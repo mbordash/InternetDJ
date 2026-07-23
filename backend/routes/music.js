@@ -980,7 +980,7 @@ router.get('/:songId', async (req, res) => {
             return res.status(400).json({ error: 'Invalid song ID' });
         }
         const songs = await pool.query(`
-            SELECT s.*, p.name as profile_name, p.background,
+            SELECT s.*, p.name as profile_name, p.background, p.user_id,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -996,6 +996,7 @@ router.get('/:songId', async (req, res) => {
             ...songs[0],
             id: Number(songs[0].id),
             profile_id: Number(songs[0].profile_id),
+            user_id: Number(songs[0].user_id),
             plays: Number(songs[0].plays) || 0,
             profile_name: songs[0].profile_name || 'Unknown Artist',
             background: songs[0].background || null,
@@ -1120,10 +1121,9 @@ router.get('/peaks/:songId', async (req, res) => {
     }
 });
 
-router.post('/peaks/:songId', authenticate, async (req, res) => {
+router.post('/peaks/:songId', async (req, res) => {
     const { songId } = req.params;
     const { peaks } = req.body;
-    const userId = req.user.id;
 
     try {
         const parsedSongId = parseInt(songId, 10);
@@ -1137,29 +1137,25 @@ router.post('/peaks/:songId', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'Valid peaks data is required' });
         }
 
-        logger.debug(`Fetching song with ID: ${parsedSongId} for user ID: ${userId}`);
-        const songs = await pool.query(
-            'SELECT s.id, s.profile_id, p.user_id FROM songs s JOIN profiles p ON s.profile_id = p.id WHERE s.id = ?',
-            [parsedSongId]
-        );
-        logger.debug('Song query result:', songs);
+        const songs = await pool.query('SELECT id, peaks FROM songs WHERE id = ?', [parsedSongId]);
 
         if (!songs || songs.length === 0) {
             logger.debug(`Song ID ${parsedSongId} not found`);
             return res.status(404).json({ error: 'Song not found' });
         }
 
-        const song = songs[0];
-        const songUserId = Number(song.user_id);
-        const requestingUserId = Number(userId);
-        if (songUserId !== requestingUserId) {
-            logger.debug('Ownership check failed:', { songUserId, requestingUserId });
-            return res.status(403).json({ error: 'Unauthorized to save peaks for this song' });
+        if (songs[0].peaks) {
+            return res.status(200).json({ success: true, skipped: true, reason: 'Peaks already exist' });
         }
 
-        logger.debug(`Saving peaks for song ID: ${parsedSongId}`);
-        await pool.query('UPDATE songs SET peaks = ? WHERE id = ?', [peaks, parsedSongId]);
-        logger.debug(`Peaks saved successfully for song ID: ${parsedSongId}`);
+        const updateResult = await pool.query(
+            'UPDATE songs SET peaks = ? WHERE id = ? AND (peaks IS NULL OR peaks = \'\')',
+            [peaks, parsedSongId]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            return res.status(200).json({ success: true, skipped: true, reason: 'Peaks already saved by another client' });
+        }
 
         res.status(200).json({ success: true });
     } catch (err) {
