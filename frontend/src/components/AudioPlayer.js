@@ -51,6 +51,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
   const { user } = useContext(AuthContext);
   const isAuthenticated = !!user;
+  const canPersistPeaks = true;
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
@@ -72,7 +73,8 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Fetched song details:', response.data);
-        setSongTitle(response.data.title || 'Untitled Song');
+        const songData = response.data?.song || response.data;
+        setSongTitle(songData?.title || 'Untitled Song');
       } catch (err) {
         console.error('Error fetching song details:', {
           message: err.message,
@@ -85,36 +87,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
     fetchSongDetails();
   }, [songId]);
 
-  const fetchPeaks = async () => {
-    if (!isMountedRef.current) return null;
-    try {
-      const response = await axios.get(`${API_URL}/music/peaks/${songId}`);
-      if (response.data.peaks) {
-        const parsedPeaks = JSON.parse(response.data.peaks);
-        console.log('Peaks fetched successfully:', parsedPeaks);
-        return parsedPeaks;
-      }
-      console.log('No peaks found for songId:', songId);
-      return null;
-    } catch (err) {
-      console.error('Error fetching peaks:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
-      return null;
-    }
-  };
-
   const savePeaks = async (peaksArray) => {
-    if (!isOwner || !isAuthenticated || !isMountedRef.current) return;
+    if (!canPersistPeaks || !isMountedRef.current) return;
     const token = localStorage.getItem('token');
-    if (!token) return;
     try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
       await axios.post(
           `${API_URL}/music/peaks/${songId}`,
           { peaks: JSON.stringify(peaksArray) },
-          { headers: { Authorization: `Bearer ${token}` } }
+          headers ? { headers } : undefined
       );
       console.log('Peaks saved successfully for songId:', songId);
     } catch (err) {
@@ -481,7 +462,8 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
       if (!isMountedRef.current) return;
 
-      setPeaks(storedPeaks);
+      const storedPeakChannels = Array.isArray(storedPeaks?.[0]) ? storedPeaks : storedPeaks ? [storedPeaks] : null;
+      setPeaks(storedPeakChannels ? storedPeakChannels[0] : null);
 
       const proxyUrl = `${API_URL}/proxy/audio?url=${encodeURIComponent(s3Url)}`;
 
@@ -526,7 +508,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         height: 125,
         responsive: true,
         normalize: true,
-        peaks: storedPeaks ? [storedPeaks] : undefined,
         plugins: [
           Hover.create({
             lineColor: 'rgba(239, 68, 68, 0.5)',
@@ -549,11 +530,18 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           initializeEQFilters();
         }
 
-        if (!storedPeaks && isOwner && isAuthenticated) {
+        if (!storedPeaks && canPersistPeaks) {
           const peaksArray = wavesurferRef.current.exportPeaks()[0];
           console.log(`[DEBUG] Saving new peaks for songId: ${songId}`);
           savePeaks(peaksArray);
           setPeaks(peaksArray);
+        } else if (!storedPeaks) {
+          console.log(`[DEBUG] Skipping peaks save for songId: ${songId}`, {
+            isOwner,
+            isAuthenticated,
+            canPersistPeaks,
+            hasToken: !!localStorage.getItem('token'),
+          });
         }
       });
 
@@ -637,7 +625,12 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
       console.log(`[DEBUG] Loading audio for songId: ${songId}`);
       try {
-        wavesurferRef.current.load(proxyUrl);
+        if (storedPeakChannels) {
+          console.log(`[DEBUG] Loading audio with precomputed peaks for songId: ${songId}`);
+          wavesurferRef.current.load(proxyUrl, storedPeakChannels);
+        } else {
+          wavesurferRef.current.load(proxyUrl);
+        }
       } catch (err) {
         console.error('Error loading audio:', err);
         retryAudioLoad();
@@ -678,7 +671,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       }
       setFiltersInitialized(false);
     };
-  }, [songId, s3Url, isOwner, isAuthenticated]);
+  }, [songId, s3Url]);
 
   // Update the audio element's loop property when isRepeating changes
   useEffect(() => {

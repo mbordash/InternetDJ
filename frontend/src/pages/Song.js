@@ -65,7 +65,11 @@ const Song = () => {
         () => ({
             songId,
             s3Url: song?.mp3_url || '',
-            isOwner: user && song?.user_id && user.id === song.user_id,
+            isOwner: Boolean(
+                user?.id &&
+                song?.user_id &&
+                Number(user.id) === Number(song.user_id)
+            ),
         }),
         [songId, song?.mp3_url, song?.user_id, user?.id]
     );
@@ -698,7 +702,11 @@ const Song = () => {
                                     </div>
                                     {/* Description and Genre Tags */}
                                     <div className="space-y-2">
-                                        {song?.description && <p className="text-gray-300">{song.description}</p>}
+                                        {song?.description && (
+                                            <p className="text-gray-300 whitespace-pre-line">
+                                                {sanitizeHtml(song.description, { allowedTags: [], allowedAttributes: {} })}
+                                            </p>
+                                        )}
                                         {song?.genre ? (
                                             <div className="flex flex-wrap gap-2">
                                                 {song.genre
@@ -728,10 +736,10 @@ const Song = () => {
                             <div className="space-y-6">
                                 {isAuthenticated && (
                                     <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                        <h2 className="text-2xl font-bold mb-4">Submit a Review</h2>
+                                        <h2 className="text-2xl font-bold mb-4">Post a Comment</h2>
                                         <form onSubmit={handleReviewSubmit} className="space-y-6">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-300">Review</label>
+                                                <label className="block text-sm font-medium text-gray-300">Comment</label>
                                                 <textarea
                                                     name="review"
                                                     value={reviewForm.review}
@@ -761,9 +769,9 @@ const Song = () => {
                                 )}
 
                                 <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                    <h2 className="text-2xl font-bold mb-4">Reviews</h2>
+                                    <h2 className="text-2xl font-bold mb-4">Comments</h2>
                                     {reviews.length === 0 ? (
-                                        <p className="text-gray-300">No reviews yet.</p>
+                                        <p className="text-gray-300">No comments yet.</p>
                                     ) : (
                                         <div className="space-y-4">
                                             {reviews.map((review) => (
