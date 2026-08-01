@@ -21,8 +21,11 @@ import {
 } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { createTransferInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { createTransferCheckedInstruction, getMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { Buffer } from 'buffer';
+import { getWallets } from '@wallet-standard/app';
+import { SolanaSignTransaction, SolanaSignAndSendTransaction } from '@solana/wallet-standard-features';
+import bs58 from 'bs58';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
@@ -70,10 +73,16 @@ const ProfilePage = () => {
     const [memberFollowActionIds, setMemberFollowActionIds] = useState([]);
     const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState(false);
     const [isSendCoinModalOpen, setIsSendCoinModalOpen] = useState(false);
+    const [isGiftCoinModalOpen, setIsGiftCoinModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [sendAmount, setSendAmount] = useState('');
     const [sendError, setSendError] = useState(null);
     const [sendSuccess, setSendSuccess] = useState(null);
+    const [giftAmount, setGiftAmount] = useState('');
+    const [giftError, setGiftError] = useState(null);
+    const [giftSuccess, setGiftSuccess] = useState(null);
+    const [availableWallets, setAvailableWallets] = useState([]);
+    const [selectedWalletKey, setSelectedWalletKey] = useState(null);
     const [shareStatus, setShareStatus] = useState('');
     const [isArtistInfoExpanded, setIsArtistInfoExpanded] = useState(false);
     const backgroundImageInputRef = useRef(null);
@@ -246,6 +255,16 @@ const ProfilePage = () => {
         setSendError(null);
     };
 
+    const handleGiftAmountChange = (e) => {
+        const value = e.target.value;
+        if (value && (isNaN(value) || value <= 0)) {
+            setGiftError('Please enter a valid amount greater than 0');
+            return;
+        }
+        setGiftAmount(value);
+        setGiftError(null);
+    };
+
     const handleCopyShareLink = async () => {
         try {
             await navigator.clipboard.writeText(profileShareUrl);
@@ -256,66 +275,222 @@ const ProfilePage = () => {
         }
     };
 
-    const handleSendCoin = async () => {
-        if (!sendAmount || sendAmount <= 0) {
-            setSendError('Please enter a valid amount');
-            return;
+    const supportsSolanaSigning = (provider) =>
+        Boolean(provider?.connect && (provider?.signTransaction || provider?.signAndSendTransaction));
+
+    const getWalletLabel = (provider) => {
+        if (provider?.isJupiter || provider?.isJupiterMobile) return 'Jupiter';
+        if (provider?.isPhantom) return 'Phantom';
+        if (provider?.isSolflare) return 'Solflare';
+        if (provider?.isBackpack) return 'Backpack';
+        if (typeof provider?.name === 'string' && provider.name) return provider.name;
+        return 'Solana Wallet';
+    };
+
+    // Modern wallets (including Jupiter's browser extension) no longer inject into
+    // window.solana. Instead they register themselves via the Wallet Standard
+    // (https://github.com/wallet-standard/wallet-standard), which we wrap here into the
+    // same connect/publicKey/signTransaction/signAndSendTransaction shape our transfer
+    // logic already expects.
+    const wrapStandardWallet = (wallet) => {
+        let currentAccount = wallet.accounts?.[0] || null;
+
+        const getSolanaChain = () => {
+            const chains = wallet.chains || [];
+            return chains.find((c) => c === 'solana:mainnet') || chains.find((c) => c.startsWith('solana:')) || 'solana:mainnet';
+        };
+
+        return {
+            isStandardWallet: true,
+            name: wallet.name,
+            get publicKey() {
+                return currentAccount ? new PublicKey(currentAccount.publicKey) : null;
+            },
+            connect: async () => {
+                const connectFeature = wallet.features?.['standard:connect'];
+                if (!connectFeature) {
+                    throw new Error(`${wallet.name} does not support the standard wallet connect feature.`);
+                }
+                const { accounts } = await connectFeature.connect();
+                if (!accounts || !accounts.length) {
+                    throw new Error(`${wallet.name} did not return any accounts.`);
+                }
+                currentAccount = accounts[0];
+                return { publicKey: new PublicKey(currentAccount.publicKey) };
+            },
+            signTransaction: async (transaction) => {
+                const feature = wallet.features?.[SolanaSignTransaction];
+                if (!feature || !currentAccount) {
+                    throw new Error(`${wallet.name} does not support signTransaction.`);
+                }
+                const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+                const [result] = await feature.signTransaction({
+                    account: currentAccount,
+                    transaction: serialized,
+                    chain: getSolanaChain(),
+                });
+                return Transaction.from(result.signedTransaction);
+            },
+            signAndSendTransaction: async (transaction) => {
+                const feature = wallet.features?.[SolanaSignAndSendTransaction];
+                if (!feature || !currentAccount) {
+                    throw new Error(`${wallet.name} does not support signAndSendTransaction.`);
+                }
+                const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+                const [result] = await feature.signAndSendTransaction({
+                    account: currentAccount,
+                    transaction: serialized,
+                    chain: getSolanaChain(),
+                });
+                // result.signature is raw bytes; connection.confirmTransaction expects a base58 string.
+                return { signature: bs58.encode(result.signature) };
+            },
+        };
+    };
+
+    const getStandardWalletProviders = () => {
+        try {
+            const registeredWallets = getWallets().get();
+            return registeredWallets
+                .filter((wallet) => (wallet.chains || []).some((chain) => chain.startsWith('solana:')))
+                .filter((wallet) => wallet.features?.['standard:connect'] &&
+                    (wallet.features?.[SolanaSignTransaction] || wallet.features?.[SolanaSignAndSendTransaction]))
+                .map(wrapStandardWallet);
+        } catch (err) {
+            console.error('Failed to read Wallet Standard registry:', err);
+            return [];
+        }
+    };
+
+    // Injected wallet extensions attach themselves to window.solana / window.jupiter, or
+    // register via the Wallet Standard, sometimes slightly after the page has finished
+    // loading. Poll briefly instead of failing immediately with "wallet not installed".
+    const waitForInjectedProviders = async (timeoutMs = 2500, intervalMs = 150) => {
+        const start = Date.now();
+        let providers = collectInjectedProviders();
+        while (!providers.length && Date.now() - start < timeoutMs) {
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+            providers = collectInjectedProviders();
+        }
+        return providers;
+    };
+
+    const collectInjectedProviders = () => {
+        const providers = [];
+        const seen = new Set();
+        const addProvider = (provider) => {
+            if (!provider || seen.has(provider) || !supportsSolanaSigning(provider)) {
+                return;
+            }
+            seen.add(provider);
+            providers.push(provider);
+        };
+
+        if (window.solana) {
+            addProvider(window.solana);
+            if (Array.isArray(window.solana.providers)) {
+                window.solana.providers.forEach(addProvider);
+            }
         }
 
-        if (!window.solana || !window.solana.isPhantom) {
-            setSendError('Please install Phantom wallet to send IDJ Coin');
-            return;
+        addProvider(window.jupiter?.solana);
+        addProvider(window.jupiter?.provider);
+        addProvider(window.Jupiter?.solana);
+        addProvider(window.Jupiter?.provider);
+        addProvider(window.solflare);
+        addProvider(window.backpack?.solana);
+
+        getStandardWalletProviders().forEach(addProvider);
+
+        return providers;
+    };
+
+    // Populate the wallet list when the gift modal opens so the user can explicitly choose
+    // which installed wallet extension to use, avoiding silent cross-extension conflicts.
+    const refreshAvailableWallets = async () => {
+        const providers = await waitForInjectedProviders();
+        const wallets = providers.map((provider, index) => ({
+            key: `wallet-${index}`,
+            label: getWalletLabel(provider),
+            provider,
+        }));
+        setAvailableWallets(wallets);
+        setSelectedWalletKey(wallets.length ? wallets[0].key : null);
+        return wallets;
+    };
+
+    const transferIdjCoin = async (amountValue, walletProvider) => {
+        if (!walletProvider) {
+            throw new Error('Please install a Solana wallet browser plugin (Jupiter, Phantom, or compatible).');
         }
+
+        const recipientPublicKey = new PublicKey(profile.solana_address);
+        if (!PublicKey.isOnCurve(recipientPublicKey)) {
+            throw new Error('Invalid recipient Solana address');
+        }
+
+        // IDJ Coin is a Token-2022 mint (has metadata extensions), not the classic SPL
+        // Token program. Detect which program actually owns the mint so we build the
+        // transfer instruction against the right program id.
+        const mintAccountInfo = await connection.getAccountInfo(IDJ_COIN_MINT);
+        if (!mintAccountInfo) {
+            throw new Error('Unable to load IDJ Coin mint account.');
+        }
+        const tokenProgramId = mintAccountInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
+            ? TOKEN_2022_PROGRAM_ID
+            : TOKEN_PROGRAM_ID;
+        const mintInfo = await getMint(connection, IDJ_COIN_MINT, 'confirmed', tokenProgramId);
 
         try {
-            await window.solana.connect();
-            const senderPublicKey = new PublicKey(window.solana.publicKey.toString());
-            const recipientPublicKey = new PublicKey(profile.solana_address);
+            await walletProvider.connect({ onlyIfTrusted: false });
+        } catch (_) {
+            await walletProvider.connect();
+        }
+        if (!walletProvider.publicKey) {
+            throw new Error('Wallet connected, but no public key was returned by the wallet plugin.');
+        }
 
-            if (!PublicKey.isOnCurve(recipientPublicKey)) {
-                setSendError('Invalid recipient Solana address');
-                return;
-            }
-
-            const senderTokenAccount = await connection.getTokenAccountsByOwner(senderPublicKey, {
-                mint: IDJ_COIN_MINT,
-            });
-            if (!senderTokenAccount.value.length) {
-                setSendError(
-                    'No IDJ Coin found in your wallet. Buy some on Raydium: ' +
-                    '<a href="https://raydium.io/swap/?inputMint=sol&outputMint=DTLkUR3Sfp1LcPVZMSv8toTTK3iwU7WTdF66TawwJpKN&referrer=HjSJR8xGc1NbB3eULRUYC5EjZL6UpRJqBrtqFmhz8hi9" target="_blank" class="text-blue-600 hover:underline">Trade Now</a>'
-                );
-                return;
-            }
-
-            const recipientTokenAccount = await connection.getTokenAccountsByOwner(recipientPublicKey, {
-                mint: IDJ_COIN_MINT,
-            });
-            let recipientTokenAccountPubkey;
-            if (!recipientTokenAccount.value.length) {
-                setSendError('Recipient wallet does not have an IDJ Coin account. Ask them to receive IDJ Coin first.');
-                return;
-            } else {
-                recipientTokenAccountPubkey = recipientTokenAccount.value[0].pubkey;
-            }
-
-            const amount = parseFloat(sendAmount) * Math.pow(10, 9);
-            const transaction = new Transaction().add(
-                createTransferInstruction(
-                    senderTokenAccount.value[0].pubkey,
-                    recipientTokenAccountPubkey,
-                    senderPublicKey,
-                    amount,
-                    [],
-                    TOKEN_PROGRAM_ID
-                )
+        const senderPublicKey = new PublicKey(walletProvider.publicKey.toString());
+        const senderTokenAccount = await connection.getTokenAccountsByOwner(senderPublicKey, {
+            mint: IDJ_COIN_MINT,
+        });
+        if (!senderTokenAccount.value.length) {
+            throw new Error(
+                'No IDJ Coin found in your wallet. Buy some on Raydium: ' +
+                '<a href="https://raydium.io/swap/?inputMint=sol&outputMint=DTLkUR3Sfp1LcPVZMSv8toTTK3iwU7WTdF66TawwJpKN&referrer=HjSJR8xGc1NbB3eULRUYC5EjZL6UpRJqBrtqFmhz8hi9" target="_blank" class="text-blue-600 hover:underline">Trade Now</a>'
             );
+        }
 
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
-            transaction.feePayer = senderPublicKey;
+        const recipientTokenAccount = await connection.getTokenAccountsByOwner(recipientPublicKey, {
+            mint: IDJ_COIN_MINT,
+        });
+        if (!recipientTokenAccount.value.length) {
+            throw new Error('Recipient wallet does not have an IDJ Coin account. Ask them to receive IDJ Coin first.');
+        }
 
-            const signedTransaction = await window.solana.signTransaction(transaction);
+        const amount = BigInt(Math.round(parseFloat(amountValue) * Math.pow(10, mintInfo.decimals)));
+        const transaction = new Transaction().add(
+            createTransferCheckedInstruction(
+                senderTokenAccount.value[0].pubkey,
+                IDJ_COIN_MINT,
+                recipientTokenAccount.value[0].pubkey,
+                senderPublicKey,
+                amount,
+                mintInfo.decimals,
+                [],
+                tokenProgramId
+            )
+        );
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = senderPublicKey;
+
+        let signature;
+        // Prefer signTransaction because some injected wallets reject signAndSendTransaction
+        // even after user approval, but still allow signing.
+        if (typeof walletProvider.signTransaction === 'function') {
+            const signedTransaction = await walletProvider.signTransaction(transaction);
 
             let serializedTransaction;
             try {
@@ -327,35 +502,61 @@ const ProfilePage = () => {
                 });
                 throw new Error('Failed to serialize transaction. Ensure your browser environment supports Buffer.');
             }
+            signature = await connection.sendRawTransaction(serializedTransaction);
+        }
 
-            const signature = await connection.sendRawTransaction(serializedTransaction);
+        if (!signature && typeof walletProvider.signAndSendTransaction === 'function') {
+            const sendResult = await walletProvider.signAndSendTransaction(transaction);
+            signature = typeof sendResult === 'string' ? sendResult : sendResult?.signature;
+        }
 
-            const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-            if (confirmation.value.err) {
-                throw new Error('Transaction failed');
+        if (!signature) {
+            throw new Error('Wallet did not return a transaction signature');
+        }
+
+        const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+        if (confirmation.value.err) {
+            throw new Error('Transaction failed');
+        }
+
+        return { signature, senderPublicKey };
+    };
+
+    const handleSendCoin = async () => {
+        if (!sendAmount || sendAmount <= 0) {
+            setSendError('Please enter a valid amount');
+            return;
+        }
+
+        if (!user || !user.is_admin) {
+            setSendError('Only admins can submit owed IDJC payouts.');
+            return;
+        }
+
+        try {
+            const selectedWallet = availableWallets.find((w) => w.key === selectedWalletKey) || availableWallets[0];
+            if (!selectedWallet) {
+                setSendError('Please install a Solana wallet browser plugin (Jupiter, Phantom, or compatible).');
+                return;
             }
+            const { signature } = await transferIdjCoin(sendAmount, selectedWallet.provider);
+            const token = localStorage.getItem('token');
 
-            setSendSuccess(`Successfully sent ${sendAmount} IDJ Coin! Transaction: ${signature}`);
+            await axios.post(`${API_URL}/profile/${profileId}/record-payment`, {
+                amount: parseFloat(sendAmount),
+                signature,
+            }, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            const response = await axios.get(`${API_URL}/profile/${profileId}`);
+            setProfile(response.data.profile);
+
+            setSendSuccess(`Successfully paid ${sendAmount} IDJC. Transaction: ${signature}`);
             setSendAmount('');
             setTimeout(() => setSendSuccess(null), 5000);
-
-            // Record the payment
-            try {
-                const token = localStorage.getItem('token');
-                await axios.post(`${API_URL}/profile/${profileId}/record-payment`, {
-                    amount: parseFloat(sendAmount),
-                    signature,
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
-                // Refresh profile to update unpaid
-                const response = await axios.get(`${API_URL}/profile/${profileId}`);
-                setProfile(response.data.profile);
-            } catch (recordErr) {
-                console.error('Error recording payment:', recordErr);
-            }
         } catch (err) {
             console.error('Send IDJ Coin error:', {
                 message: err.message,
@@ -368,7 +569,53 @@ const ProfilePage = () => {
             } else if (err.message.includes('Buffer')) {
                 setSendError('Transaction failed due to a browser compatibility issue. Try using a different browser or contact support.');
             } else {
-                setSendError(`Failed to send IDJ Coin: ${err.message}`);
+                setSendError(`Failed to send IDJ Coin: ${err.response?.data?.error || err.message}`);
+            }
+        }
+    };
+
+    const handleGiftCoin = async () => {
+        if (!giftAmount || giftAmount <= 0) {
+            setGiftError('Please enter a valid amount');
+            return;
+        }
+
+        try {
+            const selectedWallet = availableWallets.find((w) => w.key === selectedWalletKey) || availableWallets[0];
+            if (!selectedWallet) {
+                setGiftError('Please install a Solana wallet browser plugin (Jupiter, Phantom, or compatible).');
+                return;
+            }
+            const { signature, senderPublicKey } = await transferIdjCoin(giftAmount, selectedWallet.provider);
+            const token = localStorage.getItem('token');
+
+            await axios.post(`${API_URL}/profile/${profileId}/idjc-tip-notify`, {
+                amount: parseFloat(giftAmount),
+                signature,
+                sender_wallet: senderPublicKey.toBase58(),
+                recipient_wallet: profile.solana_address,
+            }, token ? {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            } : undefined);
+
+            setGiftSuccess(`Successfully gifted ${giftAmount} IDJ Coin! Transaction: ${signature}`);
+            setGiftAmount('');
+            setTimeout(() => setGiftSuccess(null), 5000);
+        } catch (err) {
+            console.error('Gift IDJ Coin error:', {
+                message: err.message,
+                stack: err.stack,
+                response: err.response?.data,
+                status: err.response?.status,
+            });
+            if (err.message.includes('403')) {
+                setGiftError('Access to Solana network blocked. Please try again or contact support via Discord: <a href="https://discord.gg/AbebAd3yS8" target="_blank" class="text-blue-600 hover:underline">Join Discord</a>');
+            } else if (err.message.includes('Buffer')) {
+                setGiftError('Transaction failed due to a browser compatibility issue. Try using a different browser or contact support.');
+            } else {
+                setGiftError(`Failed to gift IDJ Coin: ${err.response?.data?.error || err.message}`);
             }
         }
     };
@@ -588,8 +835,11 @@ const ProfilePage = () => {
     };
 
     const handlePayOwed = () => {
+        setSendError(null);
+        setSendSuccess(null);
         setSendAmount(profile.unpaid.toString());
         setIsSendCoinModalOpen(true);
+        refreshAvailableWallets();
     };
 
     const handleFeaturedSongChange = async (songId) => {
@@ -1039,11 +1289,17 @@ const ProfilePage = () => {
                             }}
                             className="bg-[#008dcb]/16 border-[#73cbf0]/40 hover:bg-[#008dcb]/26"
                         />
-                        {profile.solana_address && (
+                        {!isOwner && profile.solana_address && (
                             <IconActionButton
                                 icon={PaperAirplaneIcon}
-                                label="Send IDJ Coin"
-                                onClick={() => setIsSendCoinModalOpen(true)}
+                                label="Gift IDJ Coin"
+                                onClick={() => {
+                                    setGiftError(null);
+                                    setGiftSuccess(null);
+                                    setGiftAmount('');
+                                    setIsGiftCoinModalOpen(true);
+                                    refreshAvailableWallets();
+                                }}
                                 className="bg-[#73cbf0]/16 border-[#73cbf0]/45 hover:bg-[#73cbf0]/24"
                             />
                         )}
@@ -1741,12 +1997,37 @@ const ProfilePage = () => {
             {isSendCoinModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-md w-full mx-4 text-gray-100">
-                        <h3 className="text-xl font-bold mb-4">Send IDJ Coin to {profile.name}</h3>
+                        <h3 className="text-xl font-bold mb-4">Pay owed IDJC to {profile.name}</h3>
                         {sendError && (
                             <p className="text-red-400 text-sm mb-4" dangerouslySetInnerHTML={{ __html: sendError }}></p>
                         )}
                         {sendSuccess && (
                             <p className="text-green-400 text-sm mb-4">{sendSuccess}</p>
+                        )}
+                        {availableWallets.length > 1 && (
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-300">Wallet</label>
+                                <select
+                                    value={selectedWalletKey || ''}
+                                    onChange={(e) => setSelectedWalletKey(e.target.value)}
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                >
+                                    {availableWallets.map((wallet) => (
+                                        <option key={wallet.key} value={wallet.key}>{wallet.label}</option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Multiple wallet extensions detected. Choose the one you want to sign with.
+                                </p>
+                            </div>
+                        )}
+                        {availableWallets.length === 1 && (
+                            <p className="mb-4 text-xs text-gray-400">Using wallet: {availableWallets[0].label}</p>
+                        )}
+                        {availableWallets.length === 0 && (
+                            <p className="mb-4 text-xs text-yellow-400">
+                                No Solana wallet extension detected yet. Make sure it's unlocked, then reopen this dialog.
+                            </p>
                         )}
                         <div className="mb-4">
                             <label className="block text-sm font-medium text-gray-300">Amount (IDJ Coin)</label>
@@ -1765,7 +2046,7 @@ const ProfilePage = () => {
                                 onClick={handleSendCoin}
                                 className="py-2 px-4 bg-purple-500 text-white font-semibold rounded-md shadow-sm hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
                             >
-                                Send
+                                Send payout
                             </button>
                             <button
                                 onClick={() => {
@@ -1773,6 +2054,76 @@ const ProfilePage = () => {
                                     setSendAmount('');
                                     setSendError(null);
                                     setSendSuccess(null);
+                                }}
+                                className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isGiftCoinModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-md w-full mx-4 text-gray-100">
+                        <h3 className="text-xl font-bold mb-4">Gift IDJ Coin to {profile.name}</h3>
+                        {giftError && (
+                            <p className="text-red-400 text-sm mb-4" dangerouslySetInnerHTML={{ __html: giftError }}></p>
+                        )}
+                        {giftSuccess && (
+                            <p className="text-green-400 text-sm mb-4">{giftSuccess}</p>
+                        )}
+                        {availableWallets.length > 1 && (
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-300">Wallet</label>
+                                <select
+                                    value={selectedWalletKey || ''}
+                                    onChange={(e) => setSelectedWalletKey(e.target.value)}
+                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                >
+                                    {availableWallets.map((wallet) => (
+                                        <option key={wallet.key} value={wallet.key}>{wallet.label}</option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Multiple wallet extensions detected. Choose the one you want to sign with.
+                                </p>
+                            </div>
+                        )}
+                        {availableWallets.length === 1 && (
+                            <p className="mb-4 text-xs text-gray-400">Using wallet: {availableWallets[0].label}</p>
+                        )}
+                        {availableWallets.length === 0 && (
+                            <p className="mb-4 text-xs text-yellow-400">
+                                No Solana wallet extension detected yet. Make sure it's unlocked, then reopen this dialog.
+                            </p>
+                        )}
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-300">Gift amount (IDJ Coin)</label>
+                            <input
+                                type="number"
+                                value={giftAmount}
+                                onChange={handleGiftAmountChange}
+                                placeholder="Enter gift amount"
+                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                min="0"
+                                step="0.000000001"
+                            />
+                        </div>
+                        <div className="flex space-x-4">
+                            <button
+                                onClick={handleGiftCoin}
+                                className="py-2 px-4 bg-purple-500 text-white font-semibold rounded-md shadow-sm hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                            >
+                                Send gift
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsGiftCoinModalOpen(false);
+                                    setGiftAmount('');
+                                    setGiftError(null);
+                                    setGiftSuccess(null);
                                 }}
                                 className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                             >

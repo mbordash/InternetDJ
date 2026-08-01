@@ -140,7 +140,7 @@ function Home() {
     // ==================== RENDER SONG CARD ====================
     const renderSongCard = (song, size = 'default') => {
         const isSmall = size === 'small';
-        const imageSize = isSmall ? 'w-36 h-36' : 'w-48 h-48';
+        const imageSize = isSmall ? 'w-full max-w-36 aspect-square' : 'w-full max-w-48 aspect-square';
 
         return (
             <div key={song.id} className="bg-zinc-900/80 border border-white/10 rounded-xl p-4 flex flex-col hover:bg-zinc-800/90 transition-colors">
