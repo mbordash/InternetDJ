@@ -4,8 +4,9 @@ const logger = require('../utils/logger');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require('../config/tigris');
 const authenticate = require('../middleware/authenticate');
+const authenticateOptional = require('../middleware/authenticateOptional');
 const { buildPublicFileUrl } = require('../utils/storage');
-const { createNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
+const { createNotification, NOTIFICATION_TYPES, sendIdjcTipEmail } = require('../utils/notifications');
 const router = express.Router();
 
 // Get recommended songs
@@ -593,6 +594,93 @@ router.post('/:profileId/record-payment', authenticate, async (req, res) => {
   } catch (err) {
     logger.error('Error in POST /profile/:profileId/record-payment:', err);
     res.status(500).json({ error: 'Failed to record payment: ' + err.message });
+  }
+});
+
+router.post('/:profileId/idjc-tip-notify', authenticateOptional, async (req, res) => {
+  const parsedProfileId = Number(req.params.profileId);
+  const amount = Number(req.body.amount);
+  const signature = typeof req.body.signature === 'string' ? req.body.signature.trim() : '';
+  const senderWallet = typeof req.body.sender_wallet === 'string' ? req.body.sender_wallet.trim() : null;
+  const recipientWallet = typeof req.body.recipient_wallet === 'string' ? req.body.recipient_wallet.trim() : null;
+  const SOLANA_ADDRESS_REGEX = /^[1-9A-HJ-NP-Za-km-z]{44}$/;
+
+  if (!Number.isInteger(parsedProfileId) || !Number.isFinite(amount) || amount <= 0 || !signature) {
+    return res.status(400).json({ error: 'Invalid request parameters' });
+  }
+
+  try {
+    const profiles = await pool.query(
+      'SELECT id, user_id, name, solana_address FROM profiles WHERE id = ? LIMIT 1',
+      [parsedProfileId]
+    );
+
+    if (!profiles.length) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const recipientProfile = profiles[0];
+    const recipientUserId = Number(recipientProfile.user_id);
+    const actorUserId = req.user?.id ? Number(req.user.id) : null;
+
+    if (!recipientUserId) {
+      return res.status(400).json({ error: 'Invalid profile owner' });
+    }
+
+    if (actorUserId && recipientUserId === actorUserId) {
+      return res.status(400).json({ error: 'You cannot send IDJC to your own profile' });
+    }
+
+    if (recipientWallet && recipientProfile.solana_address && recipientWallet !== recipientProfile.solana_address) {
+      return res.status(400).json({ error: 'Recipient wallet does not match profile wallet address' });
+    }
+
+    if (senderWallet && !SOLANA_ADDRESS_REGEX.test(senderWallet)) {
+      return res.status(400).json({ error: 'Invalid sender wallet address' });
+    }
+
+    if (recipientWallet && !SOLANA_ADDRESS_REGEX.test(recipientWallet)) {
+      return res.status(400).json({ error: 'Invalid recipient wallet address' });
+    }
+
+    const formattedAmount = amount.toLocaleString('en-US', { maximumFractionDigits: 9 });
+
+    if (actorUserId) {
+      // Logged-in gifter: record an in-app notification plus email, attributed to their account.
+      await createNotification({
+        recipientUserId,
+        actorUserId,
+        type: NOTIFICATION_TYPES.IDJC_RECEIVED,
+        message: `You received ${formattedAmount} IDJC.`,
+        entityType: 'profile',
+        entityId: parsedProfileId,
+        metadata: {
+          amount,
+          signature,
+          sender_wallet: senderWallet,
+          recipient_wallet: recipientProfile.solana_address || recipientWallet || null,
+        },
+      });
+    } else {
+      // Anonymous gifter: there's no account to attribute an in-app notification to,
+      // so just email the artist that they received a gift.
+      await sendIdjcTipEmail({
+        recipientUserId,
+        amount,
+        entityId: parsedProfileId,
+        actorLabel: senderWallet ? `A supporter (${senderWallet.slice(0, 4)}...${senderWallet.slice(-4)})` : undefined,
+      });
+    }
+
+    return res.status(200).json({ message: 'IDJC tip notification sent' });
+  } catch (err) {
+    logger.error('Error in POST /profile/:profileId/idjc-tip-notify:', {
+      message: err.message,
+      stack: err.stack,
+      profileId: req.params.profileId,
+      userId: req.user?.id,
+    });
+    return res.status(500).json({ error: 'Failed to send IDJC tip notification' });
   }
 });
 

@@ -8,6 +8,7 @@ const NOTIFICATION_TYPES = {
     SONG_REVIEWED: 'song_reviewed',
     FORUM_POST_REPLIED: 'forum_post_replied',
     PROFILE_FOLLOWED: 'profile_followed',
+    IDJC_RECEIVED: 'idjc_received',
     COLLAB_TRACK_ADDED: 'collab_track_added',
     ARTIST_SONG_UPLOADED: 'artist_song_uploaded',
 };
@@ -69,6 +70,7 @@ const sendEmailNotification = async ({ recipientUserId, actorUserId, type, messa
         NOTIFICATION_TYPES.SONG_REVIEWED,
         NOTIFICATION_TYPES.FORUM_POST_REPLIED,
         NOTIFICATION_TYPES.PROFILE_FOLLOWED,
+        NOTIFICATION_TYPES.IDJC_RECEIVED,
         NOTIFICATION_TYPES.COLLAB_TRACK_ADDED,
     ].includes(type);
 
@@ -186,8 +188,44 @@ const createNotification = async ({
     }
 };
 
+const sendIdjcTipEmail = async ({ recipientUserId, amount, entityId, actorLabel = 'An anonymous supporter' }) => {
+    if (!mailgunClient) {
+        return;
+    }
+
+    const [recipient] = await pool.query(
+        'SELECT id, email, email_profile_activity_enabled FROM users WHERE id = ? LIMIT 1',
+        [recipientUserId]
+    );
+
+    if (!recipient?.email) {
+        return;
+    }
+
+    if (recipient.email_profile_activity_enabled === 0 || !recipient.email_profile_activity_enabled) {
+        return;
+    }
+
+    const formattedAmount = Number(amount).toLocaleString('en-US', { maximumFractionDigits: 9 });
+    const url = buildActivityUrl(NOTIFICATION_TYPES.IDJC_RECEIVED, 'profile', entityId, null);
+    const subject = `InternetDJ activity: You received ${formattedAmount} IDJC.`;
+    const html = `
+        <h2>New activity on InternetDJ</h2>
+        <p><strong>${actorLabel}</strong> just gifted you IDJ Coin:</p>
+        <p>You received ${formattedAmount} IDJC.</p>
+        <p><a href="${url}">Open on InternetDJ</a></p>
+    `;
+
+    await mailgunClient.messages.create(MAILGUN_DOMAIN, {
+        from: `InternetDJ <noreply@${MAILGUN_DOMAIN}>`,
+        to: recipient.email,
+        subject,
+        html,
+    });
+};
+
 module.exports = {
     NOTIFICATION_TYPES,
     createNotification,
+    sendIdjcTipEmail,
 };
-
