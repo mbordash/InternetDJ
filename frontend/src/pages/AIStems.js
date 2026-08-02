@@ -15,7 +15,7 @@ function AIStems() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [userStems, setUserStems] = useState([]);
-    const [dailyRemaining, setDailyRemaining] = useState(5);
+    const [dailyRemaining, setDailyRemaining] = useState(10);
     const [highlightedStemId, setHighlightedStemId] = useState(null);
     const [copyingStemId, setCopyingStemId] = useState(null);
 
@@ -43,7 +43,7 @@ function AIStems() {
         }
 
         if (dailyRemaining <= 0) {
-            setError('Daily limit of 5 stems reached');
+            setError('Daily limit of 10 stems reached');
             return;
         }
 

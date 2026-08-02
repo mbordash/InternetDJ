@@ -51,7 +51,7 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
             });
 
             // Apply track volume (multiplied by sample volume if needed)
-            wavesurfer.current.setVolume((sample.volume || 1) * trackVolume);
+            wavesurfer.current.setVolume((sample.volume ?? 1) * trackVolume);
 
             return () => {
                 if (wavesurfer.current) {
@@ -312,7 +312,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                     sample={sample}
                     trackId={trackId}
                     onDrag={onDrag}
-                    volume={sample.volume || 1}
+                    volume={sample.volume ?? 1}
                     zoom={zoom}
                     duration={sampleDurations[sample.id] || 0}
                     isLoadingDurations={isLoadingDurations}
@@ -390,7 +390,7 @@ const MultiTrackSampler = () => {
     useEffect(() => {
         const initialVolumes = {};
         tracks.forEach(track => {
-            initialVolumes[track.id] = track.volume || 1;
+            initialVolumes[track.id] = track.volume ?? 1;
         });
         setTrackVolumes(initialVolumes);
     }, [tracks]);
@@ -680,7 +680,7 @@ const MultiTrackSampler = () => {
     const handleTrackSettingsChange = async (trackId, settings) => {
         const previousTrack = tracks.find(t => t.id === trackId);
         const previousSettings = {
-            volume: trackVolumes[trackId] || 1,
+            volume: trackVolumes[trackId] ?? 1,
             instrument_type: previousTrack?.instrument_type || 'synth',
             is_polyphonic: previousTrack?.is_polyphonic || false,
             synth_settings: previousTrack?.synth_settings || {}
@@ -692,6 +692,16 @@ const MultiTrackSampler = () => {
             if (midiGains.current[trackId]) {
                 midiGains.current[trackId].gain.setValueAtTime(settings.volume, Tone.now());
             }
+            // Update volume for any active audio samples on this track
+            Object.values(wavesurfersRef.current).forEach(ws => {
+                if (ws.instance?.trackId === trackId) {
+                    const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
+                    ws.instance.setVolume((sample?.volume ?? 1) * settings.volume);
+                    if (ws.gainNode) {
+                        ws.gainNode.gain.setValueAtTime(settings.volume, Tone.now());
+                    }
+                }
+            });
         }
         setTracks(prev =>
             prev.map(t =>
@@ -723,6 +733,11 @@ const MultiTrackSampler = () => {
             if (midiGains.current[trackId]) {
                 midiGains.current[trackId].gain.setValueAtTime(previousSettings.volume, Tone.now());
             }
+            Object.values(wavesurfersRef.current).forEach(ws => {
+                if (ws.gainNode && ws.instance?.trackId === trackId) {
+                    ws.gainNode.gain.setValueAtTime(previousSettings.volume, Tone.now());
+                }
+            });
             setTracks(prev =>
                 prev.map(t =>
                     t.id === trackId
@@ -772,9 +787,20 @@ const MultiTrackSampler = () => {
                     track.id === trackId ? { ...track, volume: newVolume } : track
                 )
             );
+            setTrackVolumes(prev => ({ ...prev, [trackId]: newVolume }));
             if (midiGains.current[trackId]) {
                 midiGains.current[trackId].gain.setValueAtTime(newVolume, Tone.now());
             }
+            // Apply live volume to any playing samples on this track
+            Object.values(wavesurfersRef.current).forEach(ws => {
+                if (ws.instance?.trackId === trackId) {
+                    const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
+                    ws.instance.setVolume((sample?.volume ?? 1) * newVolume);
+                    if (ws.gainNode) {
+                        ws.gainNode.gain.setValueAtTime(newVolume, Tone.now());
+                    }
+                }
+            });
         } catch (err) {
             console.error('Update volume error:', err.response?.data || err.message);
             setError(`Failed to save volume: ${err.response?.data?.error || err.message}`);
@@ -1105,8 +1131,11 @@ const MultiTrackSampler = () => {
                     wsInstance.sampleId = sample.id;
                     wsInstance.trackId = sample.track_id;
 
-                    const trackVolume = trackVolumes[sample.track_id] || 1;
-                    const gainNode = new Tone.Gain((sample.volume || 1) * trackVolume);
+                    const trackVolume = trackVolumes[sample.track_id] ?? 1;
+                    const gainNode = new Tone.Gain((sample.volume ?? 1) * trackVolume);
+                    // WaveSurfer v7 has no exposed backend source, so apply
+                    // track/sample volume through the instance's own gain.
+                    wsInstance.setVolume((sample.volume ?? 1) * trackVolume);
 
                     // Initialize effects for the track
                     const trackEffects = {};
@@ -1202,7 +1231,7 @@ const MultiTrackSampler = () => {
                             console.warn('Track missing ID:', track);
                             return;
                         }
-                        const gainNode = midiGains.current[track.id] || new Tone.Gain(track.volume || 1);
+                        const gainNode = midiGains.current[track.id] || new Tone.Gain(track.volume ?? 1);
                         midiGains.current[track.id] = gainNode;
 
                         const instrumentType = track.instrument_type || 'synth';
@@ -1302,8 +1331,8 @@ const MultiTrackSampler = () => {
                         if (!ws.ready) return;
                         const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
                         if (!sample) return;
-                        const trackVolume = trackVolumes[sample.track_id] || 1;
-                        ws.instance.setVolume((sample.volume || 1) * trackVolume);
+                        const trackVolume = trackVolumes[sample.track_id] ?? 1;
+                        ws.instance.setVolume((sample.volume ?? 1) * trackVolume);
                         const duration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
                         const startTime = sample.start_time * timeScale;
                         const endTime = startTime + duration;
@@ -1320,6 +1349,54 @@ const MultiTrackSampler = () => {
                     }
                 });
 
+                // Re-initialize effects for audio sample tracks (disposed on pause)
+                projectSamples.forEach(sample => {
+                    const ws = wavesurfersRef.current[sample.id];
+                    if (!ws?.gainNode) return;
+                    const track = tracks.find(t => t.id === sample.track_id);
+                    const effectsSettings = track?.effects_settings || {};
+                    const gainNode = ws.gainNode;
+
+                    // Disconnect from previous destination/effects before rewiring
+                    gainNode.disconnect();
+
+                    const trackEffects = {};
+                    if (effectsSettings.reverb) {
+                        trackEffects.reverb = new Tone.Reverb({
+                            decay: effectsSettings.reverb.decay,
+                            wet: effectsSettings.reverb.wet
+                        });
+                    }
+                    if (effectsSettings.delay) {
+                        trackEffects.delay = new Tone.FeedbackDelay({
+                            delayTime: effectsSettings.delay.delayTime,
+                            wet: effectsSettings.delay.wet
+                        });
+                    }
+                    if (effectsSettings.distortion) {
+                        trackEffects.distortion = new Tone.Distortion({
+                            distortion: effectsSettings.distortion.distortion,
+                            wet: effectsSettings.distortion.wet
+                        });
+                    }
+                    effectsNodes.current[sample.track_id] = trackEffects;
+
+                    let lastNode = gainNode;
+                    if (trackEffects.reverb) {
+                        gainNode.connect(trackEffects.reverb);
+                        lastNode = trackEffects.reverb;
+                    }
+                    if (trackEffects.delay) {
+                        lastNode.connect(trackEffects.delay);
+                        lastNode = trackEffects.delay;
+                    }
+                    if (trackEffects.distortion) {
+                        lastNode.connect(trackEffects.distortion);
+                        lastNode = trackEffects.distortion;
+                    }
+                    lastNode.toDestination();
+                });
+
                 toneTransportRef.current.cancel();
                 tracks.forEach(track => {
                     if (track.track_type === 'midi' && Array.isArray(track.midi_notes)) {
@@ -1327,7 +1404,7 @@ const MultiTrackSampler = () => {
                             console.warn('Track missing ID:', track);
                             return;
                         }
-                        const gainNode = midiGains.current[track.id] || new Tone.Gain(track.volume || 1);
+                        const gainNode = midiGains.current[track.id] || new Tone.Gain(track.volume ?? 1);
                         midiGains.current[track.id] = gainNode;
 
                         const instrumentType = track.instrument_type || 'synth';
@@ -2168,7 +2245,7 @@ const MultiTrackSampler = () => {
                         onClose={() => setSelectedTrack(null)}
                         onDelete={handleDeleteTrack}
                         onSettingsChange={handleTrackSettingsChange}
-                        currentVolume={selectedTrack.volume || 1}
+                        currentVolume={selectedTrack.volume ?? 1}
                         currentInstrumentType={selectedTrack.instrument_type || 'synth'}
                         isPolyphonic={selectedTrack.is_polyphonic || false}
                         synthSettings={selectedTrack.synth_settings}
