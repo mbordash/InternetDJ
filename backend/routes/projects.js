@@ -268,7 +268,7 @@ router.get('/:projectId', authenticate, async (req, res) => {
                     track_order: Number(track.track_order),
                     track_type: track.track_type,
                     midi_notes: midiNotes,
-                    volume: Number(track.volume) || 1.0,
+                    volume: track.volume == null ? 1.0 : Number(track.volume),
                     instrument_type: track.instrument_type || 'synth',
                     is_polyphonic: Boolean(track.is_polyphonic),
                     synth_settings: synthSettings,

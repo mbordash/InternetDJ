@@ -36,9 +36,9 @@ router.post('/generate', authenticate, async (req, res) => { // authenticate opt
             [userId]
         );
         const dailyCount = Number(countResult[0].count);
-        if (dailyCount >= 5) {
+        if (dailyCount >= 10) {
             logger.info('Daily stem limit reached for user', { userId });
-            return res.status(429).json({ error: 'Daily limit of 5 stems reached' });
+            return res.status(429).json({ error: 'Daily limit of 10 stems reached' });
         }
 
         const stemId = uuidv4();
@@ -78,7 +78,7 @@ router.get('/my', authenticate, async (req, res) => {
             [userId]
         );
         const dailyCount = Number(countResult[0].count);
-        const dailyRemaining = 5 - dailyCount;
+        const dailyRemaining = 10 - dailyCount;
         logger.info('User stems fetched', { count: stems.length });
         res.json({ stems, dailyRemaining });
     } catch (err) {
