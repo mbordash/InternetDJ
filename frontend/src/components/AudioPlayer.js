@@ -4,6 +4,7 @@ import WaveSurfer from 'wavesurfer.js';
 import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js';
 import { SparklesIcon, PlayIcon, PauseIcon, AdjustmentsVerticalIcon, XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
 import { AuthContext } from '../context/AuthContext';
+import { AudioPlayerContext, toPlayableUrl } from '../context/AudioPlayerContext';
 import { CancelToken } from 'axios';
 import API_URL from '../utils/api';
 
@@ -22,11 +23,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   const wavesurferRef = useRef(null);
   const modalRef = useRef(null);
   const dragRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const mediaNodeRef = useRef(null);
   const isMountedRef = useRef(true);
   const fetchCancelTokenRef = useRef(null);
   const initializationCountRef = useRef(0);
+  const mediaListenersRef = useRef([]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRepeating, setIsRepeating] = useState(false);
@@ -50,6 +50,9 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const { user } = useContext(AuthContext);
+  const { audioRef, registerSong, getAudioGraph, hasAudioGraph, currentSong } = useContext(AudioPlayerContext);
+  const currentSongRef = useRef(currentSong);
+  currentSongRef.current = currentSong;
   const isAuthenticated = !!user;
   const canPersistPeaks = true;
 
@@ -75,6 +78,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         console.log('Fetched song details:', response.data);
         const songData = response.data?.song || response.data;
         setSongTitle(songData?.title || 'Untitled Song');
+        // Show this song in the global footer player
+        registerSong({
+          id: Number(songId),
+          title: songData?.title || 'Untitled Song',
+          mp3_url: songData?.mp3_url || s3Url,
+          image_url: songData?.image_url || null,
+          profile_id: songData?.profile_id || null,
+          profile_name: songData?.profile_name || null,
+        });
       } catch (err) {
         console.error('Error fetching song details:', {
           message: err.message,
@@ -269,26 +281,18 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   };
 
   const initializeEQFilters = () => {
-    if (!audioContextRef.current || !wavesurferRef.current) return false;
+    if (!wavesurferRef.current) return false;
     if (filtersInitialized) {
       console.log('EQ filters already initialized, skipping');
       return true;
     }
 
-    const audio = wavesurferRef.current.getMediaElement();
-    if (!audio) {
-      console.warn('Media element not available for EQ initialization');
-      return false;
-    }
-
     try {
-      if (!mediaNodeRef.current) {
-        mediaNodeRef.current = audioContextRef.current.createMediaElementSource(audio);
-      }
+      const { ctx, source } = getAudioGraph();
 
       filtersRef.current = {};
       eqBands.forEach((freq) => {
-        const filter = audioContextRef.current.createBiquadFilter();
+        const filter = ctx.createBiquadFilter();
         filter.type = freq <= 32 ? 'lowshelf' : freq >= 16000 ? 'highshelf' : 'peaking';
         filter.frequency.value = freq;
         filter.Q.value = 1;
@@ -296,12 +300,13 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         filtersRef.current[freq] = filter;
       });
 
+      source.disconnect();
       const equalizer = Object.values(filtersRef.current).reduce((prev, curr) => {
         prev.connect(curr);
         return curr;
-      }, mediaNodeRef.current);
+      }, source);
 
-      equalizer.connect(audioContextRef.current.destination);
+      equalizer.connect(ctx.destination);
       setFiltersInitialized(true);
       setEqLoading(false);
       console.log('EQ filters initialized successfully');
@@ -313,9 +318,25 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
     }
   };
 
+  // Detach the EQ chain and restore direct output on the persistent graph
+  const bypassEQFilters = () => {
+    if (!hasAudioGraph()) return;
+    try {
+      const { ctx, source } = getAudioGraph();
+      Object.values(filtersRef.current).forEach((filter) => {
+        try { filter.disconnect(); } catch (e) { /* noop */ }
+      });
+      filtersRef.current = {};
+      source.disconnect();
+      source.connect(ctx.destination);
+    } catch (err) {
+      console.error('Error bypassing EQ filters:', err);
+    }
+  };
+
   const retryAudioLoad = async (attempts = 3, delay = 1000) => {
     if (!isMountedRef.current) return false;
-    const proxyUrl = `${API_URL}/proxy/audio?url=${encodeURIComponent(s3Url)}`;
+    const proxyUrl = toPlayableUrl(s3Url);
     for (let i = 0; i < attempts; i++) {
       try {
         wavesurferRef.current.load(proxyUrl);
@@ -406,18 +427,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         waveformRef.current.innerHTML = '';
       }
 
-      // Disconnect and close existing AudioContext if it exists
-      if (audioContextRef.current) {
-        console.log(`[DEBUG] Closing AudioContext for songId: ${songId}`);
-        if (mediaNodeRef.current) {
-          mediaNodeRef.current.disconnect();
-          mediaNodeRef.current = null;
-        }
-        audioContextRef.current.close().catch((err) => console.error('Error closing AudioContext:', err));
-        audioContextRef.current = null;
-      }
-
-      // Reset state
+      // Reset state (do not touch the shared audio element — it may be playing)
       setFiltersInitialized(false);
       setPeaks(null);
       setIsLoading(true);
@@ -465,7 +475,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       const storedPeakChannels = Array.isArray(storedPeaks?.[0]) ? storedPeaks : storedPeaks ? [storedPeaks] : null;
       setPeaks(storedPeakChannels ? storedPeakChannels[0] : null);
 
-      const proxyUrl = `${API_URL}/proxy/audio?url=${encodeURIComponent(s3Url)}`;
+      const proxyUrl = toPlayableUrl(s3Url);
 
       try {
         console.log(`[DEBUG] Validating audio URL for songId: ${songId}`);
@@ -497,8 +507,22 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       }
 
       console.log(`[DEBUG] Creating new WaveSurfer instance for songId: ${songId}`);
+      // Attach WaveSurfer to the app-wide shared audio element so playback
+      // continues in the footer player when navigating away from this page.
+      const sharedAudio = audioRef.current;
+      const isSameSongLoaded =
+          currentSongRef.current?.id === Number(songId) && !!sharedAudio.src;
+      if (!isSameSongLoaded && sharedAudio.src !== proxyUrl) {
+        sharedAudio.pause();
+        sharedAudio.src = proxyUrl;
+      }
+      // Load with the element's current (absolute) src so WaveSurfer doesn't
+      // reset an already-playing element.
+      const loadUrl = sharedAudio.src || proxyUrl;
+
       wavesurferRef.current = WaveSurfer.create({
         container: waveformRef.current,
+        media: sharedAudio,
         waveColor: '#73cbf0',
         progressColor: '#008dcb',
         cursorColor: '#000',
@@ -519,6 +543,9 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           }),
         ],
       });
+
+      // Reflect the shared element's actual state (it may already be playing)
+      setIsPlaying(!sharedAudio.paused);
 
       wavesurferRef.current.on('ready', () => {
         if (!isMountedRef.current) return;
@@ -559,16 +586,9 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       wavesurferRef.current.on('play', () => {
         if (!isMountedRef.current) return;
         setIsPlaying(true);
-        if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContext();
-          if (audioContextRef.current.state === 'suspended') {
-            audioContextRef.current.resume().then(() => {
-              console.log('Audio context resumed');
-              if (!filtersInitialized) {
-                initializeEQFilters();
-              }
-            });
-          }
+        // Resume the shared Web Audio graph if EQ has been used
+        if (hasAudioGraph()) {
+          getAudioGraph();
         }
         const token = localStorage.getItem('token');
         axios
@@ -609,7 +629,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       // Fallback: Listen to the HTML5 audio element's ended event
       const audioElement = wavesurferRef.current.getMediaElement();
       if (audioElement) {
-        audioElement.addEventListener('ended', () => {
+        const handleEnded = () => {
           if (!isMountedRef.current) return;
           console.log('HTML5 audio ended event triggered, isRepeating:', isRepeating);
           if (isRepeating) {
@@ -620,16 +640,18 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           } else {
             setIsPlaying(false);
           }
-        });
+        };
+        audioElement.addEventListener('ended', handleEnded);
+        mediaListenersRef.current.push(() => audioElement.removeEventListener('ended', handleEnded));
       }
 
       console.log(`[DEBUG] Loading audio for songId: ${songId}`);
       try {
         if (storedPeakChannels) {
           console.log(`[DEBUG] Loading audio with precomputed peaks for songId: ${songId}`);
-          wavesurferRef.current.load(proxyUrl, storedPeakChannels);
+          wavesurferRef.current.load(loadUrl, storedPeakChannels);
         } else {
-          wavesurferRef.current.load(proxyUrl);
+          wavesurferRef.current.load(loadUrl);
         }
       } catch (err) {
         console.error('Error loading audio:', err);
@@ -647,8 +669,19 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         fetchCancelTokenRef.current.cancel('Canceled due to cleanup');
         fetchCancelTokenRef.current = null;
       }
+      // Remove our listeners from the shared audio element
+      mediaListenersRef.current.forEach((remove) => remove());
+      mediaListenersRef.current = [];
+      // Restore direct audio output; the EQ chain is page-specific
+      bypassEQFilters();
+      // Don't leave looping enabled on the shared element
+      if (audioRef.current) {
+        audioRef.current.loop = false;
+      }
       if (wavesurferRef.current) {
         try {
+          // Shared media element is external to WaveSurfer, so destroy()
+          // detaches without pausing playback.
           wavesurferRef.current.destroy();
         } catch (err) {
           console.error('Error destroying WaveSurfer:', err);
@@ -660,14 +693,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         waveformRef.currentSongId = null;
         waveformRef.currentS3Url = null;
         waveformRef.currentInitTime = null;
-      }
-      if (audioContextRef.current) {
-        if (mediaNodeRef.current) {
-          mediaNodeRef.current.disconnect();
-          mediaNodeRef.current = null;
-        }
-        audioContextRef.current.close().catch((err) => console.error('Error closing AudioContext:', err));
-        audioContextRef.current = null;
       }
       setFiltersInitialized(false);
     };
