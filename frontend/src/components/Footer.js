@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import { AuthContext } from '../context/AuthContext';
 import { PlayIcon, PauseIcon, XMarkIcon, ForwardIcon, BackwardIcon, HeartIcon as HeartIconSolid, InformationCircleIcon } from '@heroicons/react/24/solid';
@@ -25,7 +25,6 @@ const Footer = () => {
         isPlaying,
         togglePlayPause,
         stopPlayback,
-        pausePlayback,
         audioRef,
         songQueue,
         currentQueueIndex,
@@ -44,15 +43,6 @@ const Footer = () => {
     const [likeError, setLikeError] = useState(null);
     const [playlists, setPlaylists] = useState([]);
     const progressBarRef = useRef(null);
-    const location = useLocation();
-
-    const isSongPage = location.pathname.match(/^\/song\/[^/]+$/);
-
-    useEffect(() => {
-        if (isSongPage && isPlaying) {
-            pausePlayback();
-        }
-    }, [isSongPage, isPlaying, pausePlayback]);
 
     const formatTime = (seconds) => {
         if (isNaN(seconds) || seconds === 0) return '0:00';
@@ -74,8 +64,6 @@ const Footer = () => {
     }, [audioRef]);
 
     useEffect(() => {
-        if (isSongPage) return;
-
         const audio = audioRef.current;
         audio.addEventListener('timeupdate', updateProgress);
         audio.addEventListener('loadedmetadata', () => {
@@ -86,7 +74,7 @@ const Footer = () => {
             audio.removeEventListener('timeupdate', updateProgress);
             audio.removeEventListener('loadedmetadata', () => {});
         };
-    }, [audioRef, isSongPage, updateProgress]);
+    }, [audioRef, updateProgress]);
 
     const handleSeek = (e) => {
         if (!progressBarRef.current) return;

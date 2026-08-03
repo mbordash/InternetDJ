@@ -158,7 +158,13 @@ function Home() {
 
                     {song.mp3_url && (
                         <button
-                            onClick={() => handleSongPlay(song)}
+                            onClick={() => {
+                                if (currentSong?.id === song.id) {
+                                    togglePlayPause();
+                                } else {
+                                    handleSongPlay(song);
+                                }
+                            }}
                             className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 rounded-md transition-opacity"
                         >
                             {currentSong?.id === song.id && isPlaying ? (
