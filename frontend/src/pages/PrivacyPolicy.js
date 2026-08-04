@@ -121,7 +121,7 @@ function PrivacyPolicy() {
                         <h2 className="text-xl font-bold mb-3 tracking-tight">10. Contact Us</h2>
                         <p className="text-gray-300">
                             If you have questions about this Privacy Policy, contact us at{' '}
-                            <a href="mailto:support@internetdj.co" className="text-primary-brand-400 hover:underline">support@internetdj.co</a>.
+                            <a href="mailto:internetdjco@gmail.com" className="text-primary-brand-400 hover:underline">internetdjco@gmail.com</a>.
                         </p>
                     </section>
 

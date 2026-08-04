@@ -51,11 +51,11 @@ router.get('/public/:projectId', async (req, res) => {
             return res.status(404).json({ error: `Public project ${projectId} not found` });
         }
         const tracks = await pool.query(
-            'SELECT id, name, track_order, track_type, midi_notes, instrument_type, is_polyphonic, synth_settings FROM tracks WHERE project_id = ? ORDER BY track_order',
+            'SELECT id, name, track_order, track_type, midi_notes, instrument_type, is_polyphonic, synth_settings, volume, pan, is_muted FROM tracks WHERE project_id = ? ORDER BY track_order',
             [projectId]
         );
         const projectSamples = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, sl.mp3_url, sl.name
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
              FROM project_samples ps
                       JOIN sample_library sl ON ps.sample_id = sl.id
              WHERE ps.track_id IN (SELECT id FROM tracks WHERE project_id = ?)`,
@@ -107,6 +107,9 @@ router.get('/public/:projectId', async (req, res) => {
                     instrument_type: track.instrument_type || 'synth',
                     is_polyphonic: Boolean(track.is_polyphonic),
                     synth_settings: synthSettings,
+                    volume: track.volume == null ? 1.0 : Number(track.volume),
+                    pan: track.pan == null ? 0 : Number(track.pan),
+                    is_muted: Boolean(track.is_muted),
                 };
             }),
             projectSamples: projectSamples.map(sample => ({
@@ -114,8 +117,13 @@ router.get('/public/:projectId', async (req, res) => {
                 track_id: Number(sample.track_id),
                 sample_id: Number(sample.sample_id),
                 start_time: Number(sample.start_time),
+                fade_in: Number(sample.fade_in) || 0,
+                fade_out: Number(sample.fade_out) || 0,
+                trim_start: Number(sample.trim_start) || 0,
+                trim_end: sample.trim_end == null ? null : Number(sample.trim_end),
                 mp3_url: sample.mp3_url,
                 name: sample.name,
+                duration: sample.duration == null ? null : Number(sample.duration),
             })),
         });
     } catch (err) {
@@ -184,18 +192,18 @@ router.get('/:projectId', authenticate, async (req, res) => {
             return res.status(404).json({ error: `Project ${projectId} not found` });
         }
         const tracks = await pool.query(
-            'SELECT id, project_id, name, track_order, track_type, midi_notes, volume, instrument_type, is_polyphonic, synth_settings, effects_settings FROM tracks WHERE project_id = ? ORDER BY track_order',
+            'SELECT id, project_id, name, track_order, track_type, midi_notes, volume, pan, is_muted, instrument_type, is_polyphonic, synth_settings, effects_settings FROM tracks WHERE project_id = ? ORDER BY track_order',
             [projectId]
         );
         const projectSamples = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, sl.mp3_url, sl.name
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
              FROM project_samples ps
                       JOIN sample_library sl ON ps.sample_id = sl.id
              WHERE ps.track_id IN (SELECT id FROM tracks WHERE project_id = ?)`,
             [projectId]
         );
         const librarySamples = await pool.query(
-            'SELECT id, name, mp3_url FROM sample_library WHERE user_id = ?',
+            'SELECT id, name, mp3_url, duration FROM sample_library WHERE user_id = ?',
             [req.user.id]
         );
 
@@ -269,6 +277,8 @@ router.get('/:projectId', authenticate, async (req, res) => {
                     track_type: track.track_type,
                     midi_notes: midiNotes,
                     volume: track.volume == null ? 1.0 : Number(track.volume),
+                    pan: track.pan == null ? 0 : Number(track.pan),
+                    is_muted: Boolean(track.is_muted),
                     instrument_type: track.instrument_type || 'synth',
                     is_polyphonic: Boolean(track.is_polyphonic),
                     synth_settings: synthSettings,
@@ -281,8 +291,17 @@ router.get('/:projectId', authenticate, async (req, res) => {
                 track_id: Number(sample.track_id),
                 sample_id: Number(sample.sample_id),
                 start_time: Number(sample.start_time),
+                fade_in: Number(sample.fade_in) || 0,
+                fade_out: Number(sample.fade_out) || 0,
+                trim_start: Number(sample.trim_start) || 0,
+                trim_end: sample.trim_end == null ? null : Number(sample.trim_end),
+                duration: sample.duration == null ? null : Number(sample.duration),
             })),
-            librarySamples: librarySamples.map(sample => ({ ...sample, id: Number(sample.id) })),
+            librarySamples: librarySamples.map(sample => ({
+                ...sample,
+                id: Number(sample.id),
+                duration: sample.duration == null ? null : Number(sample.duration),
+            })),
         });
     } catch (err) {
         console.error('Error in GET /projects/:projectId:', err);
@@ -442,10 +461,10 @@ router.put('/:projectId/tracks/:trackId/midi', authenticate, async (req, res) =>
 // Rename a track
 router.put('/:projectId/tracks/:trackId', authenticate, async (req, res) => {
     const { projectId, trackId } = req.params;
-    const { name, volume, instrument_type, is_polyphonic, synth_settings, effects_settings } = req.body;
+    const { name, volume, pan, is_muted, instrument_type, is_polyphonic, synth_settings, effects_settings } = req.body;
 
     // Validate inputs
-    if (name === undefined && volume === undefined && instrument_type === undefined && is_polyphonic === undefined && synth_settings === undefined && effects_settings === undefined) {
+    if (name === undefined && volume === undefined && pan === undefined && is_muted === undefined && instrument_type === undefined && is_polyphonic === undefined && synth_settings === undefined && effects_settings === undefined) {
         console.log('Validation failed: No fields provided');
         return res.status(400).json({ error: 'At least one field is required' });
     }
@@ -454,6 +473,12 @@ router.put('/:projectId/tracks/:trackId', authenticate, async (req, res) => {
     }
     if (volume !== undefined && (typeof volume !== 'number' || volume < 0 || volume > 1)) {
         return res.status(400).json({ error: 'Volume must be a number between 0 and 1' });
+    }
+    if (pan !== undefined && (typeof pan !== 'number' || pan < -1 || pan > 1)) {
+        return res.status(400).json({ error: 'Pan must be a number between -1 and 1' });
+    }
+    if (is_muted !== undefined && typeof is_muted !== 'boolean') {
+        return res.status(400).json({ error: 'is_muted must be a boolean' });
     }
     if (instrument_type !== undefined && !['synth', 'amsynth', 'fmsynth', 'metalsynth', 'duosynth', 'membranesynth', 'drumsampler'].includes(instrument_type)) {
         return res.status(400).json({ error: 'Invalid instrument type' });
@@ -601,6 +626,14 @@ router.put('/:projectId/tracks/:trackId', authenticate, async (req, res) => {
             updates.push('volume = ?');
             values.push(volume);
         }
+        if (pan !== undefined) {
+            updates.push('pan = ?');
+            values.push(pan);
+        }
+        if (is_muted !== undefined) {
+            updates.push('is_muted = ?');
+            values.push(is_muted);
+        }
         if (instrument_type !== undefined) {
             updates.push('instrument_type = ?');
             values.push(instrument_type);
@@ -634,6 +667,29 @@ router.put('/:projectId/tracks/:trackId', authenticate, async (req, res) => {
     }
 });
 
+// Validate optional per-clip fade/trim fields; returns { error } or normalized values
+function validateClipFields(body) {
+    const out = {};
+    for (const field of ['fade_in', 'fade_out', 'trim_start']) {
+        if (body[field] !== undefined) {
+            if (typeof body[field] !== 'number' || !isFinite(body[field]) || body[field] < 0) {
+                return { error: `${field} must be a non-negative number` };
+            }
+            out[field] = body[field];
+        }
+    }
+    if (body.trim_end !== undefined) {
+        if (body.trim_end !== null && (typeof body.trim_end !== 'number' || !isFinite(body.trim_end) || body.trim_end <= 0)) {
+            return { error: 'trim_end must be a positive number or null' };
+        }
+        if (body.trim_end !== null && out.trim_start !== undefined && body.trim_end <= out.trim_start) {
+            return { error: 'trim_end must be greater than trim_start' };
+        }
+        out.trim_end = body.trim_end;
+    }
+    return out;
+}
+
 // Place a sample in a project
 router.post('/:projectId/samples', authenticate, async (req, res) => {
     const { projectId } = req.params;
@@ -665,12 +721,16 @@ router.post('/:projectId/samples', authenticate, async (req, res) => {
         if (!sample.length) {
             return res.status(404).json({ error: 'Sample not found in library' });
         }
+        const clipFields = validateClipFields(req.body);
+        if (clipFields.error) {
+            return res.status(400).json({ error: clipFields.error });
+        }
         const result = await pool.query(
-            'INSERT INTO project_samples (track_id, sample_id, start_time) VALUES (?, ?, ?)',
-            [track_id, sample_id, start_time]
+            'INSERT INTO project_samples (track_id, sample_id, start_time, fade_in, fade_out, trim_start, trim_end) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [track_id, sample_id, start_time, clipFields.fade_in ?? 0, clipFields.fade_out ?? 0, clipFields.trim_start ?? 0, clipFields.trim_end ?? null]
         );
         const newSample = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, sl.mp3_url, sl.name
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
        FROM project_samples ps
        JOIN sample_library sl ON ps.sample_id = sl.id
        WHERE ps.id = ?`,
@@ -682,10 +742,81 @@ router.post('/:projectId/samples', authenticate, async (req, res) => {
             track_id: Number(newSample[0].track_id),
             sample_id: Number(newSample[0].sample_id),
             start_time: Number(newSample[0].start_time),
+            fade_in: Number(newSample[0].fade_in) || 0,
+            fade_out: Number(newSample[0].fade_out) || 0,
+            trim_start: Number(newSample[0].trim_start) || 0,
+            trim_end: newSample[0].trim_end == null ? null : Number(newSample[0].trim_end),
         });
     } catch (err) {
         console.error('Error in POST /projects/:projectId/samples:', err);
         res.status(500).json({ error: 'Failed to place sample: ' + err.message });
+    }
+});
+
+// Update a placed sample's clip settings (fades/trim) and/or position
+router.put('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
+    const { projectId, sampleId } = req.params;
+    const { start_time } = req.body;
+    try {
+        const project = await pool.query(
+            'SELECT id FROM projects WHERE id = ? AND user_id = ?',
+            [projectId, req.user.id]
+        );
+        if (!project.length) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+        const sample = await pool.query(
+            'SELECT id FROM project_samples WHERE id = ? AND track_id IN (SELECT id FROM tracks WHERE project_id = ?)',
+            [sampleId, projectId]
+        );
+        if (!sample.length) {
+            return res.status(404).json({ error: 'Sample not found' });
+        }
+        const clipFields = validateClipFields(req.body);
+        if (clipFields.error) {
+            return res.status(400).json({ error: clipFields.error });
+        }
+        if (start_time !== undefined && (typeof start_time !== 'number' || !isFinite(start_time) || start_time < 0)) {
+            return res.status(400).json({ error: 'start_time must be a non-negative number' });
+        }
+
+        const updates = [];
+        const values = [];
+        if (start_time !== undefined) {
+            updates.push('start_time = ?');
+            values.push(start_time);
+        }
+        for (const [field, value] of Object.entries(clipFields)) {
+            updates.push(`${field} = ?`);
+            values.push(value);
+        }
+        if (!updates.length) {
+            return res.status(400).json({ error: 'At least one field is required' });
+        }
+        values.push(sampleId);
+        await pool.query(`UPDATE project_samples SET ${updates.join(', ')} WHERE id = ?`, values);
+
+        const updated = await pool.query(
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
+             FROM project_samples ps
+             JOIN sample_library sl ON ps.sample_id = sl.id
+             WHERE ps.id = ?`,
+            [sampleId]
+        );
+        res.status(200).json({
+            ...updated[0],
+            id: Number(updated[0].id),
+            track_id: Number(updated[0].track_id),
+            sample_id: Number(updated[0].sample_id),
+            start_time: Number(updated[0].start_time),
+            fade_in: Number(updated[0].fade_in) || 0,
+            fade_out: Number(updated[0].fade_out) || 0,
+            trim_start: Number(updated[0].trim_start) || 0,
+            trim_end: updated[0].trim_end == null ? null : Number(updated[0].trim_end),
+        });
+    } catch (err) {
+        console.error('Error in PUT /projects/:projectId/samples/:sampleId:', err);
+        res.status(500).json({ error: 'Failed to update sample: ' + err.message });
     }
 });
 

@@ -9,12 +9,25 @@ const ffmpegStatic = require('ffmpeg-static');
 const { buildPublicFileUrl } = require('../utils/storage');
 ffmpeg.setFfmpegPath(ffmpegStatic);
 const stream = require('stream');
+const mm = require('music-metadata');
+
+// Best-effort duration probe (seconds); returns null on failure
+async function probeDuration(buffer, mimeType = 'audio/mpeg') {
+    try {
+        const metadata = await mm.parseBuffer(buffer, mimeType, { duration: true });
+        const duration = metadata?.format?.duration;
+        return Number.isFinite(duration) && duration > 0 ? duration : null;
+    } catch (err) {
+        console.warn('Failed to probe audio duration:', err.message);
+        return null;
+    }
+}
 
 // List all samples in the user's library
 router.get('/', authenticate, async (req, res) => {
     try {
         const samples = await pool.query(
-            'SELECT id, name, mp3_url, created_at FROM sample_library WHERE user_id = ? ORDER BY created_at DESC',
+            'SELECT id, name, mp3_url, duration, created_at FROM sample_library WHERE user_id = ? ORDER BY created_at DESC',
             [req.user.id]
         );
         res.json(samples);
@@ -45,14 +58,16 @@ router.post('/', authenticate, async (req, res) => {
         await s3Client.send(new PutObjectCommand(uploadParams));
         const mp3Url = buildPublicFileUrl(uploadParams.Key);
         const name = mp3.name || `Sample-${Date.now()}`;
+        const duration = await probeDuration(mp3.data);
         const result = await pool.query(
-            'INSERT INTO sample_library (user_id, name, mp3_url) VALUES (?, ?, ?)',
-            [req.user.id, name, mp3Url]
+            'INSERT INTO sample_library (user_id, name, mp3_url, duration) VALUES (?, ?, ?, ?)',
+            [req.user.id, name, mp3Url, duration]
         );
         res.status(201).json({
             id: Number(result.insertId), // Convert BigInt to number
             name,
             mp3_url: mp3Url,
+            duration,
             created_at: new Date(),
         });
     } catch (err) {
@@ -120,17 +135,19 @@ router.post('/from-stem', authenticate, async (req, res) => {
 
         const mp3Url = buildPublicFileUrl(mp3Key);
         const name = `${stem.type.charAt(0).toUpperCase() + stem.type.slice(1)} Stem - ${stemId.slice(0, 8)}`; // e.g., "Bass Stem - abc12345"
+        const duration = await probeDuration(mp3Buffer);
 
         // Insert into DB
         const result = await pool.query(
-            'INSERT INTO sample_library (user_id, name, mp3_url) VALUES (?, ?, ?)',
-            [userId, name, mp3Url]
+            'INSERT INTO sample_library (user_id, name, mp3_url, duration) VALUES (?, ?, ?, ?)',
+            [userId, name, mp3Url, duration]
         );
 
         res.status(201).json({
             id: Number(result.insertId),
             name,
             mp3_url: mp3Url,
+            duration,
             created_at: new Date(),
         });
     } catch (err) {

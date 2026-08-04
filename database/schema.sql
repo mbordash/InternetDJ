@@ -333,3 +333,19 @@ CREATE TABLE IF NOT EXISTS notifications (
     CONSTRAINT fk_notifications_actor_user FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+
+-- Mixing controls: per-track pan and mute (solo is session-only in the editor)
+ALTER TABLE tracks
+    ADD COLUMN IF NOT EXISTS pan FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS is_muted TINYINT(1) NOT NULL DEFAULT 0;
+
+-- Per-clip fades and non-destructive trim (seconds; trim_end NULL = full length)
+ALTER TABLE project_samples
+    ADD COLUMN IF NOT EXISTS fade_in FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS fade_out FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS trim_start FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS trim_end FLOAT DEFAULT NULL;
+
+-- Cache decoded audio duration (seconds) to avoid client-side probing
+ALTER TABLE sample_library
+    ADD COLUMN IF NOT EXISTS duration FLOAT DEFAULT NULL;
