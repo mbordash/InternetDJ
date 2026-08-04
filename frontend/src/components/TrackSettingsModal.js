@@ -183,11 +183,13 @@ const TrackSettingsModal = ({
                                 onDelete,
                                 onSettingsChange,
                                 currentVolume,
+                                currentPan = 0,
                                 currentInstrumentType,
                                 isPolyphonic,
                                 synthSettings,
                             }) => {
     const [volume, setVolume] = useState(currentVolume);
+    const [pan, setPan] = useState(currentPan);
     const [instrumentType, setInstrumentType] = useState(currentInstrumentType);
     const [polyphonic, setPolyphonic] = useState(isPolyphonic);
     const [synthParams, setSynthParams] = useState(() => {
@@ -230,6 +232,7 @@ const TrackSettingsModal = ({
     const isMidiTrack = track.track_type === 'midi';
     const initialSettingsRef = useRef({
         volume: currentVolume,
+        pan: currentPan,
         instrumentType: currentInstrumentType,
         isPolyphonic: isPolyphonic,
         synthSettings: synthSettings || {},
@@ -257,6 +260,7 @@ const TrackSettingsModal = ({
 
     useEffect(() => {
         setVolume(currentVolume);
+        setPan(currentPan);
         setInstrumentType(currentInstrumentType);
         setPolyphonic(isPolyphonic);
         setSynthParams((prev) => ({
@@ -275,11 +279,12 @@ const TrackSettingsModal = ({
         setVoice0(synthSettings?.voice0 || { detune: synthConfigs[currentInstrumentType]?.params.voice0?.detune || 0 });
         initialSettingsRef.current = {
             volume: currentVolume,
+            pan: currentPan,
             instrumentType: currentInstrumentType,
             isPolyphonic: isPolyphonic,
             synthSettings: synthSettings || {},
         };
-    }, [currentVolume, currentInstrumentType, isPolyphonic, synthSettings]);
+    }, [currentVolume, currentPan, currentInstrumentType, isPolyphonic, synthSettings]);
 
     useEffect(() => {
         if (isMidiTrack) {
@@ -341,7 +346,7 @@ const TrackSettingsModal = ({
     }, [synthParams, envelope, voice0, instrumentType, isMidiTrack]);
 
     const buildSettings = (updatedSynthParams = synthParams, updatedEnvelope = envelope, updatedVoice0 = voice0) => {
-        const settings = { volume };
+        const settings = { volume, pan };
         if (isMidiTrack) {
             settings.instrument_type = instrumentType;
             settings.is_polyphonic = polyphonic;
@@ -357,6 +362,7 @@ const TrackSettingsModal = ({
     const hasChanges = (settings) => {
         return (
             settings.volume !== initialSettingsRef.current.volume ||
+            settings.pan !== initialSettingsRef.current.pan ||
             (isMidiTrack &&
                 (settings.instrument_type !== initialSettingsRef.current.instrumentType ||
                     settings.is_polyphonic !== initialSettingsRef.current.isPolyphonic ||
@@ -397,6 +403,7 @@ const TrackSettingsModal = ({
             } else {
                 settings = buildSettings();
                 if (field === 'volume') settings.volume = newValue;
+                else if (field === 'pan') settings.pan = newValue;
                 else if (field === 'instrument_type') settings.instrument_type = newValue;
                 else if (field === 'is_polyphonic') settings.is_polyphonic = newValue;
             }
@@ -454,6 +461,22 @@ const TrackSettingsModal = ({
                                     value={volume}
                                     onChange={(v) => handleSettingChange(setVolume, v, 'volume')}
                                     min={0}
+                                    max={1}
+                                    step={0.01}
+                                    showValue={false}
+                                />
+                            </div>
+
+                            {/* Pan */}
+                            <div>
+                                <label htmlFor="pan" className="block text-sm font-medium">
+                                    Pan: {pan === 0 ? 'Center' : pan < 0 ? `${Math.round(Math.abs(pan) * 100)}% L` : `${Math.round(pan * 100)}% R`}
+                                </label>
+                                <Lever
+                                    label=""
+                                    value={pan}
+                                    onChange={(v) => handleSettingChange(setPan, v, 'pan')}
+                                    min={-1}
                                     max={1}
                                     step={0.01}
                                     showValue={false}
@@ -741,6 +764,7 @@ TrackSettingsModal.propTypes = {
     onDelete: PropTypes.func.isRequired,
     onSettingsChange: PropTypes.func.isRequired,
     currentVolume: PropTypes.number.isRequired,
+    currentPan: PropTypes.number,
     currentInstrumentType: PropTypes.string.isRequired,
     isPolyphonic: PropTypes.bool,
     synthSettings: PropTypes.object,

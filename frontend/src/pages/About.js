@@ -81,16 +81,16 @@ function About() {
                                 <MinusIcon className="w-6 h-6" />
                             )}
                         </button>
-                        <h1 className="text-3xl font-bold mb-4 text-gray-800">About InternetDJ</h1>
+                        <h1 className="text-3xl font-bold mb-4 text-white">About InternetDJ</h1>
                         {!isMinimized && (
                             <>
-                                <p className="text-lg text-gray-600 mb-6">
+                                <p className="text-lg text-gray-100 mb-6">
                                     Since 1997, InternetDJ has been a pioneering platform empowering artists to create, collaborate, and share their music with the world. Our mission is to provide a creative space where musicians retain full ownership of their work—your music is never shared without your consent or used for AI training. With intuitive tools like drag-and-drop editing, Snap-to-Grid precision, live EQ adjustments, and AI-driven auto mastering, InternetDJ makes music production accessible to everyone, from beginners to professionals.
                                 </p>
-                                <p className="text-lg text-gray-600 mb-6">
+                                <p className="text-lg text-gray-100 mb-6">
                                     InternetDJ is more than just a music creation platform; it’s a vibrant community of artists, producers, and music lovers. Discover new tracks, collaborate with creators across the globe, and engage in our forums to share tips, feedback, and inspiration. Our decentralized rewards system, powered by IDJ Coin, ensures that artists are recognized for their contributions, fostering a fair and thriving ecosystem.
                                 </p>
-                                <p className="text-lg text-gray-600 mb-6">
+                                <p className="text-lg text-gray-100 mb-6">
                                     Over the years, we’ve grown into a trusted hub for independent musicians, offering features like real-time collaboration, advanced analytics to track your music’s reach, and seamless integration with social platforms to amplify your presence. Whether you’re crafting your first beat or mastering your next album, InternetDJ is here to support your creative journey.
                                 </p>
                                 <div className="flex justify-center space-x-4">
@@ -178,6 +178,38 @@ function About() {
                             Terms of Service
                         </Link>
                     </div>
+                </section>
+
+                <section className="mt-12 pt-6 border-t border-white/10">
+                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Copyright &amp; Music Ownership</h2>
+                    <p className="text-gray-600 mb-4">
+                        InternetDJ does not claim ownership of any music uploaded to our platform. All music, recordings, compositions, and related content remain the exclusive property of their respective rights holders. InternetDJ serves solely as a hosting and distribution platform and holds no rights, licenses, or claims over any uploaded content beyond what is strictly necessary to operate the service.
+                    </p>
+                </section>
+
+                <section className="mt-12 pt-6 border-t border-white/10">
+                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">DMCA &amp; Copyright Infringement</h2>
+                    <p className="text-gray-600 mb-4">
+                        InternetDJ respects intellectual property rights and complies with the Digital Millennium Copyright Act (DMCA). If you believe that content hosted on InternetDJ infringes your copyright, please send a written notification containing the following information to our designated DMCA agent:
+                    </p>
+                    <ul className="list-disc list-inside text-gray-600 space-y-2 mb-4">
+                        <li>A description of the copyrighted work you claim has been infringed.</li>
+                        <li>The URL or other specific location on InternetDJ where the allegedly infringing material is located.</li>
+                        <li>Your contact information (name, address, phone number, and email address).</li>
+                        <li>A statement that you have a good faith belief that the disputed use is not authorized by the copyright owner, its agent, or the law.</li>
+                        <li>A statement made under penalty of perjury that the information in your notification is accurate and that you are the copyright owner or authorized to act on the copyright owner's behalf.</li>
+                        <li>Your physical or electronic signature.</li>
+                    </ul>
+                    <p className="text-gray-600">
+                        Send DMCA notices to:{' '}
+                        <a
+                            href="mailto:internetdjco@gmail.com"
+                            className="text-primary-brand-500 hover:text-primary-brand-700 underline font-semibold"
+                            aria-label="Email InternetDJ DMCA agent"
+                        >
+                            internetdjco@gmail.com
+                        </a>
+                    </p>
                 </section>
             </div>
         </div>

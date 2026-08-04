@@ -28,7 +28,15 @@ const PASTEL_COLORS = [
     'bg-orange-100',
 ];
 
-const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadingDurations, waveformColor, trackVolume }) => {
+// Non-destructive clip window: trim_start/trim_end are offsets (seconds) into the source sample
+const getClipTimes = (sample, fullDuration) => {
+    const trimStart = Math.max(0, sample.trim_start || 0);
+    const rawEnd = sample.trim_end != null ? sample.trim_end : (fullDuration || 0);
+    const trimEnd = fullDuration ? Math.min(rawEnd, fullDuration) : rawEnd;
+    return { trimStart, trimEnd, effDuration: Math.max(0, trimEnd - trimStart) };
+};
+
+const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadingDurations, waveformColor, trackVolume, onClipEdit }) => {
     const waveformRef = useRef(null);
     const wavesurfer = useRef(null);
     const abortController = useRef(new AbortController());
@@ -83,7 +91,16 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
         e.stopPropagation();
     };
 
-    const blockWidth = duration * zoom;
+    const handleDoubleClick = (e) => {
+        e.stopPropagation();
+        if (onClipEdit && !isLoadingDurations) {
+            onClipEdit(sample);
+        }
+    };
+
+    const { effDuration } = getClipTimes(sample, duration);
+    const hasClipEdits = (sample.trim_start || 0) > 0 || sample.trim_end != null || (sample.fade_in || 0) > 0 || (sample.fade_out || 0) > 0;
+    const blockWidth = effDuration * zoom;
 
     return (
         <div
@@ -96,11 +113,16 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
                 width: `${Math.max(blockWidth, 100)}px`,
             }}
             onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+            title="Double-click to edit fades and trim"
         >
             {isLoadingDurations ? (
                 <div className="flex-1 h-10 bg-white/10 animate-pulse" />
             ) : (
                 <div ref={waveformRef} className={`flex-1 h-10 ${waveformColor}`} />
+            )}
+            {hasClipEdits && !isLoadingDurations && (
+                <span className="absolute top-0 right-1 text-[10px] text-cyan-300 pointer-events-none" title="Clip has fades/trim">✂</span>
             )}
         </div>
     );
@@ -215,7 +237,7 @@ const DraggableSample = ({ sample, name, sampleId }) => {
     );
 };
 
-const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isLoadingDurations, waveformColor, bpm, isSnapping, timelineDuration, playheadPosition, trackVolume }) => {
+const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isLoadingDurations, waveformColor, bpm, isSnapping, timelineDuration, playheadPosition, trackVolume, onClipEdit }) => {
     const timelineRef = useRef(null);
 
     const [{ isOver }, drop] = useDrop({
@@ -246,7 +268,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
             let start_time = relativeX / zoom;
 
             if (isSnapping) {
-                const snapIntervalReal = 0.05;
+                const snapIntervalReal = 15 / bpm; // 1/16 note
                 const snapIntervalScaled = snapIntervalReal * timeScale;
                 start_time = Math.round(start_time / snapIntervalScaled) * snapIntervalScaled;
             }
@@ -274,8 +296,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
 
     const timeScale = 120 / bpm;
     const totalRealSeconds = timelineDuration / timeScale;
-    const minorInterval = 0.1;
-    const majorInterval = 1.0;
+    const minorInterval = 15 / bpm; // 1/16 note in real seconds
     const numMinorMarkers = Math.ceil(totalRealSeconds / minorInterval);
 
     return (
@@ -292,15 +313,18 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                 const realTime = i * minorInterval;
                 const scaledTime = realTime * timeScale;
                 const pixelPosition = scaledTime * zoom;
-                const isMajorMarker = Math.abs(realTime % majorInterval) < 0.001;
+                const isBarMarker = i % 16 === 0; // bar = 16 sixteenths
+                const isBeatMarker = i % 4 === 0; // beat = 4 sixteenths
 
                 return (
                     <div
                         key={`grid-${i}`}
                         className={`absolute top-0 z-0 border-l ${
-                            isMajorMarker
+                            isBarMarker
                                 ? 'border-gray-400 border-opacity-80 h-full'
-                                : 'border-gray-200 border-opacity-50 h-1/2'
+                                : isBeatMarker
+                                    ? 'border-gray-300 border-opacity-60 h-1/2'
+                                    : 'border-gray-200 border-opacity-30 h-1/4'
                         }`}
                         style={{ left: `${pixelPosition}px` }}
                     />
@@ -318,6 +342,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                     isLoadingDurations={isLoadingDurations}
                     waveformColor={waveformColor}
                     trackVolume={trackVolume}
+                    onClipEdit={onClipEdit}
                 />
             ))}
             {/* Playhead bar */}
@@ -325,6 +350,81 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                 className="absolute top-0 bottom-0 w-1 bg-red-500"
                 style={{ left: `${playheadPosition * zoom}px` }}
             />
+        </div>
+    );
+};
+
+const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
+    const [fadeIn, setFadeIn] = useState(clip.fade_in || 0);
+    const [fadeOut, setFadeOut] = useState(clip.fade_out || 0);
+    const [trimStart, setTrimStart] = useState(clip.trim_start || 0);
+    const [trimEnd, setTrimEnd] = useState(clip.trim_end != null ? clip.trim_end : '');
+    const [validationError, setValidationError] = useState(null);
+
+    const handleSave = () => {
+        const fi = Number(fadeIn) || 0;
+        const fo = Number(fadeOut) || 0;
+        const ts = Number(trimStart) || 0;
+        const te = trimEnd === '' || trimEnd === null ? null : Number(trimEnd);
+        if (fi < 0 || fo < 0 || ts < 0) {
+            setValidationError('Values cannot be negative');
+            return;
+        }
+        if (te != null && te <= ts) {
+            setValidationError('Trim end must be greater than trim start');
+            return;
+        }
+        if (fullDuration && ts >= fullDuration) {
+            setValidationError(`Trim start must be less than the sample length (${fullDuration.toFixed(2)}s)`);
+            return;
+        }
+        onSave(clip.id, { fade_in: fi, fade_out: fo, trim_start: ts, trim_end: te });
+        onClose();
+    };
+
+    const numberInputClass = "w-full px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500";
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-gray-800 text-gray-200 rounded-lg shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-semibold mb-1">Clip Settings</h2>
+                <p className="text-sm text-gray-400 mb-4">
+                    {clip.name}{fullDuration ? ` — ${fullDuration.toFixed(2)}s` : ''}
+                </p>
+                {validationError && <p className="text-red-400 text-sm mb-3">{validationError}</p>}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Fade In (s)</label>
+                        <input type="number" min="0" step="0.1" value={fadeIn}
+                               onChange={(e) => setFadeIn(e.target.value)} className={numberInputClass} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Fade Out (s)</label>
+                        <input type="number" min="0" step="0.1" value={fadeOut}
+                               onChange={(e) => setFadeOut(e.target.value)} className={numberInputClass} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Trim Start (s)</label>
+                        <input type="number" min="0" step="0.05" value={trimStart}
+                               onChange={(e) => setTrimStart(e.target.value)} className={numberInputClass} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Trim End (s)</label>
+                        <input type="number" min="0" step="0.05" value={trimEnd} placeholder="Full length"
+                               onChange={(e) => setTrimEnd(e.target.value)} className={numberInputClass} />
+                    </div>
+                </div>
+                <div className="flex justify-end space-x-3">
+                    <button onClick={onClose}
+                            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold">
+                        Cancel
+                    </button>
+                    <button onClick={handleSave}
+                            className="px-4 py-2 bg-primary-brand-500 text-white rounded-md hover:bg-primary-brand-700 text-sm font-semibold">
+                        Save
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
@@ -364,11 +464,21 @@ const MultiTrackSampler = () => {
     const synthRef = useRef(null);
     const toneTransportRef = useRef(Tone.Transport);
     const [trackVolumes, setTrackVolumes] = useState({});
+    const [trackPans, setTrackPans] = useState({});
+    const [soloTracks, setSoloTracks] = useState({});
+    const [selectedClip, setSelectedClip] = useState(null);
+    const midiPanners = useRef({});
     const [selectedTrack, setSelectedTrack] = useState(null);
     const midiGains = useRef({});
     const [minimizedTracks, setMinimizedTracks] = useState({});
     const [selectedTrackForEffects, setSelectedTrackForEffects] = useState(null);
     const effectsNodes = useRef({});
+    const [metronomeOn, setMetronomeOn] = useState(false);
+    const metronomeRef = useRef(false);
+    const metronomeSynthRef = useRef(null);
+    const metronomeNextBeatRef = useRef(0);
+    const playAllRef = useRef(null);
+    const stopRef = useRef(null);
     const initializedTracks = useRef(new Set());
 
     // Initialize minimized state for MIDI tracks
@@ -389,20 +499,130 @@ const MultiTrackSampler = () => {
 
     useEffect(() => {
         const initialVolumes = {};
+        const initialPans = {};
         tracks.forEach(track => {
             initialVolumes[track.id] = track.volume ?? 1;
+            initialPans[track.id] = track.pan ?? 0;
         });
         setTrackVolumes(initialVolumes);
+        setTrackPans(initialPans);
     }, [tracks]);
+
+    // A track is audible unless muted, or another track is soloed and this one isn't
+    const isTrackAudible = (trackId) => {
+        const track = tracks.find(t => t.id === trackId);
+        if (track?.is_muted) return false;
+        const anySolo = Object.values(soloTracks).some(Boolean);
+        if (anySolo && !soloTracks[trackId]) return false;
+        return true;
+    };
+
+    const getEffectiveTrackGain = (trackId) => (isTrackAudible(trackId) ? (trackVolumes[trackId] ?? 1) : 0);
+
+    // Schedule fade-in/out gain envelope for a clip that just started playing at clipOffset seconds into it
+    const scheduleClipFades = (ws, sample, clipOffset, effDuration) => {
+        if (!ws.fadeGain) return;
+        const g = ws.fadeGain.gain;
+        const now = ws.fadeGain.context.currentTime;
+        const fadeIn = Math.min(sample.fade_in || 0, effDuration);
+        const fadeOut = Math.min(sample.fade_out || 0, effDuration);
+        const remaining = Math.max(0, effDuration - clipOffset);
+        g.cancelScheduledValues(now);
+        let startValue = 1;
+        if (fadeIn > 0 && clipOffset < fadeIn) startValue = clipOffset / fadeIn;
+        g.setValueAtTime(Math.max(0, Math.min(1, startValue)), now);
+        const fadeInEnd = fadeIn > clipOffset ? now + (fadeIn - clipOffset) : now;
+        if (fadeIn > 0 && clipOffset < fadeIn) {
+            g.linearRampToValueAtTime(1, fadeInEnd);
+        }
+        if (fadeOut > 0 && remaining > 0) {
+            const fadeOutStart = Math.max(now + remaining - fadeOut, fadeInEnd);
+            g.setValueAtTime(1, fadeOutStart);
+            g.linearRampToValueAtTime(0, now + remaining);
+        }
+    };
+
+    // Live-apply mix changes (volume/pan/mute/solo) to any playing audio
+    useEffect(() => {
+        Object.values(wavesurfersRef.current).forEach(ws => {
+            if (!ws.instance) return;
+            const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
+            if (!sample) return;
+            const gain = (sample.volume ?? 1) * getEffectiveTrackGain(sample.track_id);
+            ws.instance.setVolume(gain);
+            if (ws.gainNode) ws.gainNode.gain.value = gain;
+            if (ws.panner) ws.panner.pan.value = trackPans[sample.track_id] ?? 0;
+        });
+        Object.entries(midiGains.current).forEach(([trackId, gainNode]) => {
+            gainNode.gain.value = getEffectiveTrackGain(Number(trackId));
+        });
+        Object.entries(midiPanners.current).forEach(([trackId, panner]) => {
+            panner.pan.value = trackPans[Number(trackId)] ?? 0;
+        });
+    }, [tracks, soloTracks, trackVolumes, trackPans, projectSamples]);
+
+    const handleToggleMute = async (trackId) => {
+        const track = tracks.find(t => t.id === trackId);
+        const newMuted = !track?.is_muted;
+        setTracks(prev => prev.map(t => (t.id === trackId ? { ...t, is_muted: newMuted } : t)));
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_URL}/projects/${projectId}/tracks/${trackId}`,
+                { is_muted: newMuted },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setError(null);
+        } catch (err) {
+            console.error('Toggle mute error:', err.response?.data || err.message);
+            setTracks(prev => prev.map(t => (t.id === trackId ? { ...t, is_muted: !newMuted } : t)));
+            setError('Failed to update mute: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    const handleToggleSolo = (trackId) => {
+        setSoloTracks(prev => ({ ...prev, [trackId]: !prev[trackId] }));
+    };
+
+    const handleClipSettingsSave = async (sampleId, clipSettings) => {
+        const prevSample = projectSamples.find(s => s.id === sampleId);
+        setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...clipSettings } : s)));
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.put(
+                `${API_URL}/projects/${projectId}/samples/${sampleId}`,
+                clipSettings,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...response.data } : s)));
+            setError(null);
+        } catch (err) {
+            console.error('Update clip settings error:', err.response?.data || err.message);
+            if (prevSample) {
+                setProjectSamples(prev => prev.map(s => (s.id === sampleId ? prevSample : s)));
+            }
+            setError('Failed to update clip settings: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
 
     useEffect(() => {
         const handleKeyDown = (e) => {
+            const target = e.target;
+            const tag = target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
             if (e.ctrlKey && e.key === 'z') {
                 e.preventDefault();
                 undo();
             } else if (e.ctrlKey && e.key === 'y') {
                 e.preventDefault();
                 redo();
+            } else if (e.code === 'Space' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                playAllRef.current?.();
+            } else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                stopRef.current?.();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -416,11 +636,27 @@ const MultiTrackSampler = () => {
                 return;
             }
 
-            setIsLoadingDurations(true);
             const newSampleDurations = {};
+            const missing = [];
+            projectSamples.forEach(sample => {
+                const cached = Number(sample.duration);
+                if (Number.isFinite(cached) && cached > 0) {
+                    newSampleDurations[sample.id] = cached;
+                } else {
+                    missing.push(sample);
+                }
+            });
+
+            // All durations cached in the DB — no decoding needed
+            if (missing.length === 0) {
+                setSampleDurations(newSampleDurations);
+                return;
+            }
+
+            setIsLoadingDurations(true);
 
             try {
-                await Promise.all(projectSamples.map(async sample => {
+                await Promise.all(missing.map(async sample => {
                     const ws = WaveSurfer.create({
                         container: document.createElement('div'),
                         waveColor: '#4B5563',
@@ -681,6 +917,7 @@ const MultiTrackSampler = () => {
         const previousTrack = tracks.find(t => t.id === trackId);
         const previousSettings = {
             volume: trackVolumes[trackId] ?? 1,
+            pan: trackPans[trackId] ?? 0,
             instrument_type: previousTrack?.instrument_type || 'synth',
             is_polyphonic: previousTrack?.is_polyphonic || false,
             synth_settings: previousTrack?.synth_settings || {}
@@ -698,8 +935,19 @@ const MultiTrackSampler = () => {
                     const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
                     ws.instance.setVolume((sample?.volume ?? 1) * settings.volume);
                     if (ws.gainNode) {
-                        ws.gainNode.gain.setValueAtTime(settings.volume, Tone.now());
+                        ws.gainNode.gain.setValueAtTime((sample?.volume ?? 1) * settings.volume, Tone.now());
                     }
+                }
+            });
+        }
+        if (settings.pan !== undefined) {
+            setTrackPans(prev => ({ ...prev, [trackId]: settings.pan }));
+            if (midiPanners.current[trackId]) {
+                midiPanners.current[trackId].pan.value = settings.pan;
+            }
+            Object.values(wavesurfersRef.current).forEach(ws => {
+                if (ws.instance?.trackId === trackId && ws.panner) {
+                    ws.panner.pan.value = settings.pan;
                 }
             });
         }
@@ -709,6 +957,7 @@ const MultiTrackSampler = () => {
                     ? {
                         ...t,
                         volume: settings.volume ?? t.volume,
+                        pan: settings.pan ?? t.pan,
                         instrument_type: settings.instrument_type ?? t.instrument_type,
                         is_polyphonic: settings.is_polyphonic ?? t.is_polyphonic,
                         synth_settings: settings.synth_settings ?? t.synth_settings
@@ -730,6 +979,10 @@ const MultiTrackSampler = () => {
             setError(`Failed to save settings: ${err.response?.data?.error || err.message}`);
             // Revert optimistic updates on error
             setTrackVolumes(prev => ({ ...prev, [trackId]: previousSettings.volume }));
+            setTrackPans(prev => ({ ...prev, [trackId]: previousSettings.pan }));
+            if (midiPanners.current[trackId]) {
+                midiPanners.current[trackId].pan.value = previousSettings.pan;
+            }
             if (midiGains.current[trackId]) {
                 midiGains.current[trackId].gain.setValueAtTime(previousSettings.volume, Tone.now());
             }
@@ -833,35 +1086,66 @@ const MultiTrackSampler = () => {
             const offlineContext = new OfflineAudioContext(2, Math.ceil(sampleRate * totalRealSeconds), sampleRate);
 
             for (const sample of projectSamples) {
+                const track = tracks.find(t => t.id === sample.track_id);
+                const trackGain = getEffectiveTrackGain(sample.track_id);
+                if (trackGain <= 0) continue;
+
                 const response = await fetch(sample.mp3_url);
                 if (!response.ok) throw new Error(`Failed to fetch sample: ${sample.mp3_url}`);
                 const arrayBuffer = await response.arrayBuffer();
                 const audioBuffer = await offlineContext.decodeAudioData(arrayBuffer);
 
+                const { trimStart, effDuration } = getClipTimes(sample, audioBuffer.duration);
+                if (effDuration <= 0) continue;
+
                 const source = offlineContext.createBufferSource();
                 source.buffer = audioBuffer;
                 const gainNode = offlineContext.createGain();
-                gainNode.gain.setValueAtTime(1, 0);
+                const panner = offlineContext.createStereoPanner();
+                panner.pan.value = track?.pan ?? 0;
+
+                const baseGain = (sample.volume ?? 1) * trackGain;
+                const when = sample.start_time * timeScale;
+                const fadeIn = Math.min(sample.fade_in || 0, effDuration);
+                const fadeOut = Math.min(sample.fade_out || 0, effDuration);
+                if (fadeIn > 0) {
+                    gainNode.gain.setValueAtTime(0, when);
+                    gainNode.gain.linearRampToValueAtTime(baseGain, when + fadeIn);
+                } else {
+                    gainNode.gain.setValueAtTime(baseGain, when);
+                }
+                if (fadeOut > 0) {
+                    const fadeOutStart = Math.max(when + effDuration - fadeOut, when + fadeIn);
+                    gainNode.gain.setValueAtTime(baseGain, fadeOutStart);
+                    gainNode.gain.linearRampToValueAtTime(0, when + effDuration);
+                }
+
                 source.connect(gainNode);
-                gainNode.connect(offlineContext.destination);
-                source.start(sample.start_time * timeScale);
+                gainNode.connect(panner);
+                panner.connect(offlineContext.destination);
+                source.start(when, trimStart, effDuration);
             }
 
             for (const track of tracks) {
                 if (track.track_type === 'midi' && track.midi_notes) {
+                    const trackGain = getEffectiveTrackGain(track.id);
+                    if (trackGain <= 0) continue;
                     const instrumentType = track.instrument_type || 'synth';
                     if (instrumentType === 'drumsampler') {
                         continue;
                     }
+                    const trackPanner = offlineContext.createStereoPanner();
+                    trackPanner.pan.value = track.pan ?? 0;
+                    trackPanner.connect(offlineContext.destination);
                     track.midi_notes.forEach(note => {
                         const oscillator = offlineContext.createOscillator();
                         const gainNode = offlineContext.createGain();
                         const frequency = Tone.Frequency(note.note).toFrequency();
                         oscillator.frequency.setValueAtTime(frequency, 0);
                         oscillator.type = 'sine';
-                        gainNode.gain.setValueAtTime((trackVolumes[track.id] || 1) * 0.5, 0);
+                        gainNode.gain.setValueAtTime(trackGain * 0.5, 0);
                         oscillator.connect(gainNode);
-                        gainNode.connect(offlineContext.destination);
+                        gainNode.connect(trackPanner);
                         oscillator.start(note.start_time * timeScale);
                         oscillator.stop((note.start_time + note.duration) * timeScale);
                     });
@@ -1131,11 +1415,11 @@ const MultiTrackSampler = () => {
                     wsInstance.sampleId = sample.id;
                     wsInstance.trackId = sample.track_id;
 
-                    const trackVolume = trackVolumes[sample.track_id] ?? 1;
-                    const gainNode = new Tone.Gain((sample.volume ?? 1) * trackVolume);
-                    // WaveSurfer v7 has no exposed backend source, so apply
-                    // track/sample volume through the instance's own gain.
-                    wsInstance.setVolume((sample.volume ?? 1) * trackVolume);
+                    const effectiveGain = (sample.volume ?? 1) * getEffectiveTrackGain(sample.track_id);
+                    const gainNode = new Tone.Gain(effectiveGain);
+                    // Track/sample volume via the player's own gain; fades and pan are
+                    // inserted into the player's private AudioContext on 'ready'.
+                    wsInstance.setVolume(effectiveGain);
 
                     // Initialize effects for the track
                     const trackEffects = {};
@@ -1181,28 +1465,47 @@ const MultiTrackSampler = () => {
                         instance: wsInstance,
                         ready: false,
                         gainNode,
+                        fadeGain: null,
+                        panner: null,
+                        routed: false,
                     };
 
                     const promise = new Promise((resolve) => {
                         wsInstance.on('ready', () => {
                             try {
                                 wavesurfersRef.current[sample.id].ready = true;
-                                if (wsInstance.backend && wsInstance.backend.ac) {
-                                    const source = wsInstance.backend.getSource();
-                                    source.connect(gainNode);
+                                // WaveSurfer v7's WebAudio backend runs in its own private
+                                // AudioContext, so fade/pan nodes must be created from that
+                                // same context and terminate at its destination.
+                                const media = wsInstance.getMediaElement();
+                                if (media && typeof media.getGainNode === 'function') {
+                                    const playerGain = media.getGainNode();
+                                    const playerCtx = playerGain.context;
+                                    const fadeGain = playerCtx.createGain();
+                                    const panner = playerCtx.createStereoPanner();
+                                    panner.pan.value = trackPans[sample.track_id] ?? 0;
+                                    playerGain.disconnect();
+                                    playerGain.connect(fadeGain);
+                                    fadeGain.connect(panner);
+                                    panner.connect(playerCtx.destination);
+                                    wavesurfersRef.current[sample.id].fadeGain = fadeGain;
+                                    wavesurfersRef.current[sample.id].panner = panner;
+                                    wavesurfersRef.current[sample.id].routed = true;
                                 } else {
-                                    console.warn(`WaveSurfer backend not available for sample ${sample.id}`);
+                                    console.warn(`WaveSurfer output node not available for sample ${sample.id}; pan/fades disabled`);
                                 }
 
-                                const duration = sampleDurations[sample.id] || wsInstance.getDuration();
+                                const fullDuration = sampleDurations[sample.id] || wsInstance.getDuration();
+                                const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
                                 const sampleStart = sample.start_time * timeScale;
 
-                                if (sampleStart < maxDuration) {
-                                    wsInstance.seekTo(0);
+                                if (sampleStart < maxDuration && effDuration > 0) {
+                                    wsInstance.seekTo(fullDuration ? Math.min(trimStart / fullDuration, 1) : 0);
                                     if (sampleStart <= 0) {
                                         wsInstance.play().catch(err => {
                                             console.warn(`Error playing sample ${sample.id}:`, err);
                                         });
+                                        scheduleClipFades(wavesurfersRef.current[sample.id], sample, 0, effDuration);
                                     }
                                 }
                                 resolve();
@@ -1231,7 +1534,8 @@ const MultiTrackSampler = () => {
                             console.warn('Track missing ID:', track);
                             return;
                         }
-                        const gainNode = midiGains.current[track.id] || new Tone.Gain(track.volume ?? 1);
+                        const gainNode = midiGains.current[track.id] || new Tone.Gain(getEffectiveTrackGain(track.id));
+                        gainNode.gain.value = getEffectiveTrackGain(track.id);
                         midiGains.current[track.id] = gainNode;
 
                         const instrumentType = track.instrument_type || 'synth';
@@ -1278,7 +1582,7 @@ const MultiTrackSampler = () => {
                         }
                         effectsNodes.current[track.id] = trackEffects;
 
-                        // Connect effects chain: synth -> effects -> gain -> destination
+                        // Connect effects chain: synth -> effects -> gain -> pan -> destination
                         let synth;
                         if (instrumentType === 'drumsampler') {
                             synth = new Tone.Sampler(synthParams).connect(gainNode);
@@ -1302,7 +1606,11 @@ const MultiTrackSampler = () => {
                             lastNode.connect(trackEffects.distortion);
                             lastNode = trackEffects.distortion;
                         }
-                        lastNode.toDestination();
+                        const midiPanner = midiPanners.current[track.id] || new Tone.Panner(trackPans[track.id] ?? 0);
+                        midiPanner.pan.value = trackPans[track.id] ?? 0;
+                        midiPanners.current[track.id] = midiPanner;
+                        lastNode.connect(midiPanner);
+                        midiPanner.toDestination();
 
                         track.midi_notes.forEach(note => {
                             toneTransportRef.current.schedule(time => {
@@ -1331,18 +1639,22 @@ const MultiTrackSampler = () => {
                         if (!ws.ready) return;
                         const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
                         if (!sample) return;
-                        const trackVolume = trackVolumes[sample.track_id] ?? 1;
-                        ws.instance.setVolume((sample.volume ?? 1) * trackVolume);
-                        const duration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
+                        const effGain = (sample.volume ?? 1) * getEffectiveTrackGain(sample.track_id);
+                        ws.instance.setVolume(effGain);
+                        if (ws.gainNode) ws.gainNode.gain.value = effGain;
+                        if (ws.panner) ws.panner.pan.value = trackPans[sample.track_id] ?? 0;
+                        const fullDuration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
+                        const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
                         const startTime = sample.start_time * timeScale;
-                        const endTime = startTime + duration;
+                        const endTime = startTime + effDuration;
 
                         if (playheadPosition >= startTime && playheadPosition < endTime) {
-                            const playTime = (playheadPosition - startTime) / duration;
-                            ws.instance.seekTo(playTime);
+                            const clipOffset = playheadPosition - startTime;
+                            ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
                             ws.instance.play().catch(err => {
                                 console.warn(`Error resuming sample ${ws.instance.sampleId}:`, err);
                             });
+                            scheduleClipFades(ws, sample, clipOffset, effDuration);
                         }
                     } catch (err) {
                         console.warn('Error resuming WaveSurfer:', err);
@@ -1404,7 +1716,8 @@ const MultiTrackSampler = () => {
                             console.warn('Track missing ID:', track);
                             return;
                         }
-                        const gainNode = midiGains.current[track.id] || new Tone.Gain(track.volume ?? 1);
+                        const gainNode = midiGains.current[track.id] || new Tone.Gain(getEffectiveTrackGain(track.id));
+                        gainNode.gain.value = getEffectiveTrackGain(track.id);
                         midiGains.current[track.id] = gainNode;
 
                         const instrumentType = track.instrument_type || 'synth';
@@ -1475,7 +1788,11 @@ const MultiTrackSampler = () => {
                             lastNode.connect(trackEffects.distortion);
                             lastNode = trackEffects.distortion;
                         }
-                        lastNode.toDestination();
+                        const midiPanner = midiPanners.current[track.id] || new Tone.Panner(trackPans[track.id] ?? 0);
+                        midiPanner.pan.value = trackPans[track.id] ?? 0;
+                        midiPanners.current[track.id] = midiPanner;
+                        lastNode.connect(midiPanner);
+                        midiPanner.toDestination();
 
                         track.midi_notes.forEach(note => {
                             if (note.start_time * timeScale >= playheadPosition) {
@@ -1507,21 +1824,47 @@ const MultiTrackSampler = () => {
                 }
                 setPlayheadPosition(scaledElapsed);
 
+                // Metronome: fire clicks as the playhead crosses beat boundaries
+                const beatScaled = (60 / bpm) * timeScale;
+                while (scaledElapsed >= metronomeNextBeatRef.current * beatScaled) {
+                    if (metronomeRef.current) {
+                        try {
+                            let clickSynth = metronomeSynthRef.current;
+                            if (!clickSynth || clickSynth.disposed || clickSynth.context !== Tone.getContext()) {
+                                try { clickSynth?.dispose(); } catch (_) {}
+                                clickSynth = new Tone.Synth({
+                                    oscillator: { type: 'square' },
+                                    envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.05 },
+                                    volume: -10,
+                                }).toDestination();
+                                metronomeSynthRef.current = clickSynth;
+                            }
+                            const isBarStart = metronomeNextBeatRef.current % 4 === 0;
+                            clickSynth.triggerAttackRelease(isBarStart ? 'C6' : 'C5', '32n');
+                        } catch (err) {
+                            console.warn('Metronome click error:', err.message);
+                        }
+                    }
+                    metronomeNextBeatRef.current += 1;
+                }
+
                 Object.values(wavesurfersRef.current).forEach(ws => {
                     try {
                         if (!ws.instance || !ws.ready) return;
                         const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
                         if (!sample) return;
-                        const duration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
+                        const fullDuration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
+                        const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
                         const startTime = sample.start_time * timeScale;
-                        const endTime = startTime + duration;
+                        const endTime = startTime + effDuration;
 
                         if (scaledElapsed >= startTime && scaledElapsed < endTime && !ws.instance.isPlaying()) {
-                            const playTime = (scaledElapsed - startTime) / duration;
-                            ws.instance.seekTo(playTime);
+                            const clipOffset = scaledElapsed - startTime;
+                            ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
                             ws.instance.play().catch(err => {
                                 console.warn(`Error playing sample ${ws.instance.sampleId}:`, err);
                             });
+                            scheduleClipFades(ws, sample, clipOffset, effDuration);
                         } else if (ws.instance.isPlaying() && (scaledElapsed < startTime || scaledElapsed >= endTime)) {
                             ws.instance.pause();
                         }
@@ -1537,6 +1880,10 @@ const MultiTrackSampler = () => {
 
                 playbackTimerRef.current = requestAnimationFrame(updatePlayhead);
             };
+
+            // Initialize the next metronome beat index from the current playhead
+            const beatScaledInit = (60 / bpm) * timeScale;
+            metronomeNextBeatRef.current = Math.max(0, Math.ceil(((isPaused ? playheadPosition : 0) / beatScaledInit) - 1e-6));
 
             playbackTimerRef.current = requestAnimationFrame(updatePlayhead);
         }
@@ -1586,6 +1933,10 @@ const MultiTrackSampler = () => {
         toneTransportRef.current.cancel();
     };
 
+    // Keep keyboard shortcuts pointing at the latest closures
+    playAllRef.current = handlePlayAllClick;
+    stopRef.current = handleStop;
+
     const handleSeek = async (seekTime) => {
         if (isPlayingRef.current) {
             try {
@@ -1630,7 +1981,7 @@ const MultiTrackSampler = () => {
         const timeScale = 120 / bpm;
 
         if (isSnapping) {
-            const snapIntervalReal = 0.05;
+            const snapIntervalReal = 15 / bpm; // 1/16 note
             const snapIntervalScaled = snapIntervalReal * timeScale;
             clickedTime = Math.round(clickedTime / snapIntervalScaled) * snapIntervalScaled;
         }
@@ -1820,7 +2171,15 @@ const MultiTrackSampler = () => {
             }
             const response = await axios.post(
                 `${API_URL}/projects/${projectId}/samples`,
-                { track_id: newTrackId, sample_id: originalSample.sample_id, start_time: newStartTime },
+                {
+                    track_id: newTrackId,
+                    sample_id: originalSample.sample_id,
+                    start_time: newStartTime,
+                    fade_in: originalSample.fade_in || 0,
+                    fade_out: originalSample.fade_out || 0,
+                    trim_start: originalSample.trim_start || 0,
+                    trim_end: originalSample.trim_end ?? null,
+                },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setProjectSamples(prev => {
@@ -1922,9 +2281,8 @@ const MultiTrackSampler = () => {
     }
 
     const timeScale = 120 / bpm;
-    const markerInterval = 5;
-    const realTimeInterval = markerInterval / timeScale;
-    const numMarkers = Math.ceil(timelineDuration / markerInterval);
+    const beatIntervalScaled = (60 / bpm) * timeScale; // one beat in scaled units
+    const numBeatMarkers = Math.ceil(timelineDuration / beatIntervalScaled);
 
     return (
         <DndProvider backend={HTML5Backend}>
@@ -1987,6 +2345,14 @@ const MultiTrackSampler = () => {
                         max="240"
                         disabled={isLoadingDurations}
                     />
+                    <button
+                        onClick={() => setMetronomeOn(prev => { metronomeRef.current = !prev; return !prev; })}
+                        disabled={isLoadingDurations}
+                        title="Metronome click during playback"
+                        className={`px-3 py-2 font-semibold rounded-lg border transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${metronomeOn ? 'bg-purple-600 text-white border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'}`}
+                    >
+                        Click
+                    </button>
                     <div className="flex items-center space-x-2">
                         <button
                             onClick={handleZoomOut}
@@ -2013,7 +2379,7 @@ const MultiTrackSampler = () => {
                             id="snap-toggle"
                             className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 bg-gray-700 rounded disabled:opacity-50"
                         />
-                        <label htmlFor="snap-toggle" className="text-sm text-gray-300">Snap to Grid (.05)</label>
+                        <label htmlFor="snap-toggle" className="text-sm text-gray-300">Snap to Grid (1/16)</label>
                     </div>
                     <span className="text-sm text-gray-300">
                         Playhead: {(playheadPosition / (120 / bpm)).toFixed(1)}s
@@ -2037,9 +2403,39 @@ const MultiTrackSampler = () => {
                                                 type="text"
                                                 value={track.name}
                                                 onChange={(e) => handleRenameTrack(track.id, e.target.value)}
-                                                className="w-36 px-2 py-1 bg-gray-800 text-gray-200 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                                                className="w-24 px-2 py-1 bg-gray-800 text-gray-200 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
                                                 disabled={isLoadingDurations}
                                             />
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggleMute(track.id);
+                                                }}
+                                                className={`w-6 h-6 text-xs font-bold rounded focus:outline-none focus:ring-2 focus:ring-red-300 transition-colors ${
+                                                    track.is_muted
+                                                        ? 'bg-red-500 text-white'
+                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-600'
+                                                }`}
+                                                title={track.is_muted ? 'Unmute' : 'Mute'}
+                                                aria-label={track.is_muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
+                                            >
+                                                M
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggleSolo(track.id);
+                                                }}
+                                                className={`w-6 h-6 text-xs font-bold rounded focus:outline-none focus:ring-2 focus:ring-yellow-300 transition-colors ${
+                                                    soloTracks[track.id]
+                                                        ? 'bg-yellow-500 text-black'
+                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-600'
+                                                }`}
+                                                title={soloTracks[track.id] ? 'Unsolo' : 'Solo'}
+                                                aria-label={soloTracks[track.id] ? `Unsolo ${track.name}` : `Solo ${track.name}`}
+                                            >
+                                                S
+                                            </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -2093,20 +2489,21 @@ const MultiTrackSampler = () => {
                                 style={{ width: `${timelineDuration * zoom}px` }}
                                 onClick={handleTopTimelineClick}
                             >
-                                {Array.from({ length: numMarkers }, (_, i) => {
-                                    const scaledTime = i * markerInterval;
-                                    const realTime = scaledTime / timeScale;
-                                    const pixelPosition = scaledTime * zoom;
+                                {Array.from({ length: numBeatMarkers }, (_, i) => {
+                                    const pixelPosition = i * beatIntervalScaled * zoom;
+                                    const isBarStart = i % 4 === 0;
                                     return (
                                         <React.Fragment key={i}>
+                                            {isBarStart && (
+                                                <div
+                                                    className="text-sm font-medium absolute text-gray-300"
+                                                    style={{ left: `${pixelPosition + 2}px` }}
+                                                >
+                                                    {i / 4 + 1}
+                                                </div>
+                                            )}
                                             <div
-                                                className="text-sm font-medium absolute text-gray-300"
-                                                style={{ left: `${pixelPosition}px` }}
-                                            >
-                                                {realTime.toFixed(1)}s
-                                            </div>
-                                            <div
-                                                className="absolute top-0 bottom-0 border-l border-gray-600"
+                                                className={`absolute border-l ${isBarStart ? 'top-0 bottom-0 border-gray-400' : 'bottom-0 h-1/3 border-gray-600'}`}
                                                 style={{ left: `${pixelPosition}px` }}
                                             />
                                         </React.Fragment>
@@ -2162,6 +2559,7 @@ const MultiTrackSampler = () => {
                                                 timelineDuration={timelineDuration}
                                                 playheadPosition={playheadPosition}
                                                 trackVolume={trackVolumes[track.id] || 1}
+                                                onClipEdit={setSelectedClip}
                                             />
                                         )}
                                     </div>
@@ -2246,6 +2644,7 @@ const MultiTrackSampler = () => {
                         onDelete={handleDeleteTrack}
                         onSettingsChange={handleTrackSettingsChange}
                         currentVolume={selectedTrack.volume ?? 1}
+                        currentPan={selectedTrack.pan ?? 0}
                         currentInstrumentType={selectedTrack.instrument_type || 'synth'}
                         isPolyphonic={selectedTrack.is_polyphonic || false}
                         synthSettings={selectedTrack.synth_settings}
@@ -2256,6 +2655,14 @@ const MultiTrackSampler = () => {
                         track={selectedTrackForEffects}
                         onClose={() => setSelectedTrackForEffects(null)}
                         onEffectsChange={handleEffectsChange}
+                    />
+                )}
+                {selectedClip && (
+                    <ClipSettingsModal
+                        clip={selectedClip}
+                        fullDuration={sampleDurations[selectedClip.id] || 0}
+                        onClose={() => setSelectedClip(null)}
+                        onSave={handleClipSettingsSave}
                     />
                 )}
             </div>

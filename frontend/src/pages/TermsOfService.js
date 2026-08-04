@@ -81,7 +81,7 @@ function TermsOfService() {
                         <p className="text-gray-300">
                             We respect intellectual property rights. If you believe content on the Service
                             infringes your copyright, contact us at{' '}
-                            <a href="mailto:support@internetdj.co" className="text-primary-brand-400 hover:underline">support@internetdj.co</a>{' '}
+                            <a href="mailto:internetdjco@gmail.com" className="text-primary-brand-400 hover:underline">internetdjco@gmail.com</a>{' '}
                             with sufficient detail to identify the work and the allegedly infringing material. We
                             may remove infringing content and terminate repeat infringers.
                         </p>
@@ -115,16 +115,39 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">9. Limitation of Liability</h2>
+                        <h2 className="text-xl font-bold mb-3 tracking-tight">9. Indemnification</h2>
                         <p className="text-gray-300">
-                            To the maximum extent permitted by law, InternetDJ will not be liable for any
-                            indirect, incidental, special, consequential, or punitive damages, or any loss of
-                            data, profits, or revenue arising from your use of the Service.
+                            You agree to defend, indemnify, and hold harmless InternetDJ and its officers,
+                            employees, and affiliates from any claims, damages, losses, or expenses arising from
+                            your use of the Service, your Content, your violation of these Terms, or your
+                            infringement of any third-party rights.
                         </p>
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">10. Changes to These Terms</h2>
+                        <h2 className="text-xl font-bold mb-3 tracking-tight">10. Limitation of Liability</h2>
+                        <p className="text-gray-300">
+                            To the maximum extent permitted by law, InternetDJ will not be liable for any
+                            indirect, incidental, special, consequential, or punitive damages, or any loss of
+                            data, profits, or revenue arising from your use of the Service. Our total liability
+                            for any claim related to the Service shall not exceed the greater of (a) the fees you
+                            paid to us in the twelve (12) months preceding the claim or (b) one hundred dollars
+                            ($100), if no fees were paid.
+                        </p>
+                    </section>
+
+                    <section className="mb-8">
+                        <h2 className="text-xl font-bold mb-3 tracking-tight">11. Governing Law</h2>
+                        <p className="text-gray-300">
+                            These Terms are governed by the laws of the State of New York, United States,
+                            without regard to conflict of law principles. You agree that any dispute arising from
+                            these Terms will be brought exclusively in the state or federal courts located in New
+                            York, unless otherwise required by applicable law.
+                        </p>
+                    </section>
+
+                    <section className="mb-8">
+                        <h2 className="text-xl font-bold mb-3 tracking-tight">12. Changes to These Terms</h2>
                         <p className="text-gray-300">
                             We may update these Terms from time to time. We will revise the "Last updated" date
                             above, and your continued use of the Service after changes take effect constitutes
@@ -133,10 +156,10 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-2">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">11. Contact Us</h2>
+                        <h2 className="text-xl font-bold mb-3 tracking-tight">13. Contact Us</h2>
                         <p className="text-gray-300">
                             Questions about these Terms? Contact us at{' '}
-                            <a href="mailto:support@internetdj.co" className="text-primary-brand-400 hover:underline">support@internetdj.co</a>.
+                            <a href="mailto:internetdjco@gmail.com" className="text-primary-brand-400 hover:underline">internetdjco@gmail.com</a>.
                         </p>
                     </section>
 
