@@ -37,28 +37,62 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
-// Upload a new sample to the library
+// Convert a WAV buffer to MP3 using ffmpeg
+function transcodeWavToMp3(wavBuffer) {
+    return new Promise((resolve, reject) => {
+        const input = new stream.PassThrough();
+        input.end(wavBuffer);
+        const buffers = [];
+        ffmpeg(input)
+            .inputFormat('wav')
+            .audioCodec('libmp3lame')
+            .audioBitrate(192)
+            .toFormat('mp3')
+            .on('error', reject)
+            .on('end', () => resolve(Buffer.concat(buffers)))
+            .pipe(new stream.PassThrough()
+                .on('data', (chunk) => buffers.push(chunk))
+                .on('error', reject)
+            );
+    });
+}
+
+// Upload a new sample to the library (MP3 or WAV; WAV is transcoded to MP3)
 router.post('/', authenticate, async (req, res) => {
-    const mp3 = req.files?.mp3;
-    if (!mp3) {
-        return res.status(400).json({ error: 'MP3 file is required' });
+    const upload = req.files?.mp3;
+    if (!upload) {
+        return res.status(400).json({ error: 'Audio file is required' });
     }
-    if (mp3.size > 10 * 1024 * 1024) {
-        return res.status(400).json({ error: 'MP3 file exceeds 10MB limit' });
+    const isMp3 = upload.mimetype.includes('audio/mpeg');
+    const isWav = upload.mimetype.includes('audio/wav') || upload.mimetype.includes('audio/x-wav')
+        || upload.mimetype.includes('audio/wave') || /\.wav$/i.test(upload.name || '');
+    if (!isMp3 && !isWav) {
+        return res.status(400).json({ error: 'File must be an MP3 or WAV' });
     }
-    if (!mp3.mimetype.includes('audio/mpeg')) {
-        return res.status(400).json({ error: 'File must be an MP3' });
+    const sizeLimit = (isWav ? 50 : 10) * 1024 * 1024;
+    if (upload.size > sizeLimit) {
+        return res.status(400).json({ error: `File exceeds ${isWav ? 50 : 10}MB limit` });
     }
     try {
+        let mp3Data = upload.data;
+        if (isWav && !isMp3) {
+            try {
+                mp3Data = await transcodeWavToMp3(upload.data);
+            } catch (err) {
+                console.error('WAV transcode failed:', err.message);
+                return res.status(400).json({ error: 'Failed to convert WAV to MP3: ' + err.message });
+            }
+        }
         const uploadParams = {
             Bucket: process.env.BUCKET_NAME,
             Key: `samples/${req.user.id}-${Date.now()}.mp3`,
-            Body: mp3.data,
+            Body: mp3Data,
+            ContentType: 'audio/mpeg',
         };
         await s3Client.send(new PutObjectCommand(uploadParams));
         const mp3Url = buildPublicFileUrl(uploadParams.Key);
-        const name = mp3.name || `Sample-${Date.now()}`;
-        const duration = await probeDuration(mp3.data);
+        const name = (upload.name || `Sample-${Date.now()}`).replace(/\.wav$/i, '.mp3');
+        const duration = await probeDuration(mp3Data);
         const result = await pool.query(
             'INSERT INTO sample_library (user_id, name, mp3_url, duration) VALUES (?, ?, ?, ?)',
             [req.user.id, name, mp3Url, duration]
