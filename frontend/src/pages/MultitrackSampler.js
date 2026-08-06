@@ -10,6 +10,7 @@ import * as Tone from 'tone';
 import PianoRoll from '../components/PianoRoll';
 import TrackSettingsModal from '../components/TrackSettingsModal';
 import TrackEffectsModal from '../components/TrackEffectsModal';
+import MidiGenerateModal from '../components/MidiGenerateModal';
 import synthConfigs from '../config/synthConfigs';
 import API_URL from '../utils/api';
 
@@ -36,7 +37,7 @@ const getClipTimes = (sample, fullDuration) => {
     return { trimStart, trimEnd, effDuration: Math.max(0, trimEnd - trimStart) };
 };
 
-const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadingDurations, waveformColor, trackVolume, onClipEdit }) => {
+const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadingDurations, waveformColor, trackVolume, onClipEdit, isSelected, onSelect, onDuplicate }) => {
     const waveformRef = useRef(null);
     const wavesurfer = useRef(null);
     const abortController = useRef(new AbortController());
@@ -89,6 +90,9 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
 
     const handleClick = (e) => {
         e.stopPropagation();
+        if (onSelect && !isLoadingDurations) {
+            onSelect(isSelected ? null : sample.id);
+        }
     };
 
     const handleDoubleClick = (e) => {
@@ -105,7 +109,9 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
     return (
         <div
             ref={drag}
-            className={`absolute h-12 flex items-center p-1 bg-white/5 border border-white/10 rounded-md shadow-sm hover:bg-white/10 ${
+            className={`absolute h-12 flex items-center p-1 bg-white/5 border rounded-md shadow-sm hover:bg-white/10 ${
+                isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/60' : 'border-white/10'
+            } ${
                 isDragging ? 'opacity-50' : 'opacity-100'
             } ${isLoadingDurations ? 'cursor-not-allowed' : 'cursor-move'}`}
             style={{
@@ -123,6 +129,19 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
             )}
             {hasClipEdits && !isLoadingDurations && (
                 <span className="absolute top-0 right-1 text-[10px] text-cyan-300 pointer-events-none" title="Clip has fades/trim">✂</span>
+            )}
+            {isSelected && !isLoadingDurations && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDuplicate?.(sample.id);
+                    }}
+                    className="absolute -top-2 -right-2 z-30 w-5 h-5 flex items-center justify-center text-[11px] leading-none bg-cyan-600 hover:bg-cyan-500 text-white rounded-full shadow focus:outline-none"
+                    title="Duplicate clip after itself (Cmd/Ctrl+D)"
+                    aria-label="Duplicate clip"
+                >
+                    ⧉
+                </button>
             )}
         </div>
     );
@@ -237,7 +256,7 @@ const DraggableSample = ({ sample, name, sampleId }) => {
     );
 };
 
-const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isLoadingDurations, waveformColor, bpm, isSnapping, timelineDuration, playheadPosition, trackVolume, onClipEdit }) => {
+const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isLoadingDurations, waveformColor, bpm, isSnapping, timelineDuration, playheadPosition, trackVolume, onClipEdit, selectedSampleId, onSelectSample, onDuplicateClip }) => {
     const timelineRef = useRef(null);
 
     const [{ isOver }, drop] = useDrop({
@@ -343,6 +362,9 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                     waveformColor={waveformColor}
                     trackVolume={trackVolume}
                     onClipEdit={onClipEdit}
+                    isSelected={selectedSampleId === sample.id}
+                    onSelect={onSelectSample}
+                    onDuplicate={onDuplicateClip}
                 />
             ))}
             {/* Playhead bar */}
@@ -467,11 +489,13 @@ const MultiTrackSampler = () => {
     const [trackPans, setTrackPans] = useState({});
     const [soloTracks, setSoloTracks] = useState({});
     const [selectedClip, setSelectedClip] = useState(null);
+    const [selectedSampleId, setSelectedSampleId] = useState(null);
     const midiPanners = useRef({});
     const [selectedTrack, setSelectedTrack] = useState(null);
     const midiGains = useRef({});
     const [minimizedTracks, setMinimizedTracks] = useState({});
     const [selectedTrackForEffects, setSelectedTrackForEffects] = useState(null);
+    const [selectedTrackForGenerate, setSelectedTrackForGenerate] = useState(null);
     const effectsNodes = useRef({});
     const [metronomeOn, setMetronomeOn] = useState(false);
     const metronomeRef = useRef(false);
@@ -479,6 +503,8 @@ const MultiTrackSampler = () => {
     const metronomeNextBeatRef = useRef(0);
     const playAllRef = useRef(null);
     const stopRef = useRef(null);
+    const duplicateSelectedRef = useRef(null);
+    const deleteSelectedRef = useRef(null);
     const initializedTracks = useRef(new Set());
 
     // Initialize minimized state for MIDI tracks
@@ -617,6 +643,14 @@ const MultiTrackSampler = () => {
             } else if (e.ctrlKey && e.key === 'y') {
                 e.preventDefault();
                 redo();
+            } else if ((e.key === 'd' || e.key === 'D') && (e.ctrlKey || e.metaKey) && !e.altKey) {
+                e.preventDefault();
+                duplicateSelectedRef.current?.();
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                deleteSelectedRef.current?.();
+            } else if (e.key === 'Escape') {
+                setSelectedSampleId(null);
             } else if (e.code === 'Space' && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 e.preventDefault();
                 playAllRef.current?.();
@@ -1307,6 +1341,17 @@ const MultiTrackSampler = () => {
         });
     };
 
+    // Save generated MIDI notes to a track (used by the ✨ generate modal)
+    const handleApplyGeneratedNotes = async (trackId, newNotes) => {
+        const token = localStorage.getItem('token');
+        await axios.put(
+            `${API_URL}/projects/${projectId}/tracks/${trackId}/midi`,
+            { midi_notes: newNotes },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        handleNotesChange(trackId, newNotes);
+    };
+
     const handlePlayAll = async () => {
         if (isPlayingRef.current) {
             try {
@@ -1959,6 +2004,15 @@ const MultiTrackSampler = () => {
     // Keep keyboard shortcuts pointing at the latest closures
     playAllRef.current = handlePlayAllClick;
     stopRef.current = handleStop;
+    duplicateSelectedRef.current = () => {
+        if (selectedSampleId) handleDuplicateSample(selectedSampleId);
+    };
+    deleteSelectedRef.current = () => {
+        if (selectedSampleId) {
+            handleDeleteSample(selectedSampleId);
+            setSelectedSampleId(null);
+        }
+    };
 
     const handleSeek = async (seekTime) => {
         if (isPlayingRef.current) {
@@ -2086,12 +2140,14 @@ const MultiTrackSampler = () => {
 
     const handleFileUpload = async (e) => {
         const files = Array.from(e.target.files);
+        const isWav = (file) => file.type.includes('audio/wav') || file.type.includes('audio/x-wav') || /\.wav$/i.test(file.name);
         const validFiles = files.filter(
             (file) =>
-                file.type.includes('audio/mpeg') && file.size <= 10 * 1024 * 1024
+                (file.type.includes('audio/mpeg') && file.size <= 10 * 1024 * 1024) ||
+                (isWav(file) && file.size <= 50 * 1024 * 1024)
         );
         if (validFiles.length !== files.length) {
-            setError('Some files are invalid (must be MP3, max 10MB)');
+            setError('Some files are invalid (MP3 max 10MB, WAV max 50MB)');
             return;
         }
         try {
@@ -2177,8 +2233,72 @@ const MultiTrackSampler = () => {
         }
     };
 
-    const handleDragSample = async (sampleId, newTrackId, newStartTime) => {
+    // Duplicate a clip immediately after itself (Cmd/Ctrl+D or ⧉ button)
+    const handleDuplicateSample = async (projectSampleId) => {
+        const original = projectSamples.find(s => s.id === projectSampleId);
+        if (!original) return;
+        const fullDuration = sampleDurations[original.id] || 0;
+        if (!fullDuration) {
+            setError('Sample still loading — try again in a moment');
+            return;
+        }
+        const { effDuration } = getClipTimes(original, fullDuration);
+        const newStartTime = Math.round((original.start_time + effDuration) * 100) / 100;
         try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${API_URL}/projects/${projectId}/samples`,
+                {
+                    track_id: original.track_id,
+                    sample_id: original.sample_id,
+                    start_time: newStartTime,
+                    fade_in: original.fade_in || 0,
+                    fade_out: original.fade_out || 0,
+                    trim_start: original.trim_start || 0,
+                    trim_end: original.trim_end ?? null,
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setProjectSamples(prev => {
+                pushToHistory({ type: 'addSample', data: response.data });
+                extendTimelineIfNeeded(newStartTime, response.data.sample_id);
+                return [...prev, response.data];
+            });
+            // Select the new copy so Cmd+D can be chained to keep extending
+            setSelectedSampleId(response.data.id);
+            setError(null);
+        } catch (err) {
+            console.error('Duplicate sample error:', err.response?.data || err.message);
+            setError('Failed to duplicate sample: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    // Repeat a MIDI track's pattern: append a copy of all notes one pattern-length later
+    const handleRepeatMidiPattern = async (trackId) => {
+        const track = tracks.find(t => t.id === trackId);
+        const notes = Array.isArray(track?.midi_notes) ? track.midi_notes : [];
+        if (notes.length === 0) {
+            setError('No notes to repeat on this track');
+            return;
+        }
+        const barLength = 240 / bpm; // 4 beats in real seconds
+        const maxEnd = notes.reduce((max, n) => Math.max(max, n.start_time + n.duration), 0);
+        const patternLength = Math.max(barLength, Math.ceil(maxEnd / barLength - 0.001) * barLength);
+        const shifted = notes.map(n => ({
+            ...n,
+            start_time: Math.round((n.start_time + patternLength) * 100) / 100,
+        }));
+        const newNotes = [...notes, ...shifted];
+        try {
+            await handleApplyGeneratedNotes(trackId, newNotes);
+            setError(null);
+        } catch (err) {
+            console.error('Repeat MIDI pattern error:', err.response?.data || err.message);
+            setError('Failed to repeat pattern: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    const handleDragSample = async (sampleId, newTrackId, newStartTime) => {        try {
             const newTrack = tracks.find(t => t.id === newTrackId);
             if (newTrack.track_type === 'midi') {
                 setError('Cannot drag samples to MIDI tracks');
@@ -2410,7 +2530,7 @@ const MultiTrackSampler = () => {
                 </div>
                 <div className="flex mb-6">
                     {/* Track Settings Column (Static) */}
-                    <div className="w-[224px] flex-shrink-0 sticky top-20 z-10 bg-[#0f0f0f] border-r border-white/10">
+                    <div className="w-[256px] flex-shrink-0 sticky top-20 z-10 bg-[#0f0f0f] border-r border-white/10">
                         <div className="h-12"></div> {/* Empty div to align with top timeline */}
                         <div className="space-y-1">
                             {tracks.map((track) => {
@@ -2484,19 +2604,47 @@ const MultiTrackSampler = () => {
                                             >
                                                 🎛️
                                             </button>
+                                            {track.track_type === 'midi' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedTrackForGenerate(tracks.find(t => t.id === track.id));
+                                                    }}
+                                                    className="bg-gray-700 text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={isLoadingDurations}
+                                                    title="Generate MIDI (AI)"
+                                                    aria-label={`Generate MIDI for ${track.name}`}
+                                                >
+                                                    ✨
+                                                </button>
+                                            )}
                                         </div>
                                         {track.track_type === 'midi' && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleTrackMinimize(track.id);
-                                                }}
-                                                className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-md px-4 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                disabled={isLoadingDurations}
-                                                title={minimizedTracks[track.id] ? 'Expand Piano Roll' : 'Minimize Piano Roll'}
-                                            >
-                                                {minimizedTracks[track.id] ? '↔ Expand' : '↕ Minimize'}
-                                            </button>
+                                            <div className="flex items-center space-x-1">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleTrackMinimize(track.id);
+                                                    }}
+                                                    className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={isLoadingDurations}
+                                                    title={minimizedTracks[track.id] ? 'Expand Piano Roll' : 'Minimize Piano Roll'}
+                                                >
+                                                    {minimizedTracks[track.id] ? '↔ Expand' : '↕ Minimize'}
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRepeatMidiPattern(track.id);
+                                                    }}
+                                                    className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={isLoadingDurations || !(Array.isArray(track.midi_notes) && track.midi_notes.length > 0)}
+                                                    title="Repeat pattern: copy all notes after the last bar"
+                                                    aria-label={`Repeat pattern on ${track.name}`}
+                                                >
+                                                    ⟳ Repeat
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 );
@@ -2583,6 +2731,9 @@ const MultiTrackSampler = () => {
                                                 playheadPosition={playheadPosition}
                                                 trackVolume={trackVolumes[track.id] || 1}
                                                 onClipEdit={setSelectedClip}
+                                                selectedSampleId={selectedSampleId}
+                                                onSelectSample={setSelectedSampleId}
+                                                onDuplicateClip={handleDuplicateSample}
                                             />
                                         )}
                                     </div>
@@ -2652,7 +2803,7 @@ const MultiTrackSampler = () => {
                     </div>
                     <input
                         type="file"
-                        accept="audio/mp3"
+                        accept="audio/mp3,audio/mpeg,audio/wav,audio/x-wav,.wav"
                         multiple
                         onChange={handleFileUpload}
                         ref={fileInputRef}
@@ -2678,6 +2829,14 @@ const MultiTrackSampler = () => {
                         track={selectedTrackForEffects}
                         onClose={() => setSelectedTrackForEffects(null)}
                         onEffectsChange={handleEffectsChange}
+                    />
+                )}
+                {selectedTrackForGenerate && (
+                    <MidiGenerateModal
+                        track={selectedTrackForGenerate}
+                        bpm={bpm}
+                        onClose={() => setSelectedTrackForGenerate(null)}
+                        onApply={handleApplyGeneratedNotes}
                     />
                 )}
                 {selectedClip && (
