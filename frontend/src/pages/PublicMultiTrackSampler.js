@@ -400,18 +400,35 @@ const PublicMultiTrackSampler = () => {
                         const isPolyphonic = track.is_polyphonic || false;
                         const config = synthConfigs[instrumentType] || synthConfigs.synth;
                         const { SynthClass } = config;
-                        const params = track.synth_settings
-                            ? {
-                                ...track.synth_settings.synthParams,
-                                envelope: track.synth_settings.envelope,
-                                voice0: track.synth_settings.voice0,
-                                voice1: track.synth_settings.voice0 ? { detune: -track.synth_settings.voice0.detune } : undefined,
-                            }
-                            : config.params;
+                        let params;
+                        if (instrumentType === 'drumsampler') {
+                            params = {
+                                urls: config.params.urls,
+                                baseUrl: config.params.baseUrl || '',
+                                onload: config.params.onload,
+                            };
+                        } else {
+                            // Merge saved settings over the instrument's defaults so
+                            // characteristic params (e.g. oscillator type) are kept
+                            params = track.synth_settings
+                                ? {
+                                    ...config.params,
+                                    ...track.synth_settings.synthParams,
+                                    envelope: { ...config.params.envelope, ...track.synth_settings.envelope },
+                                    voice0: { ...config.params.voice0, ...track.synth_settings.voice0 },
+                                    voice1: track.synth_settings.voice0 ? { ...config.params.voice1, detune: -track.synth_settings.voice0.detune } : config.params.voice1,
+                                }
+                                : config.params;
+                        }
 
-                        const synth = isPolyphonic
-                            ? new Tone.PolySynth(SynthClass, { maxPolyphony: 8, ...params }).toDestination()
-                            : new SynthClass(params).toDestination();
+                        let synth;
+                        if (instrumentType === 'drumsampler') {
+                            synth = new Tone.Sampler(params).toDestination();
+                        } else {
+                            synth = isPolyphonic
+                                ? new Tone.PolySynth(SynthClass, { maxPolyphony: 8, ...params }).toDestination()
+                                : new SynthClass(params).toDestination();
+                        }
 
                         synthsRef.current[track.id] = synth;
 

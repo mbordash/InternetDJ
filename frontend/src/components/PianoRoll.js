@@ -17,6 +17,10 @@ const PianoRoll = ({
                        isMinimized,
                    }) => {
     const [notes, setNotes] = useState(Array.isArray(track.midi_notes) ? track.midi_notes : []);
+    const [selectedIndices, setSelectedIndices] = useState(new Set());
+    const [lassoRect, setLassoRect] = useState(null);
+    const dragStateRef = useRef(null);
+    const suppressClickRef = useRef(false);
     const canvasRef = useRef(null);
 
     const drumNotes = [
@@ -49,6 +53,7 @@ const PianoRoll = ({
         } else {
             setNotes(track.midi_notes);
         }
+        setSelectedIndices(new Set());
     }, [track.midi_notes]);
 
     const drawGrid = () => {
@@ -96,7 +101,7 @@ const PianoRoll = ({
         }
 
         ctx.fillStyle = '#9333ea';
-        notes.forEach((note) => {
+        notes.forEach((note, idx) => {
             const noteIndex = notesList.indexOf(note.note);
             if (noteIndex === -1) {
                 console.warn(`Invalid note: ${note.note} not in notesList`, { note, notesList });
@@ -106,8 +111,22 @@ const PianoRoll = ({
             if (isMinimized && y >= minimizedHeight) return;
             const x = note.start_time * timeScale * pixelsPerSecond;
             const width = note.duration * timeScale * pixelsPerSecond;
+            ctx.fillStyle = selectedIndices.has(idx) ? '#22d3ee' : '#9333ea';
             ctx.fillRect(x, y, width, rowHeight);
         });
+
+        // Lasso marquee
+        if (lassoRect) {
+            const lx = Math.min(lassoRect.x1, lassoRect.x2);
+            const ly = Math.min(lassoRect.y1, lassoRect.y2);
+            const lw = Math.abs(lassoRect.x2 - lassoRect.x1);
+            const lh = Math.abs(lassoRect.y2 - lassoRect.y1);
+            ctx.fillStyle = 'rgba(34, 211, 238, 0.15)';
+            ctx.fillRect(lx, ly, lw, lh);
+            ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lx, ly, lw, lh);
+        }
 
         ctx.fillStyle = '#ef4444';
         const playheadX = playheadPosition * pixelsPerSecond;
@@ -116,10 +135,34 @@ const PianoRoll = ({
         ctx.restore();
     };
 
+    const saveNotes = async (newNotes, prevNotes) => {
+        setNotes(newNotes);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No authentication token found');
+            }
+            await axios.put(
+                `${API_URL}/projects/${projectId}/tracks/${track.id}/midi`,
+                { midi_notes: newNotes },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            onNotesChange(track.id, newNotes);
+        } catch (err) {
+            console.error('Failed to save MIDI notes:', err.response?.data || err.message);
+            setNotes(prevNotes);
+        }
+    };
+
     const handleCanvasClick = async (e) => {
         e.stopPropagation();
         if (isMinimized) {
             console.log('Canvas click ignored: Piano roll is minimized');
+            return;
+        }
+        // A plain click while notes are selected just clears the selection
+        if (selectedIndices.size > 0) {
+            setSelectedIndices(new Set());
             return;
         }
         const canvas = canvasRef.current;
@@ -163,44 +206,111 @@ const PianoRoll = ({
             onExtendTimeline(startTime, segmentDuration);
         }
 
-        setNotes(newNotes);
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                throw new Error('No authentication token found');
-            }
-            await axios.put(
-                `${API_URL}/projects/${projectId}/tracks/${track.id}/midi`,
-                { midi_notes: newNotes },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            console.log('Saved notes to backend:', newNotes);
-            onNotesChange(track.id, newNotes);
-        } catch (err) {
-            console.error('Failed to save MIDI notes:', err.response?.data || err.message);
-            setNotes(notes);
-            setError('Failed to save MIDI notes: ' + (err.response?.data?.error || err.message));
-        }
+        await saveNotes(newNotes, notes);
     };
 
     useEffect(() => {
         drawGrid();
-    }, [notes, playheadPosition, zoom, bpm, timelineDuration, isMinimized, track.instrument_type]);
+    }, [notes, playheadPosition, zoom, bpm, timelineDuration, isMinimized, track.instrument_type, selectedIndices, lassoRect]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (canvas) {
-            const handleClick = (e) => {
-                console.log('Canvas clicked:', e);
-                handleCanvasClick(e);
+        if (!canvas) return;
+
+        const handleMouseDown = (e) => {
+            if (isMinimized) return;
+            const rect = canvas.getBoundingClientRect();
+            dragStateRef.current = {
+                startX: e.clientX - rect.left,
+                startY: e.clientY - rect.top,
+                dragged: false,
             };
-            canvas.addEventListener('click', handleClick);
-            return () => {
-                console.log('Removing canvas click listener');
-                canvas.removeEventListener('click', handleClick);
-            };
-        }
-    }, [isMinimized, isSnapping, zoom, bpm, track.id, notesList, notes]);
+        };
+
+        const handleMouseMove = (e) => {
+            const drag = dragStateRef.current;
+            if (!drag) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+            if (!drag.dragged && Math.abs(x - drag.startX) < 4 && Math.abs(y - drag.startY) < 4) return;
+            drag.dragged = true;
+            setLassoRect({ x1: drag.startX, y1: drag.startY, x2: x, y2: y });
+        };
+
+        const handleMouseUp = () => {
+            const drag = dragStateRef.current;
+            if (!drag) return;
+            dragStateRef.current = null;
+            if (!drag.dragged) return;
+            suppressClickRef.current = true; // swallow the click event that follows a drag
+            // Finish lasso: select notes intersecting the rectangle
+            setLassoRect((rect) => {
+                if (rect) {
+                    const lx1 = Math.min(rect.x1, rect.x2);
+                    const lx2 = Math.max(rect.x1, rect.x2);
+                    const ly1 = Math.min(rect.y1, rect.y2);
+                    const ly2 = Math.max(rect.y1, rect.y2);
+                    const picked = new Set();
+                    notes.forEach((note, idx) => {
+                        const noteIndex = notesList.indexOf(note.note);
+                        if (noteIndex === -1) return;
+                        const nx1 = note.start_time * timeScale * pixelsPerSecond;
+                        const nx2 = nx1 + note.duration * timeScale * pixelsPerSecond;
+                        const ny1 = noteIndex * rowHeight;
+                        const ny2 = ny1 + rowHeight;
+                        if (nx1 < lx2 && nx2 > lx1 && ny1 < ly2 && ny2 > ly1) {
+                            picked.add(idx);
+                        }
+                    });
+                    setSelectedIndices(picked);
+                }
+                return null;
+            });
+        };
+
+        const handleClick = (e) => {
+            if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                e.stopPropagation();
+                return;
+            }
+            handleCanvasClick(e);
+        };
+
+        canvas.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('click', handleClick);
+        return () => {
+            canvas.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            canvas.removeEventListener('click', handleClick);
+        };
+    }, [isMinimized, isSnapping, zoom, bpm, track.id, notesList, notes, selectedIndices]);
+
+    // Delete/Backspace removes lassoed notes; Escape clears the selection
+    useEffect(() => {
+        if (selectedIndices.size === 0) return;
+        const handleKeyDown = (e) => {
+            const target = e.target;
+            const tag = target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                const newNotes = notes.filter((_, idx) => !selectedIndices.has(idx));
+                setSelectedIndices(new Set());
+                saveNotes(newNotes, notes);
+            } else if (e.key === 'Escape') {
+                setSelectedIndices(new Set());
+            }
+        };
+        // Capture phase so this wins over the page-level Delete (clip) handler
+        window.addEventListener('keydown', handleKeyDown, true);
+        return () => window.removeEventListener('keydown', handleKeyDown, true);
+    }, [selectedIndices, notes]);
 
     return (
         <div

@@ -1440,7 +1440,12 @@ const MultiTrackSampler = () => {
             const timeScale = 120 / bpm;
             let maxDuration = timelineDuration / timeScale;
 
-            if (!isPaused) {
+            // A true resume requires loaded players; a seek from stopped state
+            // (isPaused set but nothing loaded) must take the fresh-play path.
+            const canResume = isPaused && Object.keys(wavesurfersRef.current).length > 0;
+            const startPos = playheadPosition; // scaled timeline seconds
+
+            if (!canResume) {
                 wavesurfersRef.current = {};
                 toneTransportRef.current.cancel();
                 effectsNodes.current = {};
@@ -1674,30 +1679,33 @@ const MultiTrackSampler = () => {
                     return;
                 }
 
-                startTimeRef.current = audioContextRef.current.currentTime;
-                setPlayheadPosition(0);
+                startTimeRef.current = audioContextRef.current.currentTime - (startPos / timeScale);
+                setPlayheadPosition(startPos);
 
-                // Everything is loaded — start clips at t=0 in the same instant
-                // the playhead clock starts, so audio and UI stay in sync.
+                // Everything is loaded — start clips under the playhead in the same
+                // instant the playhead clock starts, so audio and UI stay in sync.
                 Object.values(wavesurfersRef.current).forEach(ws => {
                     try {
                         if (!ws.ready) return;
                         const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
                         if (!sample) return;
                         const fullDuration = sampleDurations[sample.id] || ws.instance.getDuration();
-                        const { effDuration } = getClipTimes(sample, fullDuration);
-                        if (sample.start_time * timeScale <= 0 && effDuration > 0) {
+                        const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
+                        const clipStart = sample.start_time * timeScale;
+                        if (clipStart <= startPos && startPos < clipStart + effDuration && effDuration > 0) {
+                            const clipOffset = startPos - clipStart;
+                            ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
                             ws.instance.play().catch(err => {
                                 console.warn(`Error playing sample ${sample.id}:`, err);
                             });
-                            scheduleClipFades(ws, sample, 0, effDuration);
+                            scheduleClipFades(ws, sample, clipOffset, effDuration);
                         }
                     } catch (err) {
-                        console.warn('Error starting sample at t=0:', err);
+                        console.warn('Error starting sample at playhead:', err);
                     }
                 });
 
-                toneTransportRef.current.start();
+                toneTransportRef.current.start(undefined, startPos);
             } else {
                 Object.values(wavesurfersRef.current).forEach(ws => {
                     try {
@@ -1873,7 +1881,9 @@ const MultiTrackSampler = () => {
                 });
 
                 startTimeRef.current = audioContextRef.current.currentTime - (playheadPosition / timeScale);
-                toneTransportRef.current.start('+' + (playheadPosition / timeScale));
+                // Start the transport AT the playhead offset (a '+delay' start would
+                // postpone MIDI instead of skipping to the right position)
+                toneTransportRef.current.start(undefined, playheadPosition);
                 setIsPaused(false);
             }
 
@@ -1951,7 +1961,7 @@ const MultiTrackSampler = () => {
 
             // Initialize the next metronome beat index from the current playhead
             const beatScaledInit = (60 / bpm) * timeScale;
-            metronomeNextBeatRef.current = Math.max(0, Math.ceil(((isPaused ? playheadPosition : 0) / beatScaledInit) - 1e-6));
+            metronomeNextBeatRef.current = Math.max(0, Math.ceil((playheadPosition / beatScaledInit) - 1e-6));
 
             playbackTimerRef.current = requestAnimationFrame(updatePlayhead);
         }
