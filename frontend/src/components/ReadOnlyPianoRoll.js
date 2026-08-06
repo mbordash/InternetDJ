@@ -28,7 +28,7 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
                     <div
                         key={note}
                         className={`absolute w-full h-[15px] ${
-                            note.includes('#') ? 'bg-[#121826]' : 'bg-[#0b0f1a]'
+                            note.includes('#') ? 'bg-[#0b0f1a]' : 'bg-[#3a4560]'
                         } border-t border-white/10`}
                         style={{ top: `${index * rowHeight}px` }}
                     />

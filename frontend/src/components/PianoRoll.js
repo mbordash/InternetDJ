@@ -59,9 +59,10 @@ const PianoRoll = ({
         ctx.save();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        ctx.fillStyle = '#e5e7eb';
+        // White-key (natural) rows get a lighter tint; sharp rows stay dark
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
         notesList.forEach((note, index) => {
-            if (!isDrumTrack && note.includes('#')) {
+            if (!isDrumTrack && !note.includes('#')) {
                 const y = index * rowHeight;
                 if (isMinimized && y >= minimizedHeight) return;
                 ctx.fillRect(0, y, gridWidth, rowHeight);

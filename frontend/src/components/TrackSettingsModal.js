@@ -345,12 +345,12 @@ const TrackSettingsModal = ({
         }
     }, [synthParams, envelope, voice0, instrumentType, isMidiTrack]);
 
-    const buildSettings = (updatedSynthParams = synthParams, updatedEnvelope = envelope, updatedVoice0 = voice0) => {
+    const buildSettings = (updatedSynthParams = synthParams, updatedEnvelope = envelope, updatedVoice0 = voice0, updatedInstrumentType = instrumentType) => {
         const settings = { volume, pan };
         if (isMidiTrack) {
-            settings.instrument_type = instrumentType;
+            settings.instrument_type = updatedInstrumentType;
             settings.is_polyphonic = polyphonic;
-            settings.synth_settings = instrumentType === 'drumsampler' ? {} : {
+            settings.synth_settings = updatedInstrumentType === 'drumsampler' ? {} : {
                 synthParams: updatedSynthParams,
                 envelope: updatedEnvelope,
                 voice0: updatedVoice0,
@@ -495,7 +495,7 @@ const TrackSettingsModal = ({
                                             value={instrumentType}
                                             onChange={(e) => {
                                                 const newInstrument = e.target.value;
-                                                handleSettingChange(setInstrumentType, newInstrument, 'instrument_type');
+                                                setInstrumentType(newInstrument);
                                                 const newSynthParams = {
                                                     harmonicity: synthConfigs[newInstrument]?.params.harmonicity || 1,
                                                     modulationIndex: synthConfigs[newInstrument]?.params.modulationIndex || 10,
@@ -519,7 +519,9 @@ const TrackSettingsModal = ({
                                                 setSynthParams(newSynthParams);
                                                 setEnvelope(newEnvelope);
                                                 setVoice0(newVoice0);
-                                                const settings = buildSettings(newSynthParams, newEnvelope, newVoice0);
+                                                // Pass newInstrument explicitly: state hasn't flushed yet,
+                                                // so buildSettings would otherwise read the stale instrument
+                                                const settings = buildSettings(newSynthParams, newEnvelope, newVoice0, newInstrument);
                                                 if (hasChanges(settings)) {
                                                     debouncedSave(settings, (savedSettings) => {
                                                         onSettingsChange(track.id, savedSettings);

@@ -1499,14 +1499,10 @@ const MultiTrackSampler = () => {
                                 const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
                                 const sampleStart = sample.start_time * timeScale;
 
+                                // Prep only — playback of t=0 clips begins after ALL
+                                // samples are loaded, so audio and playhead start together.
                                 if (sampleStart < maxDuration && effDuration > 0) {
                                     wsInstance.seekTo(fullDuration ? Math.min(trimStart / fullDuration, 1) : 0);
-                                    if (sampleStart <= 0) {
-                                        wsInstance.play().catch(err => {
-                                            console.warn(`Error playing sample ${sample.id}:`, err);
-                                        });
-                                        scheduleClipFades(wavesurfersRef.current[sample.id], sample, 0, effDuration);
-                                    }
                                 }
                                 resolve();
                             } catch (err) {
@@ -1549,12 +1545,15 @@ const MultiTrackSampler = () => {
                                 onload: params.onload,
                             };
                         } else {
+                            // Merge saved settings over the instrument's defaults so
+                            // characteristic params (e.g. oscillator type) are kept
                             synthParams = track.synth_settings
                                 ? {
+                                    ...params,
                                     ...track.synth_settings.synthParams,
-                                    envelope: track.synth_settings.envelope,
-                                    voice0: track.synth_settings.voice0,
-                                    voice1: track.synth_settings.voice0 ? { detune: -track.synth_settings.voice0.detune } : undefined,
+                                    envelope: { ...params.envelope, ...track.synth_settings.envelope },
+                                    voice0: { ...params.voice0, ...track.synth_settings.voice0 },
+                                    voice1: track.synth_settings.voice0 ? { ...params.voice1, detune: -track.synth_settings.voice0.detune } : params.voice1,
                                 }
                                 : params;
                         }
@@ -1632,6 +1631,27 @@ const MultiTrackSampler = () => {
 
                 startTimeRef.current = audioContextRef.current.currentTime;
                 setPlayheadPosition(0);
+
+                // Everything is loaded — start clips at t=0 in the same instant
+                // the playhead clock starts, so audio and UI stay in sync.
+                Object.values(wavesurfersRef.current).forEach(ws => {
+                    try {
+                        if (!ws.ready) return;
+                        const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
+                        if (!sample) return;
+                        const fullDuration = sampleDurations[sample.id] || ws.instance.getDuration();
+                        const { effDuration } = getClipTimes(sample, fullDuration);
+                        if (sample.start_time * timeScale <= 0 && effDuration > 0) {
+                            ws.instance.play().catch(err => {
+                                console.warn(`Error playing sample ${sample.id}:`, err);
+                            });
+                            scheduleClipFades(ws, sample, 0, effDuration);
+                        }
+                    } catch (err) {
+                        console.warn('Error starting sample at t=0:', err);
+                    }
+                });
+
                 toneTransportRef.current.start();
             } else {
                 Object.values(wavesurfersRef.current).forEach(ws => {
@@ -1731,12 +1751,15 @@ const MultiTrackSampler = () => {
                                 onload: params.onload,
                             };
                         } else {
+                            // Merge saved settings over the instrument's defaults so
+                            // characteristic params (e.g. oscillator type) are kept
                             synthParams = track.synth_settings
                                 ? {
+                                    ...params,
                                     ...track.synth_settings.synthParams,
-                                    envelope: track.synth_settings.envelope,
-                                    voice0: track.synth_settings.voice0,
-                                    voice1: track.synth_settings.voice0 ? { detune: -track.synth_settings.voice0.detune } : undefined,
+                                    envelope: { ...params.envelope, ...track.synth_settings.envelope },
+                                    voice0: { ...params.voice0, ...track.synth_settings.voice0 },
+                                    voice1: track.synth_settings.voice0 ? { ...params.voice1, detune: -track.synth_settings.voice0.detune } : params.voice1,
                                 }
                                 : params;
                         }
