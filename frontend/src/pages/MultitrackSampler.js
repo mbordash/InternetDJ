@@ -1279,6 +1279,9 @@ const MultiTrackSampler = () => {
                     setTracks(prev => [...prev, action.data.track]);
                     setProjectSamples(prev => [...prev, ...action.data.samples]);
                     break;
+                case 'midiChange':
+                    saveMidiNotes(action.data.trackId, action.data.prevNotes);
+                    break;
                 default:
                     break;
             }
@@ -1309,6 +1312,9 @@ const MultiTrackSampler = () => {
                 case 'deleteTrack':
                     setTracks(prev => prev.filter(t => t.id !== action.data.track.id));
                     setProjectSamples(prev => prev.filter(s => !action.data.samples.some(ds => ds.id === s.id)));
+                    break;
+                case 'midiChange':
+                    saveMidiNotes(action.data.trackId, action.data.newNotes);
                     break;
                 default:
                     break;
@@ -1341,14 +1347,39 @@ const MultiTrackSampler = () => {
         });
     };
 
+    // Persist MIDI notes without touching history (used by undo/redo)
+    const saveMidiNotes = async (trackId, notesToSave) => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_URL}/projects/${projectId}/tracks/${trackId}/midi`,
+                { midi_notes: notesToSave },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            handleNotesChange(trackId, notesToSave);
+        } catch (err) {
+            console.error('Failed to save MIDI notes:', err.response?.data || err.message);
+            setError('Failed to save MIDI notes: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    // PianoRoll already persisted the notes; record the edit for undo/redo
+    const handlePianoRollNotesChange = (trackId, newNotes) => {
+        const prevNotes = tracks.find(t => t.id === trackId)?.midi_notes || [];
+        pushToHistory({ type: 'midiChange', data: { trackId, prevNotes, newNotes } });
+        handleNotesChange(trackId, newNotes);
+    };
+
     // Save generated MIDI notes to a track (used by the ✨ generate modal)
     const handleApplyGeneratedNotes = async (trackId, newNotes) => {
+        const prevNotes = tracks.find(t => t.id === trackId)?.midi_notes || [];
         const token = localStorage.getItem('token');
         await axios.put(
             `${API_URL}/projects/${projectId}/tracks/${trackId}/midi`,
             { midi_notes: newNotes },
             { headers: { Authorization: `Bearer ${token}` } }
         );
+        pushToHistory({ type: 'midiChange', data: { trackId, prevNotes, newNotes } });
         handleNotesChange(trackId, newNotes);
     };
 
@@ -2253,7 +2284,18 @@ const MultiTrackSampler = () => {
             return;
         }
         const { effDuration } = getClipTimes(original, fullDuration);
-        const newStartTime = Math.round((original.start_time + effDuration) * 100) / 100;
+        let newStartTime = original.start_time + effDuration;
+        // Snap to the nearest 1/16 so copies stay on the musical grid — raw MP3
+        // durations include encoder padding, which otherwise drifts every copy
+        if (isSnapping) {
+            const timeScale = 120 / bpm;
+            const snapIntervalScaled = (15 / bpm) * timeScale;
+            const snapped = Math.round(newStartTime / snapIntervalScaled) * snapIntervalScaled;
+            if (snapped > original.start_time) {
+                newStartTime = snapped;
+            }
+        }
+        newStartTime = Math.round(newStartTime * 1000) / 1000;
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
@@ -2292,11 +2334,13 @@ const MultiTrackSampler = () => {
             return;
         }
         const barLength = 240 / bpm; // 4 beats in real seconds
-        const maxEnd = notes.reduce((max, n) => Math.max(max, n.start_time + n.duration), 0);
-        const patternLength = Math.max(barLength, Math.ceil(maxEnd / barLength - 0.001) * barLength);
+        // Pattern length = end of the bar containing the last note START, so long
+        // note tails ringing past the bar line don't push the copy out (gap bug)
+        const maxStart = notes.reduce((max, n) => Math.max(max, n.start_time), 0);
+        const patternLength = (Math.floor(maxStart / barLength + 1e-6) + 1) * barLength;
         const shifted = notes.map(n => ({
             ...n,
-            start_time: Math.round((n.start_time + patternLength) * 100) / 100,
+            start_time: Math.round((n.start_time + patternLength) * 1000) / 1000,
         }));
         const newNotes = [...notes, ...shifted];
         try {
@@ -2652,7 +2696,7 @@ const MultiTrackSampler = () => {
                                                     title="Repeat pattern: copy all notes after the last bar"
                                                     aria-label={`Repeat pattern on ${track.name}`}
                                                 >
-                                                    ⟳ Repeat
+                                                    ⟳ Dupe Notes
                                                 </button>
                                             </div>
                                         )}
@@ -2721,7 +2765,7 @@ const MultiTrackSampler = () => {
                                                 isSnapping={isSnapping}
                                                 timelineDuration={timelineDuration}
                                                 onExtendTimeline={extendTimelineIfNeeded}
-                                                onNotesChange={handleNotesChange}
+                                                onNotesChange={handlePianoRollNotesChange}
                                                 isMinimized={minimizedTracks[track.id] ?? true}
                                             />
                                         ) : (
