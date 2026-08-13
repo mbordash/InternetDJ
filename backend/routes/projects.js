@@ -178,7 +178,7 @@ router.get('/:projectId', authenticate, async (req, res) => {
     const { projectId } = req.params;
     try {
         const projects = await pool.query(
-            'SELECT id, title, created_at, is_public FROM projects WHERE id = ? AND user_id = ?',
+            'SELECT id, title, created_at, is_public, bpm FROM projects WHERE id = ? AND user_id = ?',
             [projectId, req.user.id]
         );
         if (!projects.length) {
@@ -888,7 +888,7 @@ router.delete('/:projectId', authenticate, async (req, res) => {
 
 router.put('/:projectId', authenticate, async (req, res) => {
     const { projectId } = req.params;
-    const { title, is_public } = req.body;
+    const { title, is_public, bpm } = req.body;
     try {
         const project = await pool.query(
             'SELECT id FROM projects WHERE id = ? AND user_id = ?',
@@ -909,6 +909,14 @@ router.put('/:projectId', authenticate, async (req, res) => {
         if (is_public !== undefined) {
             updates.is_public = is_public;
             values.push(is_public);
+        }
+        if (bpm !== undefined) {
+            const parsedBpm = Number(bpm);
+            if (!Number.isInteger(parsedBpm) || parsedBpm < 60 || parsedBpm > 240) {
+                return res.status(400).json({ error: 'BPM must be an integer between 60 and 240' });
+            }
+            updates.bpm = parsedBpm;
+            values.push(parsedBpm);
         }
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({ error: 'No valid fields to update' });

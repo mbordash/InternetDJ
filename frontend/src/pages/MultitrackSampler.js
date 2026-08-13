@@ -11,6 +11,7 @@ import PianoRoll from '../components/PianoRoll';
 import TrackSettingsModal from '../components/TrackSettingsModal';
 import TrackEffectsModal from '../components/TrackEffectsModal';
 import MidiGenerateModal from '../components/MidiGenerateModal';
+import StemGenerateModal from '../components/StemGenerateModal';
 import synthConfigs from '../config/synthConfigs';
 import API_URL from '../utils/api';
 
@@ -30,6 +31,25 @@ const PASTEL_COLORS = [
 ];
 
 // Non-destructive clip window: trim_start/trim_end are offsets (seconds) into the source sample
+// Timeline unit convention
+// ------------------------
+// The timeline x-axis is MUSICAL time, expressed in "timeline units" — seconds
+// measured at the 120 BPM reference tempo. One beat is always 0.5 units and one
+// bar always 2 units, at every tempo, so the grid and the clips on it never move
+// when the project tempo changes. What tempo changes is how fast the playhead
+// crosses that fixed canvas:
+//   realSeconds = timelineUnits * timeScale,   timeScale = 120 / bpm
+// Drop to 90 BPM and timeScale becomes 1.333, so the same bar takes a third
+// longer to play — the song slows down, the ruler stays put. At 120 BPM
+// timeScale is exactly 1 and units and real seconds coincide.
+//
+// Stored in UNITS: playheadPosition, timelineDuration, audio clip start_time.
+// Stored in REAL SECONDS: audio file/clip durations, fade lengths, MIDI note
+// start_time and duration, and anything handed to an AudioContext.
+// Convert at the boundary; never add one to the other.
+const unitsToReal = (timelineUnits, timeScale) => timelineUnits * timeScale;
+const realToUnits = (realSeconds, timeScale) => realSeconds / timeScale;
+
 const getClipTimes = (sample, fullDuration) => {
     const trimStart = Math.max(0, sample.trim_start || 0);
     const rawEnd = sample.trim_end != null ? sample.trim_end : (fullDuration || 0);
@@ -37,7 +57,7 @@ const getClipTimes = (sample, fullDuration) => {
     return { trimStart, trimEnd, effDuration: Math.max(0, trimEnd - trimStart) };
 };
 
-const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadingDurations, waveformColor, trackVolume, onClipEdit, isSelected, onSelect, onDuplicate }) => {
+const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, timeScale, isLoadingDurations, waveformColor, trackVolume, onClipEdit, isSelected, onSelect, onDuplicate }) => {
     const waveformRef = useRef(null);
     const wavesurfer = useRef(null);
     const abortController = useRef(new AbortController());
@@ -104,7 +124,8 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, isLoadin
 
     const { effDuration } = getClipTimes(sample, duration);
     const hasClipEdits = (sample.trim_start || 0) > 0 || sample.trim_end != null || (sample.fade_in || 0) > 0 || (sample.fade_out || 0) > 0;
-    const blockWidth = effDuration * zoom;
+    // effDuration is real seconds; the block is drawn on the timeline-units axis
+    const blockWidth = realToUnits(effDuration, timeScale) * zoom;
 
     return (
         <div
@@ -288,7 +309,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
 
             if (isSnapping) {
                 const snapIntervalReal = 15 / bpm; // 1/16 note
-                const snapIntervalScaled = snapIntervalReal * timeScale;
+                const snapIntervalScaled = realToUnits(snapIntervalReal, timeScale);
                 start_time = Math.round(start_time / snapIntervalScaled) * snapIntervalScaled;
             }
 
@@ -314,7 +335,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
     });
 
     const timeScale = 120 / bpm;
-    const totalRealSeconds = timelineDuration / timeScale;
+    const totalRealSeconds = unitsToReal(timelineDuration, timeScale);
     const minorInterval = 15 / bpm; // 1/16 note in real seconds
     const numMinorMarkers = Math.ceil(totalRealSeconds / minorInterval);
 
@@ -330,7 +351,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
         >
             {Array.from({ length: numMinorMarkers }, (_, i) => {
                 const realTime = i * minorInterval;
-                const scaledTime = realTime * timeScale;
+                const scaledTime = realToUnits(realTime, timeScale);
                 const pixelPosition = scaledTime * zoom;
                 const isBarMarker = i % 16 === 0; // bar = 16 sixteenths
                 const isBeatMarker = i % 4 === 0; // beat = 4 sixteenths
@@ -358,6 +379,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                     volume={sample.volume ?? 1}
                     zoom={zoom}
                     duration={sampleDurations[sample.id] || 0}
+                    timeScale={timeScale}
                     isLoadingDurations={isLoadingDurations}
                     waveformColor={waveformColor}
                     trackVolume={trackVolume}
@@ -496,6 +518,7 @@ const MultiTrackSampler = () => {
     const [minimizedTracks, setMinimizedTracks] = useState({});
     const [selectedTrackForEffects, setSelectedTrackForEffects] = useState(null);
     const [selectedTrackForGenerate, setSelectedTrackForGenerate] = useState(null);
+    const [selectedTrackForStem, setSelectedTrackForStem] = useState(null);
     const effectsNodes = useRef({});
     const [metronomeOn, setMetronomeOn] = useState(false);
     const metronomeRef = useRef(false);
@@ -729,10 +752,12 @@ const MultiTrackSampler = () => {
             const timeScale = 120 / bpm;
             let maxEndTime = 0;
 
+            // maxEndTime is in timeline units: clip starts already are, but clip
+            // and note lengths are real seconds and need converting first
             if (projectSamples.length > 0 && Object.keys(sampleDurations).length > 0) {
                 maxEndTime = projectSamples.reduce((max, sample) => {
                     const duration = sampleDurations[sample.id] || 0;
-                    const endTime = sample.start_time + duration;
+                    const endTime = sample.start_time + realToUnits(duration, timeScale);
                     return Math.max(max, endTime);
                 }, 0);
             }
@@ -746,10 +771,11 @@ const MultiTrackSampler = () => {
                 }
             });
 
-            const buffer = 10;
-            const scaledDuration = (maxEndTime + buffer) * timeScale;
-            const minDuration = 30 * timeScale;
-            setTimelineDuration(Math.max(scaledDuration, minDuration));
+            // Headroom and floor are musical (units), so the canvas length does
+            // not jump around when the tempo changes
+            const buffer = 10; // 5 bars
+            const minDuration = 30; // 15 bars
+            setTimelineDuration(Math.max(maxEndTime + buffer, minDuration));
         };
 
         calculateTimelineDuration();
@@ -775,6 +801,7 @@ const MultiTrackSampler = () => {
                 setLibrarySamples(Array.isArray(librarySamples) ? librarySamples : []);
                 setIsPublic(project.is_public || false);
                 setEditTitle(project.title || '');
+                setBpm(project.bpm || 120);
             } catch (err) {
                 console.error('Fetch project error:', {
                     status: err.response?.status,
@@ -872,6 +899,7 @@ const MultiTrackSampler = () => {
             setProjectSamples(projectSamples);
             setLibrarySamples(librarySamples);
             setIsPublic(project.is_public);
+            setBpm(project.bpm || 120);
             setEditTitle(project.title);
 
             setError(null);
@@ -1094,6 +1122,33 @@ const MultiTrackSampler = () => {
         }
     };
 
+    // Persist the project tempo. Debounced because the number input fires on
+    // every keystroke, and clamped to the same range the API accepts.
+    const bpmSaveTimerRef = useRef(null);
+    const handleBpmChange = (value) => {
+        const clamped = Math.max(60, Math.min(240, Math.round(value || 0) || 120));
+        setBpm(clamped);
+        setProject(prev => (prev ? { ...prev, bpm: clamped } : prev));
+        if (bpmSaveTimerRef.current) clearTimeout(bpmSaveTimerRef.current);
+        bpmSaveTimerRef.current = setTimeout(async () => {
+            try {
+                const token = localStorage.getItem('token');
+                await axios.put(
+                    `${API_URL}/projects/${projectId}`,
+                    { bpm: clamped },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            } catch (err) {
+                console.error('Save BPM error:', err.response?.data || err.message);
+                setError('Failed to save BPM: ' + (err.response?.data?.error || err.message));
+            }
+        }, 600);
+    };
+
+    useEffect(() => () => {
+        if (bpmSaveTimerRef.current) clearTimeout(bpmSaveTimerRef.current);
+    }, []);
+
     const handleTogglePublic = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -1114,7 +1169,7 @@ const MultiTrackSampler = () => {
         try {
             setIsLoadingDurations(true);
             const timeScale = 120 / bpm;
-            let totalRealSeconds = timelineDuration / timeScale;
+            let totalRealSeconds = unitsToReal(timelineDuration, timeScale);
 
             const sampleRate = 44100;
             const offlineContext = new OfflineAudioContext(2, Math.ceil(sampleRate * totalRealSeconds), sampleRate);
@@ -1139,7 +1194,7 @@ const MultiTrackSampler = () => {
                 panner.pan.value = track?.pan ?? 0;
 
                 const baseGain = (sample.volume ?? 1) * trackGain;
-                const when = sample.start_time * timeScale;
+                const when = unitsToReal(sample.start_time, timeScale);
                 const fadeIn = Math.min(sample.fade_in || 0, effDuration);
                 const fadeOut = Math.min(sample.fade_out || 0, effDuration);
                 if (fadeIn > 0) {
@@ -1180,8 +1235,8 @@ const MultiTrackSampler = () => {
                         gainNode.gain.setValueAtTime(trackGain * 0.5, 0);
                         oscillator.connect(gainNode);
                         gainNode.connect(trackPanner);
-                        oscillator.start(note.start_time * timeScale);
-                        oscillator.stop((note.start_time + note.duration) * timeScale);
+                        oscillator.start(unitsToReal(note.start_time, timeScale));
+                        oscillator.stop(unitsToReal(note.start_time + note.duration, timeScale));
                     });
                 }
             }
@@ -1323,15 +1378,16 @@ const MultiTrackSampler = () => {
         }
     };
 
-    const extendTimelineIfNeeded = (startTime, duration) => {
-        const timeScale = 120 / bpm;
-        const endTime = startTime + duration;
-        const currentDurationRealTime = timelineDuration / timeScale;
-        const threshold = 5;
+    // Grow the timeline when content lands near its end.
+    // Both args are in timeline units. Audio clip lengths are real seconds, so
+    // those callers convert with realToUnits() first. See the unit convention at
+    // the top of this file.
+    const extendTimelineIfNeeded = (startTime, durationUnits) => {
+        const endTime = startTime + durationUnits;
+        const threshold = 5; // units of headroom to keep ahead of content
 
-        if (endTime >= currentDurationRealTime - threshold) {
-            const extension = 10 * timeScale;
-            setTimelineDuration(prev => prev + extension);
+        if (endTime >= timelineDuration - threshold) {
+            setTimelineDuration(prev => prev + 10);
         }
     };
 
@@ -1381,6 +1437,34 @@ const MultiTrackSampler = () => {
         );
         pushToHistory({ type: 'midiChange', data: { trackId, prevNotes, newNotes } });
         handleNotesChange(trackId, newNotes);
+    };
+
+    // Place an AI-generated stem (already copied into the sample library by the
+    // ✨ generate modal) onto a sample track at the playhead
+    const handleApplyGeneratedStem = async (trackId, librarySample) => {
+        setLibrarySamples(prev => [...prev, librarySample]);
+
+        const timeScale = 120 / bpm;
+        let start_time = playheadPosition;
+        if (isSnapping) {
+            const snapIntervalScaled = realToUnits(15 / bpm, timeScale); // 1/16 note
+            start_time = Math.round(start_time / snapIntervalScaled) * snapIntervalScaled;
+        }
+        start_time = Math.max(0, Math.round(start_time * 1000) / 1000);
+
+        const token = localStorage.getItem('token');
+        const response = await axios.post(
+            `${API_URL}/projects/${projectId}/samples`,
+            { track_id: trackId, sample_id: librarySample.id, start_time },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setProjectSamples(prev => {
+            pushToHistory({ type: 'addSample', data: response.data });
+            extendTimelineIfNeeded(start_time, realToUnits(librarySample.duration || 0, timeScale));
+            return [...prev, response.data];
+        });
+        setSelectedSampleId(response.data.id);
+        setError(null);
     };
 
     const handlePlayAll = async () => {
@@ -1469,7 +1553,8 @@ const MultiTrackSampler = () => {
             }
 
             const timeScale = 120 / bpm;
-            let maxDuration = timelineDuration / timeScale;
+            // Compared against the playhead below, so keep it in timeline units
+            let maxDuration = timelineDuration;
 
             // A true resume requires loaded players; a seek from stopped state
             // (isPaused set but nothing loaded) must take the fresh-play path.
@@ -1578,7 +1663,7 @@ const MultiTrackSampler = () => {
 
                                 const fullDuration = sampleDurations[sample.id] || wsInstance.getDuration();
                                 const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                                const sampleStart = sample.start_time * timeScale;
+                                const sampleStart = sample.start_time;
 
                                 // Prep only — playback of t=0 clips begins after ALL
                                 // samples are loaded, so audio and playhead start together.
@@ -1692,10 +1777,11 @@ const MultiTrackSampler = () => {
                         lastNode.connect(midiPanner);
                         midiPanner.toDestination();
 
+                        // Note times are musical units; the transport is real seconds
                         track.midi_notes.forEach(note => {
                             toneTransportRef.current.schedule(time => {
-                                synth.triggerAttackRelease(note.note, note.duration, time);
-                            }, note.start_time * timeScale);
+                                synth.triggerAttackRelease(note.note, unitsToReal(note.duration, timeScale), time);
+                            }, unitsToReal(note.start_time, timeScale));
                         });
                     }
                 });
@@ -1710,7 +1796,7 @@ const MultiTrackSampler = () => {
                     return;
                 }
 
-                startTimeRef.current = audioContextRef.current.currentTime - (startPos / timeScale);
+                startTimeRef.current = audioContextRef.current.currentTime - unitsToReal(startPos, timeScale);
                 setPlayheadPosition(startPos);
 
                 // Everything is loaded — start clips under the playhead in the same
@@ -1722,9 +1808,11 @@ const MultiTrackSampler = () => {
                         if (!sample) return;
                         const fullDuration = sampleDurations[sample.id] || ws.instance.getDuration();
                         const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                        const clipStart = sample.start_time * timeScale;
-                        if (clipStart <= startPos && startPos < clipStart + effDuration && effDuration > 0) {
-                            const clipOffset = startPos - clipStart;
+                        const clipStart = sample.start_time;
+                        const clipLength = realToUnits(effDuration, timeScale);
+                        if (clipStart <= startPos && startPos < clipStart + clipLength && effDuration > 0) {
+                            // Offset into the audio file is real seconds, not units
+                            const clipOffset = unitsToReal(startPos - clipStart, timeScale);
                             ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
                             ws.instance.play().catch(err => {
                                 console.warn(`Error playing sample ${sample.id}:`, err);
@@ -1736,7 +1824,7 @@ const MultiTrackSampler = () => {
                     }
                 });
 
-                toneTransportRef.current.start(undefined, startPos);
+                toneTransportRef.current.start(undefined, unitsToReal(startPos, timeScale));
             } else {
                 Object.values(wavesurfersRef.current).forEach(ws => {
                     try {
@@ -1749,11 +1837,11 @@ const MultiTrackSampler = () => {
                         if (ws.panner) ws.panner.pan.value = trackPans[sample.track_id] ?? 0;
                         const fullDuration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
                         const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                        const startTime = sample.start_time * timeScale;
-                        const endTime = startTime + effDuration;
+                        const startTime = sample.start_time;
+                        const endTime = startTime + realToUnits(effDuration, timeScale);
 
                         if (playheadPosition >= startTime && playheadPosition < endTime) {
-                            const clipOffset = playheadPosition - startTime;
+                            const clipOffset = unitsToReal(playheadPosition - startTime, timeScale);
                             ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
                             ws.instance.play().catch(err => {
                                 console.warn(`Error resuming sample ${ws.instance.sampleId}:`, err);
@@ -1901,20 +1989,21 @@ const MultiTrackSampler = () => {
                         lastNode.connect(midiPanner);
                         midiPanner.toDestination();
 
+                        // Note times are musical units; the transport is real seconds
                         track.midi_notes.forEach(note => {
-                            if (note.start_time * timeScale >= playheadPosition) {
+                            if (note.start_time >= playheadPosition) {
                                 toneTransportRef.current.schedule(time => {
-                                    synth.triggerAttackRelease(note.note, note.duration, time);
-                                }, note.start_time * timeScale);
+                                    synth.triggerAttackRelease(note.note, unitsToReal(note.duration, timeScale), time);
+                                }, unitsToReal(note.start_time, timeScale));
                             }
                         });
                     }
                 });
 
-                startTimeRef.current = audioContextRef.current.currentTime - (playheadPosition / timeScale);
+                startTimeRef.current = audioContextRef.current.currentTime - unitsToReal(playheadPosition, timeScale);
                 // Start the transport AT the playhead offset (a '+delay' start would
                 // postpone MIDI instead of skipping to the right position)
-                toneTransportRef.current.start(undefined, playheadPosition);
+                toneTransportRef.current.start(undefined, unitsToReal(playheadPosition, timeScale));
                 setIsPaused(false);
             }
 
@@ -1924,17 +2013,17 @@ const MultiTrackSampler = () => {
                 let scaledElapsed;
                 if (audioContextRef.current.state === 'running') {
                     const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
-                    scaledElapsed = elapsed * timeScale;
+                    scaledElapsed = realToUnits(elapsed, timeScale);
                     fallbackCounterRef.current = scaledElapsed;
                 } else {
-                    fallbackCounterRef.current += 0.016 * timeScale;
+                    fallbackCounterRef.current += realToUnits(0.016, timeScale);
                     scaledElapsed = fallbackCounterRef.current;
                     console.warn('AudioContext suspended, using fallback counter:', scaledElapsed.toFixed(3), 's');
                 }
                 setPlayheadPosition(scaledElapsed);
 
                 // Metronome: fire clicks as the playhead crosses beat boundaries
-                const beatScaled = (60 / bpm) * timeScale;
+                const beatScaled = realToUnits(60 / bpm, timeScale); // always 0.5 units
                 while (scaledElapsed >= metronomeNextBeatRef.current * beatScaled) {
                     if (metronomeRef.current) {
                         try {
@@ -1964,11 +2053,11 @@ const MultiTrackSampler = () => {
                         if (!sample) return;
                         const fullDuration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
                         const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                        const startTime = sample.start_time * timeScale;
-                        const endTime = startTime + effDuration;
+                        const startTime = sample.start_time;
+                        const endTime = startTime + realToUnits(effDuration, timeScale);
 
                         if (scaledElapsed >= startTime && scaledElapsed < endTime && !ws.instance.isPlaying()) {
-                            const clipOffset = scaledElapsed - startTime;
+                            const clipOffset = unitsToReal(scaledElapsed - startTime, timeScale);
                             ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
                             ws.instance.play().catch(err => {
                                 console.warn(`Error playing sample ${ws.instance.sampleId}:`, err);
@@ -1991,7 +2080,7 @@ const MultiTrackSampler = () => {
             };
 
             // Initialize the next metronome beat index from the current playhead
-            const beatScaledInit = (60 / bpm) * timeScale;
+            const beatScaledInit = realToUnits(60 / bpm, timeScale);
             metronomeNextBeatRef.current = Math.max(0, Math.ceil((playheadPosition / beatScaledInit) - 1e-6));
 
             playbackTimerRef.current = requestAnimationFrame(updatePlayhead);
@@ -2100,7 +2189,7 @@ const MultiTrackSampler = () => {
 
         if (isSnapping) {
             const snapIntervalReal = 15 / bpm; // 1/16 note
-            const snapIntervalScaled = snapIntervalReal * timeScale;
+            const snapIntervalScaled = realToUnits(snapIntervalReal, timeScale);
             clickedTime = Math.round(clickedTime / snapIntervalScaled) * snapIntervalScaled;
         }
 
@@ -2243,10 +2332,13 @@ const MultiTrackSampler = () => {
                 { track_id: trackId, sample_id: sampleId, start_time },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
+            // The new clip has no entry in sampleDurations yet, so take the
+            // length from the library record it was placed from
+            const droppedLength = librarySamples.find(s => s.id === sampleId)?.duration || 0;
             setProjectSamples(prev => {
                 const updatedSamples = [...prev, response.data];
                 pushToHistory({ type: 'addSample', data: response.data });
-                extendTimelineIfNeeded(start_time, response.data.sample_id);
+                extendTimelineIfNeeded(start_time, realToUnits(droppedLength, 120 / bpm));
                 return updatedSamples;
             });
             setError(null);
@@ -2284,18 +2376,19 @@ const MultiTrackSampler = () => {
             return;
         }
         const { effDuration } = getClipTimes(original, fullDuration);
-        let newStartTime = original.start_time + effDuration;
-        // Snap to the nearest 1/16 so copies stay on the musical grid — raw MP3
-        // durations include encoder padding, which otherwise drifts every copy
-        if (isSnapping) {
-            const timeScale = 120 / bpm;
-            const snapIntervalScaled = (15 / bpm) * timeScale;
-            const snapped = Math.round(newStartTime / snapIntervalScaled) * snapIntervalScaled;
-            if (snapped > original.start_time) {
-                newStartTime = snapped;
-            }
-        }
-        newStartTime = Math.round(newStartTime * 1000) / 1000;
+        const timeScale = 120 / bpm;
+        // Butt-join: the copy starts exactly where the original ends so the audio
+        // continues seamlessly — that is the whole point of duplicating a clip.
+        // Deliberately NOT snapped to the 1/16 grid: any snap, however small,
+        // leaves a gap or an overlap at the seam, and a clip whose length is not an
+        // exact number of 1/16s would get one on every single copy. A loop that is
+        // meant to sit on the grid should be trimmed to a musical length (the clip
+        // trim controls), after which the exact join lands on the grid by itself.
+        // Sub-millisecond rounding, since chained copies build on the previous
+        // copy's stored start and coarse rounding would compound.
+        const newStartTime = Math.round(
+            (original.start_time + realToUnits(effDuration, timeScale)) * 10000
+        ) / 10000;
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
@@ -2313,7 +2406,7 @@ const MultiTrackSampler = () => {
             );
             setProjectSamples(prev => {
                 pushToHistory({ type: 'addSample', data: response.data });
-                extendTimelineIfNeeded(newStartTime, response.data.sample_id);
+                extendTimelineIfNeeded(newStartTime, realToUnits(effDuration, timeScale));
                 return [...prev, response.data];
             });
             // Select the new copy so Cmd+D can be chained to keep extending
@@ -2333,7 +2426,7 @@ const MultiTrackSampler = () => {
             setError('No notes to repeat on this track');
             return;
         }
-        const barLength = 240 / bpm; // 4 beats in real seconds
+        const barLength = 2; // 4 beats in timeline units, at any tempo
         // Pattern length = end of the bar containing the last note START, so long
         // note tails ringing past the bar line don't push the copy out (gap bug)
         const maxStart = notes.reduce((max, n) => Math.max(max, n.start_time), 0);
@@ -2366,6 +2459,9 @@ const MultiTrackSampler = () => {
             if (!originalSample) {
                 throw new Error('Sample not found');
             }
+            // Trim/fade settings carry over to the new clip, so its on-screen
+            // length is the original's effective length
+            const { effDuration: draggedLength } = getClipTimes(originalSample, sampleDurations[sampleId] || 0);
             const response = await axios.post(
                 `${API_URL}/projects/${projectId}/samples`,
                 {
@@ -2382,7 +2478,7 @@ const MultiTrackSampler = () => {
             setProjectSamples(prev => {
                 const updatedSamples = prev.filter(s => s.id !== sampleId).concat(response.data);
                 pushToHistory({ type: 'dragSample', data: { originalSample, newSample: response.data } });
-                extendTimelineIfNeeded(newStartTime, originalSample.sample_id);
+                extendTimelineIfNeeded(newStartTime, realToUnits(draggedLength, 120 / bpm));
                 return updatedSamples;
             });
             setError(null);
@@ -2478,7 +2574,7 @@ const MultiTrackSampler = () => {
     }
 
     const timeScale = 120 / bpm;
-    const beatIntervalScaled = (60 / bpm) * timeScale; // one beat in scaled units
+    const beatIntervalScaled = realToUnits(60 / bpm, timeScale); // one beat = 0.5 units
     const numBeatMarkers = Math.ceil(timelineDuration / beatIntervalScaled);
 
     return (
@@ -2535,7 +2631,7 @@ const MultiTrackSampler = () => {
                     <input
                         type="number"
                         value={bpm}
-                        onChange={(e) => setBpm(Math.max(60, Math.min(240, Number(e.target.value))))}
+                        onChange={(e) => handleBpmChange(Number(e.target.value))}
                         className="w-20 px-2 py-1 bg-gray-700 text-white border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
                         placeholder="BPM"
                         min="60"
@@ -2579,7 +2675,7 @@ const MultiTrackSampler = () => {
                         <label htmlFor="snap-toggle" className="text-sm text-gray-300">Snap to Grid (1/16)</label>
                     </div>
                     <span className="text-sm text-gray-300">
-                        Playhead: {(playheadPosition / (120 / bpm)).toFixed(1)}s
+                        Playhead: {unitsToReal(playheadPosition, timeScale).toFixed(1)}s
                     </span>
                 </div>
                 <div className="flex mb-6">
@@ -2668,6 +2764,20 @@ const MultiTrackSampler = () => {
                                                     disabled={isLoadingDurations}
                                                     title="Generate MIDI (AI)"
                                                     aria-label={`Generate MIDI for ${track.name}`}
+                                                >
+                                                    ✨
+                                                </button>
+                                            )}
+                                            {track.track_type !== 'midi' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedTrackForStem(tracks.find(t => t.id === track.id));
+                                                    }}
+                                                    className="bg-gray-700 text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={isLoadingDurations}
+                                                    title="Generate Sample (AI)"
+                                                    aria-label={`Generate AI sample for ${track.name}`}
                                                 >
                                                     ✨
                                                 </button>
@@ -2891,6 +3001,15 @@ const MultiTrackSampler = () => {
                         bpm={bpm}
                         onClose={() => setSelectedTrackForGenerate(null)}
                         onApply={handleApplyGeneratedNotes}
+                    />
+                )}
+                {selectedTrackForStem && (
+                    <StemGenerateModal
+                        track={selectedTrackForStem}
+                        bpm={bpm}
+                        startTime={playheadPosition}
+                        onClose={() => setSelectedTrackForStem(null)}
+                        onApply={handleApplyGeneratedStem}
                     />
                 )}
                 {selectedClip && (
