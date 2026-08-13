@@ -1,6 +1,6 @@
 // Music-theory-based MIDI generator.
 // Outputs notes in the piano roll's format: { note: 'F#3', start_time, duration }
-// (times in real seconds at the given BPM, quantized to 1/16 notes).
+// (times in timeline units — musical time, quantized to 1/16 notes).
 import { Scale, Note } from 'tonal';
 
 // Piano roll range is C2..C5
@@ -87,7 +87,6 @@ export function generateMelody({
     mode = 'minor',
     style = 'lead',
     bars = 4,
-    bpm = 120,
     density = 0.8, // 0..1, chance each rhythm slot is kept
     seed = Date.now(),
 } = {}) {
@@ -95,7 +94,7 @@ export function generateMelody({
     const pool = buildScalePool(key, mode);
     if (pool.length === 0) return [];
 
-    const sixteenth = 15 / bpm; // real seconds
+    const sixteenth = 0.125; // musical units (1/16 note) — tempo-independent
     const scaleSize = 7 <= pool.length ? new Set(pool.map(p => p.degree)).size : pool.length;
     const progressions = PROGRESSIONS[isMinorish(mode) ? 'minorish' : 'majorish'];
     const progression = progressions[Math.floor(rand() * progressions.length)];

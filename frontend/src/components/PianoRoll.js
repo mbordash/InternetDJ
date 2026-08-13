@@ -38,14 +38,14 @@ const PianoRoll = ({
     const fullGridHeight = notesList.length * rowHeight;
     const minimizedHeight = 80;
     const gridWidth = timelineDuration * zoom;
-    const timeScale = 120 / bpm;
+    // Notes and the grid are both in timeline units, so nothing here depends on
+    // the tempo — the piano roll looks identical at every BPM.
     const pixelsPerSecond = zoom;
     const currentHeight = isMinimized ? minimizedHeight : fullGridHeight;
-    const minorInterval = 0.1;
-    const majorInterval = 1.0;
-    const totalRealSeconds = timelineDuration / timeScale;
-    const numMinorMarkers = Math.ceil(totalRealSeconds / minorInterval);
-    const segmentDuration = 0.25; // Increased for audibility
+    const minorInterval = 0.125; // a 1/16 note in timeline units
+    const majorInterval = 0.5; // one beat
+    const numMinorMarkers = Math.ceil(timelineDuration / minorInterval);
+    const segmentDuration = 0.25; // half a beat, in timeline units
 
     useEffect(() => {
         if (track.midi_notes == null || !Array.isArray(track.midi_notes)) {
@@ -88,10 +88,9 @@ const PianoRoll = ({
 
         ctx.strokeStyle = '#ccc';
         for (let i = 0; i < numMinorMarkers; i++) {
-            const realTime = i * minorInterval;
-            const scaledTime = realTime * timeScale;
-            const pixelPosition = scaledTime * pixelsPerSecond;
-            const isMajorMarker = Math.abs(realTime % majorInterval) < 0.001;
+            const unitTime = i * minorInterval;
+            const pixelPosition = unitTime * pixelsPerSecond;
+            const isMajorMarker = Math.abs(unitTime % majorInterval) < 0.001;
 
             ctx.beginPath();
             ctx.moveTo(pixelPosition, 0);
@@ -109,8 +108,8 @@ const PianoRoll = ({
             }
             const y = noteIndex * rowHeight;
             if (isMinimized && y >= minimizedHeight) return;
-            const x = note.start_time * timeScale * pixelsPerSecond;
-            const width = note.duration * timeScale * pixelsPerSecond;
+            const x = note.start_time * pixelsPerSecond;
+            const width = note.duration * pixelsPerSecond;
             ctx.fillStyle = selectedIndices.has(idx) ? '#22d3ee' : '#9333ea';
             ctx.fillRect(x, y, width, rowHeight);
         });
@@ -180,11 +179,11 @@ const PianoRoll = ({
             return;
         }
 
-        let startTime = x / pixelsPerSecond / timeScale;
+        // Notes are stored in timeline units, so the grid is the same at any tempo
+        let startTime = x / pixelsPerSecond;
         if (isSnapping) {
-            const snapIntervalReal = 0.05;
-            const snapIntervalScaled = snapIntervalReal * timeScale;
-            startTime = Math.round(startTime / snapIntervalScaled) * snapIntervalScaled;
+            const snapUnits = 0.0625; // 1/32 note
+            startTime = Math.round(startTime / snapUnits) * snapUnits;
         }
         startTime = Number(startTime.toFixed(2));
 
@@ -255,8 +254,8 @@ const PianoRoll = ({
                     notes.forEach((note, idx) => {
                         const noteIndex = notesList.indexOf(note.note);
                         if (noteIndex === -1) return;
-                        const nx1 = note.start_time * timeScale * pixelsPerSecond;
-                        const nx2 = nx1 + note.duration * timeScale * pixelsPerSecond;
+                        const nx1 = note.start_time * pixelsPerSecond;
+                        const nx2 = nx1 + note.duration * pixelsPerSecond;
                         const ny1 = noteIndex * rowHeight;
                         const ny2 = ny1 + rowHeight;
                         if (nx1 < lx2 && nx2 > lx1 && ny1 < ly2 && ny2 > ly1) {
