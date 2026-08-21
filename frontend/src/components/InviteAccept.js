@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import API_URL from '../utils/api';
+import profilePath from '../utils/profilePath';
 
 const InviteAccept = () => {
     const { token } = useParams(); // Get invite token from URL
@@ -40,7 +41,7 @@ const InviteAccept = () => {
                 setSuccess(true);
                 // Redirect to collaborations page after 2 seconds
                 setTimeout(() => {
-                    navigate(`/profile/${user.profile_id}/collaborations`);
+                    navigate(`${profilePath(user)}/collaborations`);
                 }, 2000);
             } catch (err) {
                 console.error('Invitation acceptance error:', err.response || err);

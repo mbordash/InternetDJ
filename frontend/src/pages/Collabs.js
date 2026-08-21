@@ -7,6 +7,7 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import { AuthContext } from '../context/AuthContext';
+import profilePath from '../utils/profilePath';
 
 function Collabs() {
     const { user } = useContext(AuthContext);
@@ -45,7 +46,7 @@ function Collabs() {
                     <h1 className="text-3xl font-bold text-white tracking-tight">Public Collaborations</h1>
                     {user ? (
                         <Link
-                            to={`/profile/${user.profile_id || user.id}/collaborations`}
+                            to={`${profilePath(user)}/collaborations`}
                             className="retro-btn retro-btn--hot px-4 py-2 rounded-full text-sm transition-colors"
                         >
                             Create/Manage Collabs
@@ -96,7 +97,7 @@ function Collabs() {
 
                                 <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
                                     <Link
-                                        to={collab.profile_id ? `/profile/${collab.profile_id}` : '#'}
+                                        to={collab.profile_id ? profilePath(collab) : '#'}
                                         className="flex items-center gap-2 min-w-0"
                                     >
                                         <img
@@ -114,7 +115,7 @@ function Collabs() {
                                             </span>
                                         )}
                                         <Link
-                                            to={collab.profile_id ? `/profile/${collab.profile_id}` : '#'}
+                                            to={collab.profile_id ? profilePath(collab) : '#'}
                                             className="text-sm text-primary-brand-300 hover:text-primary-brand-200"
                                         >
                                             Open Profile

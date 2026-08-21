@@ -6,6 +6,7 @@ import { PlayIcon, PauseIcon, XMarkIcon, ForwardIcon, BackwardIcon, HeartIcon as
 import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import API_URL from '../utils/api';
+import profilePath from '../utils/profilePath';
 
 const DiscordIcon = ({ className }) => (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -224,7 +225,7 @@ const Footer = () => {
                                 <div className="retro-mono text-lg truncate">
                                     {currentSong.profile_id && currentSong.profile_name ? (
                                         <Link
-                                            to={`/profile/${currentSong.profile_id}`}
+                                            to={profilePath(currentSong)}
                                             className="retro-link"
                                             aria-label={`View profile of ${currentSong.profile_name}`}
                                         >

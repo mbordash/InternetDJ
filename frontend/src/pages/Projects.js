@@ -9,6 +9,7 @@ import { getDefaultAvatar } from '../utils/defaultAvatar';
 import { PlusIcon } from '@heroicons/react/24/solid';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMusic, faVolumeUp, faHeadphones, faSlidersH, faFileAudio } from '@fortawesome/free-solid-svg-icons';
+import profilePath from '../utils/profilePath';
 
 const Projects = () => {
     const { user } = useContext(AuthContext);
@@ -342,7 +343,7 @@ const Projects = () => {
                                                 Creator:{' '}
                                                 {project.creator && project.profile_id ? (
                                                     <Link
-                                                        to={`/profile/${project.profile_id}`}
+                                                        to={profilePath(project)}
                                                         className="retro-link ml-1"
                                                         aria-label={`View ${project.creator}'s profile`}
                                                     >

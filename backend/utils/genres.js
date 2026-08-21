@@ -100,4 +100,106 @@ function aliasSourcesFor(key) {
     return [...sources];
 }
 
-module.exports = { normalizeGenre, aliasSourcesFor, GENRE_ALIASES };
+/**
+ * Genres people typed as one run-on string.
+ *
+ * The upload form only commits a tag when it sees a comma, so anything left in
+ * the box at submit time becomes a single genre no matter how long it is. That
+ * produces entries like "Trance Analog Trance Tech House", which then show up
+ * as their own genre in the directory.
+ *
+ * GENRE_VOCAB is the set we're confident enough about to pull such a string
+ * apart. Matching is longest-first so "tech house" wins over "tech" + "house",
+ * and multi-word genres like "deep house" are never split into their parts.
+ */
+const GENRE_VOCAB = [
+    'house', 'deep house', 'tech house', 'progressive house', 'electro house', 'acid house',
+    'funky house', 'tribal house', 'afro house', 'disco house',
+    'trance', 'tech trance', 'progressive trance', 'uplifting trance', 'psytrance', 'hard trance',
+    'techno', 'minimal techno', 'detroit techno', 'acid techno', 'hard techno',
+    'drum bass', 'jungle', 'breaks', 'dubstep', 'garage', 'uk garage', 'grime',
+    'ambient', 'downtempo', 'chillout', 'electro', 'electronic', 'idm', 'edm',
+    'disco', 'nudisco', 'funk', 'soul', 'jazz', 'blues', 'reggae', 'dub', 'ska',
+    'hiphop', 'triphop', 'lofi', 'rnb', 'pop', 'rock', 'metal', 'punk', 'indie', 'folk',
+    'acid', 'minimal', 'hardcore', 'gabber', 'hardstyle', 'synthwave', 'vaporwave',
+    'experimental', 'industrial', 'ebm', 'darkwave', 'shoegaze', 'post rock',
+].map(normalizeGenre);
+
+const VOCAB_SET = new Set(GENRE_VOCAB);
+const MAX_VOCAB_WORDS = GENRE_VOCAB.reduce((max, entry) => Math.max(max, entry.split(' ').length), 1);
+
+/**
+ * Try to pull a run-on genre string into its parts.
+ * Returns an array of normalised keys, or null when the string should be left
+ * exactly as it is — which is the answer for ordinary genres, for anything we
+ * don't recognise, and for free-text nobody has used before.
+ */
+function splitGenreBlob(raw) {
+    const words = normalizeGenre(raw).split(' ').filter(Boolean);
+    if (words.length < 2) return null;
+
+    const found = [];
+    const gaps = [];
+    let i = 0;
+    while (i < words.length) {
+        let matched = null;
+        for (let n = Math.min(MAX_VOCAB_WORDS, words.length - i); n >= 1; n--) {
+            const candidate = words.slice(i, i + n).join(' ');
+            if (VOCAB_SET.has(candidate)) {
+                matched = { candidate, n };
+                break;
+            }
+        }
+        if (matched) {
+            found.push(matched.candidate);
+            i += matched.n;
+        } else {
+            gaps.push(words[i]);
+            i += 1;
+        }
+    }
+
+    const unique = [...new Set(found)];
+    // Only act when the string really does decompose into several known genres
+    // and little is left over. One stray word ("analog") is tolerable; a
+    // sentence of them means this was never a genre list at all.
+    const tolerance = Math.max(1, Math.floor(words.length * 0.25));
+    if (unique.length >= 2 && gaps.length <= tolerance) return unique;
+    return null;
+}
+
+/**
+ * Turn one raw genre field into the normalised keys it represents, splitting
+ * commas first and then rescuing any run-on strings.
+ */
+function expandGenreString(rawField) {
+    const keys = [];
+    String(rawField || '').split(',').forEach(part => {
+        const trimmed = part.trim();
+        if (!trimmed) return;
+        const split = splitGenreBlob(trimmed);
+        if (split) {
+            split.forEach(key => keys.push({ key, raw: key, fromBlob: true }));
+        } else {
+            const key = normalizeGenre(trimmed);
+            if (key) keys.push({ key, raw: trimmed, fromBlob: false });
+        }
+    });
+    return keys;
+}
+
+/**
+ * A genre that is long AND used exactly once is almost certainly a mistake —
+ * someone typed a sentence into the genre box. We never delete it: the song
+ * keeps its tag and a direct link still works. It just doesn't earn a tile in
+ * the Browse directory, where it would sit alongside real genres.
+ *
+ * Deliberately conservative. Three- and four-word genres are real
+ * ("progressive psychedelic trance"), and anything used by two or more songs is
+ * evidently meaningful to more than one person.
+ */
+function isLikelyJunkGenre(key, count) {
+    return String(key || '').split(' ').filter(Boolean).length >= 5 && count <= 1;
+}
+
+module.exports = { normalizeGenre, aliasSourcesFor, splitGenreBlob, expandGenreString, isLikelyJunkGenre, GENRE_ALIASES, GENRE_VOCAB };

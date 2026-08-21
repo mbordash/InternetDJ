@@ -6,6 +6,7 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { Helmet } from 'react-helmet-async';
 import API_URL from '../utils/api';
+import profilePath from '../utils/profilePath';
 
 function Forum() {
     const [posts, setPosts] = useState([]);
@@ -292,7 +293,7 @@ function Forum() {
                                     "author": {
                                         "@type": "Person",
                                         "name": post.user_name || "Anonymous",
-                                        "url": post.profile_id ? `${baseUrl}/profile/${post.profile_id}` : undefined
+                                        "url": post.profile_id ? `${baseUrl}${profilePath(post)}` : undefined
                                     },
                                     "datePublished": post.created_at ? new Date(post.created_at).toISOString() : undefined,
                                     "interactionStatistic": [
@@ -442,7 +443,7 @@ function Forum() {
                                                          </Link>
                                                          <div className="retro-mono text-lg text-gray-400">
                                                              <Link
-                                                                 to={`/profile/${post.profile_id}`}
+                                                                 to={profilePath(post)}
                                                                  className="retro-link"
                                                              >
                                                                  {post.user_name}
@@ -481,7 +482,7 @@ function Forum() {
                                                             <>
                                                                 {formatDate(post.last_commented_at)} by{' '}
                                                                 <Link
-                                                                    to={`/profile/${post.last_commenter_id}`}
+                                                                    to={profilePath({ profile_slug: post.last_commenter_slug, profile_id: post.last_commenter_id })}
                                                                     className="retro-link"
                                                                 >
                                                                     {post.last_commenter_name || 'Unknown'}
@@ -526,7 +527,7 @@ function Forum() {
                                                 </Link>
                                                 <div className="retro-mono text-base text-gray-400">
                                                     <Link
-                                                        to={`/profile/${post.profile_id}`}
+                                                        to={profilePath(post)}
                                                         className="retro-link"
                                                     >
                                                         {post.user_name}

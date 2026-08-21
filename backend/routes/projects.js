@@ -8,7 +8,7 @@ router.get('/public', async (req, res) => {
     try {
         const projects = await pool.query(
             `SELECT p.id, p.title, p.created_at, p.user_id,
-                    COALESCE(pr.name, u.name) AS creator_name, pr.id AS profile_id, pr.picture_url
+                    COALESCE(pr.name, u.name) AS creator_name, pr.id AS profile_id, pr.slug AS profile_slug, pr.picture_url
              FROM projects p
                       JOIN users u ON p.user_id = u.id
                       LEFT JOIN profiles pr ON p.user_id = pr.user_id
@@ -23,6 +23,7 @@ router.get('/public', async (req, res) => {
             user_id: Number(project.user_id),
             creator: project.creator_name,
             profile_id: project.profile_id ? Number(project.profile_id) : null,
+            profile_slug: project.profile_slug || null,
             picture_url: project.picture_url || null
         })));
     } catch (err) {
@@ -40,7 +41,7 @@ router.get('/public/:projectId', async (req, res) => {
     try {
         const projects = await pool.query(
             `SELECT p.id, p.title, p.created_at, p.is_public, p.user_id, p.bpm,
-                    COALESCE(pr.name, u.name) AS creator_name, pr.id AS profile_id, pr.picture_url
+                    COALESCE(pr.name, u.name) AS creator_name, pr.id AS profile_id, pr.slug AS profile_slug, pr.picture_url
              FROM projects p
                       JOIN users u ON p.user_id = u.id
                       LEFT JOIN profiles pr ON p.user_id = pr.user_id
@@ -70,6 +71,7 @@ router.get('/public/:projectId', async (req, res) => {
                 user_id: Number(projects[0].user_id),
                 creator: projects[0].creator_name,
                 profile_id: projects[0].profile_id ? Number(projects[0].profile_id) : null,
+                profile_slug: projects[0].profile_slug || null,
                 picture_url: projects[0].picture_url || null,
                 bpm: Number(projects[0].bpm) || 120,
             },

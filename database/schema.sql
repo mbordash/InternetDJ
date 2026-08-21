@@ -351,3 +351,10 @@ ALTER TABLE project_samples
 -- Cache decoded audio duration (seconds) to avoid client-side probing
 ALTER TABLE sample_library
     ADD COLUMN IF NOT EXISTS duration FLOAT DEFAULT NULL;
+
+-- Vanity profile URLs: /profile/dj-subspace as well as /profile/18.
+-- NULL means "no slug chosen yet", and MySQL/MariaDB allow many NULLs in a
+-- UNIQUE index, so existing profiles need no backfill. The table collation is
+-- utf8mb4_general_ci, so uniqueness is already case-insensitive.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS slug VARCHAR(40) DEFAULT NULL;
+ALTER TABLE profiles ADD UNIQUE KEY IF NOT EXISTS profiles_slug_unique (slug);

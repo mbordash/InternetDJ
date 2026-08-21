@@ -4,7 +4,7 @@ const { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aw
 const s3Client = require('../config/tigris');
 const authenticate = require('../middleware/authenticate');
 const logger = require('../utils/logger');
-const { normalizeGenre, aliasSourcesFor } = require('../utils/genres');
+const { normalizeGenre, aliasSourcesFor, expandGenreString, isLikelyJunkGenre } = require('../utils/genres');
 const router = express.Router();
 const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
@@ -60,7 +60,7 @@ router.get('/user-songs', authenticate, async (req, res) => {
 
         // Fetch songs uploaded by this profile_id
         const rows = await pool.query(`
-            SELECT s.*, p.name AS profile_name,
+            SELECT s.*, p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -77,6 +77,7 @@ router.get('/user-songs', authenticate, async (req, res) => {
             profile_id: Number(row.profile_id),
             plays: Number(row.plays) || 0,
             profile_name: row.profile_name || 'Unknown',
+            profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
             allow_download: Boolean(row.allow_download),
         }));
@@ -178,7 +179,7 @@ router.get('/:songId/similar', async (req, res) => {
             // No genres – fall back to most-played songs by other artists
             const fallback = await pool.query(`
                 SELECT s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
-                       p.name AS profile_name,
+                       p.name AS profile_name, p.slug AS profile_slug,
                        (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
                         WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
                 FROM songs s
@@ -197,7 +198,7 @@ router.get('/:songId/similar', async (req, res) => {
 
         const rows = await pool.query(`
             SELECT s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
-                   p.name AS profile_name,
+                   p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
@@ -218,6 +219,7 @@ router.get('/:songId/similar', async (req, res) => {
                 genre: r.genre,
                 profile_id: Number(r.profile_id),
                 profile_name: r.profile_name || 'Unknown',
+                profile_slug: r.profile_slug || null,
                 likes_count: Number(r.likes_count) || 0,
             }))
         });
@@ -245,6 +247,7 @@ router.get('/:songId/activity', async (req, res) => {
             SELECT
                 'song_liked' AS type,
                 p.id          AS actor_profile_id,
+                p.slug        AS actor_profile_slug,
                 p.name        AS actor_name,
                 p.picture_url AS actor_picture,
                 ps.added_at   AS created_at,
@@ -262,6 +265,7 @@ router.get('/:songId/activity', async (req, res) => {
             SELECT
                 'playlist_add'  AS type,
                 p.id            AS actor_profile_id,
+                p.slug        AS actor_profile_slug,
                 p.name          AS actor_name,
                 p.picture_url   AS actor_picture,
                 ps.added_at     AS created_at,
@@ -279,6 +283,7 @@ router.get('/:songId/activity', async (req, res) => {
             SELECT
                 'song_reviewed' AS type,
                 p.id            AS actor_profile_id,
+                p.slug        AS actor_profile_slug,
                 p.name          AS actor_name,
                 p.picture_url   AS actor_picture,
                 r.created_at    AS created_at,
@@ -295,6 +300,7 @@ router.get('/:songId/activity', async (req, res) => {
             SELECT
                 'profile_followed' AS type,
                 follower_p.id      AS actor_profile_id,
+                follower_p.slug    AS actor_profile_slug,
                 follower_p.name    AS actor_name,
                 follower_p.picture_url AS actor_picture,
                 f.created_at       AS created_at,
@@ -311,6 +317,7 @@ router.get('/:songId/activity', async (req, res) => {
             .map(row => ({
                 type: row.type,
                 actor_profile_id: row.actor_profile_id != null ? Number(row.actor_profile_id) : null,
+                actor_profile_slug: row.actor_profile_slug || null,
                 actor_name: row.actor_name || 'Someone',
                 actor_picture: row.actor_picture || null,
                 created_at: row.created_at,
@@ -332,7 +339,7 @@ router.get('/featured', async (req, res) => {
         const rows = await pool.query(
             `
             SELECT
-                s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name,
+                s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name, p.slug AS profile_slug,
                 (SELECT COUNT(*)
                  FROM playlist_songs ps
                           JOIN playlists pl ON ps.playlist_id = pl.id
@@ -372,6 +379,7 @@ router.get('/featured', async (req, res) => {
             plays: Number(rows[0].plays) || 0,
             genre: rows[0].genre,
             profile_name: rows[0].profile_name || 'Unknown',
+            profile_slug: rows[0].profile_slug || null,
             likes_count: Number(rows[0].likes_count) || 0,
         };
 
@@ -390,7 +398,7 @@ router.get('/unreviewed', async (req, res) => {
 
         const rows = await pool.query(`
             WITH RankedSongs AS (
-                SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name,
+                SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name, p.slug AS profile_slug,
                        (SELECT COUNT(*)
                         FROM playlist_songs ps
                                  JOIN playlists pl ON ps.playlist_id = pl.id
@@ -417,6 +425,7 @@ router.get('/unreviewed', async (req, res) => {
             plays: Number(row.plays) || 0,
             genre: row.genre,
             profile_name: row.profile_name || 'Unknown',
+            profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
         }));
 
@@ -436,7 +445,7 @@ router.get('/search', async (req, res) => {
 
         // Search songs
         const songRows = await pool.query(`
-            SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name,
+            SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -457,12 +466,13 @@ router.get('/search', async (req, res) => {
             plays: Number(row.plays) || 0,
             genre: row.genre,
             profile_name: row.profile_name || 'Unknown',
+            profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
         }));
 
         // Search profiles
         const profileRows = await pool.query(`
-            SELECT p.id, p.user_id, p.name, p.genre, p.picture_url, p.created_at,
+            SELECT p.id, p.user_id, p.name, p.slug, p.genre, p.picture_url, p.created_at,
                    COALESCE(SUM(s.plays), 0) AS total_plays
             FROM profiles p
                      LEFT JOIN songs s ON s.profile_id = p.id
@@ -492,7 +502,7 @@ router.get('/search', async (req, res) => {
 router.get('/by-genre', async (req, res) => {
     try {
         const rows = await pool.query(`
-            SELECT s.genre, s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name,
+            SELECT s.genre, s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -517,6 +527,7 @@ router.get('/by-genre', async (req, res) => {
                 image_url: row.image_url,
                 plays: Number(row.plays) || 0,
                 profile_name: row.profile_name || 'Unknown',
+                profile_slug: row.profile_slug || null,
                 likes_count: Number(row.likes_count) || 0,
             });
             return acc;
@@ -558,9 +569,9 @@ router.get('/by-tags', async (req, res) => {
         // spelling was used so the label shown is the one artists actually type.
         const buckets = {};
         rows.forEach(row => {
-            const genres = row.genre ? row.genre.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
-            genres.forEach(rawTag => {
-                const tag = normalizeGenre(rawTag);
+            // expandGenreString also rescues run-on strings like
+            // "Trance Analog Trance Tech House" into their real genres.
+            expandGenreString(row.genre).forEach(({ key: tag, raw: rawTag }) => {
                 if (!tag) return;
                 const bucket = buckets[tag] || (buckets[tag] = { count: 0, thumbs: [], labels: {} });
                 bucket.count += 1;
@@ -576,6 +587,7 @@ router.get('/by-tags', async (req, res) => {
         // `tag` stays lowercase so it round-trips through /tag/:tag links;
         // `label` is the most-used spelling, for display.
         const result = Object.keys(buckets)
+            .filter(tag => !isLikelyJunkGenre(tag, buckets[tag].count))
             .map(tag => {
                 const { count, thumbs, labels } = buckets[tag];
                 const label = Object.keys(labels)
@@ -604,18 +616,16 @@ router.get('/genres', async (req, res) => {
 
         const buckets = {};
         rows.forEach(row => {
-            (row.genre || '').split(',').forEach(rawTag => {
-                const trimmed = rawTag.trim();
-                if (!trimmed) return;
-                const key = normalizeGenre(trimmed);
+            expandGenreString(row.genre).forEach(({ key, raw }) => {
                 if (!key) return;
                 const bucket = buckets[key] || (buckets[key] = { count: 0, labels: {} });
                 bucket.count += 1;
-                bucket.labels[trimmed] = (bucket.labels[trimmed] || 0) + 1;
+                bucket.labels[raw] = (bucket.labels[raw] || 0) + 1;
             });
         });
 
         const genres = Object.keys(buckets)
+            .filter(key => !isLikelyJunkGenre(key, buckets[key].count))
             .map(key => {
                 const { count, labels } = buckets[key];
                 // Most-used spelling wins. On a tie prefer the longer, more
@@ -651,7 +661,7 @@ router.get('/tag/:tag/overview', async (req, res) => {
         }
 
         const rows = await pool.query(`
-            SELECT s.genre, s.plays, s.created_at, s.profile_id, p.name AS profile_name, p.picture_url
+            SELECT s.genre, s.plays, s.created_at, s.profile_id, p.name AS profile_name, p.slug AS profile_slug, p.picture_url
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
             WHERE s.genre IS NOT NULL AND s.genre != ''
@@ -665,8 +675,7 @@ router.get('/tag/:tag/overview', async (req, res) => {
         let newest = null;
 
         rows.forEach(row => {
-            const parts = (row.genre || '').split(',').map(part => part.trim()).filter(Boolean);
-            const keys = parts.map(part => ({ raw: part, key: normalizeGenre(part) }));
+            const keys = expandGenreString(row.genre);
             const hit = keys.find(entry => entry.key === wanted);
             if (!hit) return;
 
@@ -690,6 +699,7 @@ router.get('/tag/:tag/overview', async (req, res) => {
                 const id = Number(row.profile_id);
                 const artist = artists[id] || (artists[id] = {
                     profile_id: id,
+                    profile_slug: row.profile_slug || null,
                     name: row.profile_name || 'Unknown',
                     picture_url: row.picture_url || null,
                     tracks: 0,
@@ -779,9 +789,7 @@ router.get('/by-tag/:tag', async (req, res) => {
         `);
 
         const matchingIds = candidates
-            .filter(row => (row.genre || '')
-                .split(',')
-                .some(part => normalizeGenre(part) === wanted))
+            .filter(row => expandGenreString(row.genre).some(entry => entry.key === wanted))
             .map(row => Number(row.id));
 
         if (matchingIds.length === 0) {
@@ -792,7 +800,7 @@ router.get('/by-tag/:tag', async (req, res) => {
         // sorting and pagination in SQL where they belong.
         const placeholders = matchingIds.map(() => '?').join(',');
         const query = `
-            SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name,
+            SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -814,6 +822,7 @@ router.get('/by-tag/:tag', async (req, res) => {
             image_url: row.image_url,
             plays: Number(row.plays) || 0,
             profile_name: row.profile_name || 'Unknown',
+            profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
         }));
 
@@ -1000,7 +1009,7 @@ router.get('/most-played', async (req, res) => {
             FROM (
                      SELECT
                          s.*,
-                         p.name AS profile_name,
+                         p.name AS profile_name, p.slug AS profile_slug,
                          ROW_NUMBER() OVER (
                         PARTITION BY s.profile_id 
                         ORDER BY s.plays DESC, s.id DESC
@@ -1036,6 +1045,7 @@ router.get('/most-played', async (req, res) => {
                 profile_id: Number(safeRow.profile_id),
                 plays: Number(safeRow.plays) || 0,
                 profile_name: safeRow.profile_name || 'Unknown',
+                profile_slug: safeRow.profile_slug || null,
                 likes_count: Number(safeRow.likes_count) || 0,
             };
         });
@@ -1053,7 +1063,7 @@ router.get('/highest-rated', async (req, res) => {
         const rows = await pool.query(`
             SELECT
                 s.*,
-                p.name AS profile_name,
+                p.name AS profile_name, p.slug AS profile_slug,
                 COALESCE(l.likes_count, 0) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
@@ -1076,6 +1086,7 @@ router.get('/highest-rated', async (req, res) => {
             profile_id: Number(row.profile_id),
             plays: Number(row.plays) || 0,
             profile_name: row.profile_name || 'Unknown',
+            profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
         }));
 
@@ -1094,7 +1105,7 @@ router.get('/latest', async (req, res) => {
             FROM (
                      SELECT
                          s.*,
-                         p.name AS profile_name,
+                         p.name AS profile_name, p.slug AS profile_slug,
                          ROW_NUMBER() OVER (PARTITION BY s.profile_id ORDER BY s.created_at DESC) AS row_num,
                              (
                                  SELECT COUNT(*)
@@ -1128,6 +1139,7 @@ router.get('/latest', async (req, res) => {
                 profile_id: Number(safeRow.profile_id),
                 plays: Number(safeRow.plays) || 0,
                 profile_name: safeRow.profile_name || 'Unknown',
+                profile_slug: safeRow.profile_slug || null,
                 likes_count: Number(safeRow.likes_count) || 0,
             };
         });
@@ -1142,7 +1154,7 @@ router.get('/latest', async (req, res) => {
 router.get('/this-month', async (req, res) => {
     try {
         const rows = await pool.query(`
-            SELECT s.*, p.name AS profile_name,
+            SELECT s.*, p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -1159,6 +1171,7 @@ router.get('/this-month', async (req, res) => {
             plays: Number(row.plays) || 0,
             genre: row.genre || 'Unknown',
             profile_name: row.profile_name || 'Unknown',
+            profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
         }));
         res.json(Array.isArray(sanitizedRows) ? sanitizedRows : []);
@@ -1175,7 +1188,7 @@ router.get('/:songId', async (req, res) => {
             return res.status(400).json({ error: 'Invalid song ID' });
         }
         const songs = await pool.query(`
-            SELECT s.*, p.name as profile_name, p.background, p.user_id,
+            SELECT s.*, p.name as profile_name, p.slug as profile_slug, p.background, p.user_id,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -1194,6 +1207,7 @@ router.get('/:songId', async (req, res) => {
             user_id: Number(songs[0].user_id),
             plays: Number(songs[0].plays) || 0,
             profile_name: songs[0].profile_name || 'Unknown Artist',
+            profile_slug: songs[0].profile_slug || null,
             background: songs[0].background || null,
             likes_count: Number(songs[0].likes_count) || 0,
             allow_download: Boolean(songs[0].allow_download),

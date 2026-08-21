@@ -3,6 +3,7 @@ import { useContext, useEffect, useState, useRef } from 'react';
 import API_URL from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
 import Logo from './Logo';
+import profilePath from '../utils/profilePath';
 
 function Navbar() {
     // Auth lives in AuthContext. The navbar used to keep its own copy and fetch
@@ -114,10 +115,10 @@ function Navbar() {
     // and the mobile sheet so the two can't drift apart.
     const accountLinks = user
         ? [
-            { to: `/profile/${user.profile_id || user.id}`, label: 'Profile' },
-            { to: `/profile/${user.profile_id || user.id}/songs-manager`, label: 'Songs Manager' },
+            { to: profilePath(user), label: 'Profile' },
+            { to: `${profilePath(user)}/songs-manager`, label: 'Songs Manager' },
             { to: '/playlists', label: 'Playlists' },
-            { to: `/profile/${user.profile_id || user.id}/collaborations`, label: 'Collabs' },
+            { to: `${profilePath(user)}/collaborations`, label: 'Collabs' },
             { to: '/settings', label: 'Settings' },
         ]
         : [

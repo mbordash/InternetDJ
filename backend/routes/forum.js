@@ -26,9 +26,10 @@ router.get('/posts', async (req, res) => {
                         fp.edited_at,
                         p.name AS user_name,
                         p.picture_url AS user_picture,
-                        p.id AS profile_id,
+                        p.id AS profile_id, p.slug AS profile_slug,
                         COUNT(fc.id) AS comment_count,
                         MAX(fc.created_at) AS last_commented_at,
+                        COALESCE(MAX(fc.created_at), fp.created_at) AS last_activity_at,
                         (SELECT p2.name FROM profiles p2
                          WHERE p2.user_id = (
                              SELECT fc2.user_id
@@ -44,12 +45,20 @@ router.get('/posts', async (req, res) => {
                              WHERE fc2.post_id = fp.id
                              ORDER BY fc2.created_at DESC
                             LIMIT 1
-                        )) AS last_commenter_id
+                        )) AS last_commenter_id,
+                        (SELECT p2.slug FROM profiles p2
+                         WHERE p2.user_id = (
+                             SELECT fc2.user_id FROM forum_comments fc2
+                             WHERE fc2.post_id = fp.id
+                             ORDER BY fc2.created_at DESC LIMIT 1
+                         )) AS last_commenter_slug
                     FROM forum_posts fp
                         LEFT JOIN profiles p ON p.user_id = fp.user_id
                         LEFT JOIN forum_comments fc ON fc.post_id = fp.id
                     GROUP BY fp.id
-                    ORDER BY fp.created_at DESC
+                    -- Bumped by replies: a thread with a fresh answer belongs
+                    -- above a newer thread nobody has responded to.
+                    ORDER BY last_activity_at DESC, fp.id DESC
                         LIMIT ? OFFSET ?
                 `,
                 [limit, offset]
@@ -61,6 +70,7 @@ router.get('/posts', async (req, res) => {
             id: Number(post.id),
             user_id: Number(post.user_id),
             profile_id: Number(post.profile_id) || null,
+            profile_slug: post.profile_slug || null,
             title: post.title,
             content: post.content,
             image_url: post.image_url || null,
@@ -72,6 +82,8 @@ router.get('/posts', async (req, res) => {
             last_commented_at: post.last_commented_at || null,
             last_commenter_name: post.last_commenter_name || null,
             last_commenter_id: Number(post.last_commenter_id) || null,
+            last_commenter_slug: post.last_commenter_slug || null,
+            last_activity_at: post.last_activity_at || post.created_at || null,
         }));
 
         res.json({
@@ -150,7 +162,7 @@ router.post('/posts', authenticate, async (req, res) => {
                     fp.edited_at,
                     p.name AS user_name,
                     p.picture_url AS user_picture,
-                    p.id AS profile_id
+                    p.id AS profile_id, p.slug AS profile_slug
                 FROM forum_posts fp
                          LEFT JOIN profiles p ON p.user_id = fp.user_id
                 WHERE fp.id = ?
@@ -162,6 +174,7 @@ router.post('/posts', authenticate, async (req, res) => {
             id: Number(newPost.id),
             user_id: Number(newPost.user_id),
             profile_id: Number(newPost.profile_id) || null,
+            profile_slug: newPost.profile_slug || null,
             title: newPost.title,
             content: newPost.content,
             image_url: newPost.image_url || null,
@@ -261,7 +274,7 @@ router.get('/posts/:postId', async (req, res) => {
                     fp.edited_at,
                     p.name AS user_name,
                     p.picture_url AS user_picture,
-                    p.id AS profile_id
+                    p.id AS profile_id, p.slug AS profile_slug
                 FROM forum_posts fp
                          LEFT JOIN profiles p ON p.user_id = fp.user_id
                 WHERE fp.id = ?
@@ -281,7 +294,7 @@ router.get('/posts/:postId', async (req, res) => {
                     fc.parent_comment_id,
                     p.name AS user_name,
                     p.picture_url AS user_picture,
-                    p.id AS profile_id
+                    p.id AS profile_id, p.slug AS profile_slug
                 FROM forum_comments fc
                          LEFT JOIN profiles p ON p.user_id = fc.user_id
                 WHERE fc.post_id = ?
@@ -298,6 +311,7 @@ router.get('/posts/:postId', async (req, res) => {
             id: Number(post.id),
             user_id: Number(post.user_id),
             profile_id: Number(post.profile_id) || null,
+            profile_slug: post.profile_slug || null,
             title: post.title,
             content: post.content,
             image_url: post.image_url || null,
@@ -311,6 +325,7 @@ router.get('/posts/:postId', async (req, res) => {
             id: Number(comment.id),
             user_id: Number(comment.user_id),
             profile_id: Number(comment.profile_id) || null,
+            profile_slug: comment.profile_slug || null,
             content: comment.content,
             image_url: comment.image_url || null,
             created_at: comment.created_at,
@@ -409,7 +424,7 @@ router.post('/posts/:postId/comments', authenticate, async (req, res) => {
                     fc.parent_comment_id,
                     p.name AS user_name,
                     p.picture_url AS user_picture,
-                    p.id AS profile_id
+                    p.id AS profile_id, p.slug AS profile_slug
                 FROM forum_comments fc
                          LEFT JOIN profiles p ON p.user_id = fc.user_id
                 WHERE fc.id = ?
@@ -421,6 +436,7 @@ router.post('/posts/:postId/comments', authenticate, async (req, res) => {
             id: Number(newComment.id),
             user_id: Number(newComment.user_id),
             profile_id: Number(newComment.profile_id) || null,
+            profile_slug: newComment.profile_slug || null,
             content: newComment.content,
             image_url: newComment.image_url || null,
             created_at: newComment.created_at,
@@ -571,7 +587,7 @@ router.put('/posts/:postId', authenticate, async (req, res) => {
                     fp.edited_at,
                     p.name AS user_name,
                     p.picture_url AS user_picture,
-                    p.id AS profile_id
+                    p.id AS profile_id, p.slug AS profile_slug
                 FROM forum_posts fp
                 LEFT JOIN profiles p ON p.user_id = fp.user_id
                 WHERE fp.id = ?
@@ -583,6 +599,7 @@ router.put('/posts/:postId', authenticate, async (req, res) => {
             id: Number(updatedPost.id),
             user_id: Number(updatedPost.user_id),
             profile_id: Number(updatedPost.profile_id) || null,
+            profile_slug: updatedPost.profile_slug || null,
             title: updatedPost.title,
             content: updatedPost.content,
             image_url: updatedPost.image_url || null,
@@ -651,7 +668,7 @@ router.put('/posts/:postId/comments/:commentId', authenticate, async (req, res) 
                     fc.parent_comment_id,
                     p.name AS user_name,
                     p.picture_url AS user_picture,
-                    p.id AS profile_id
+                    p.id AS profile_id, p.slug AS profile_slug
                 FROM forum_comments fc
                 LEFT JOIN profiles p ON p.user_id = fc.user_id
                 WHERE fc.id = ?
@@ -663,6 +680,7 @@ router.put('/posts/:postId/comments/:commentId', authenticate, async (req, res) 
             id: Number(updatedComment.id),
             user_id: Number(updatedComment.user_id),
             profile_id: Number(updatedComment.profile_id) || null,
+            profile_slug: updatedComment.profile_slug || null,
             content: updatedComment.content,
             image_url: updatedComment.image_url || null,
             created_at: updatedComment.created_at,
@@ -687,7 +705,7 @@ router.get('/popular-posts', async (req, res) => {
                     fp.id,
                     fp.title,
                     p.name AS user_name,
-                    p.id AS profile_id,
+                    p.id AS profile_id, p.slug AS profile_slug,
                     COUNT(fc.id) AS comment_count
                 FROM forum_posts fp
                 LEFT JOIN profiles p ON p.user_id = fp.user_id
@@ -703,6 +721,7 @@ router.get('/popular-posts', async (req, res) => {
             title: post.title,
             user_name: post.user_name || 'Unknown',
             profile_id: Number(post.profile_id) || null,
+            profile_slug: post.profile_slug || null,
             comment_count: Number(post.comment_count) || 0,
         }));
 

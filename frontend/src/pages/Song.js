@@ -11,6 +11,7 @@ import sanitizeHtml from 'sanitize-html';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
+import profilePath from '../utils/profilePath';
 
 // Feedback criteria
 const feedbackCriteria = [
@@ -584,7 +585,7 @@ const Song = () => {
                         "byArtist": {
                             "@type": "MusicGroup",
                             "name": song?.profile_name || "Artist",
-                            "url": `${baseUrl}/profile/${song?.profile_id || 'default'}`
+                            "url": song?.profile_id ? `${baseUrl}${profilePath(song)}` : undefined
                         },
                         "description": cleanDescription, // Use the sanitized description
                         "url": `${baseUrl}/song/${songId}`,
@@ -698,7 +699,7 @@ const Song = () => {
                                     <div>
                                         <h1 className="retro-display text-2xl sm:text-3xl retro-chrome break-words">{song?.title || 'Loading...'}</h1>
                                         <Link
-                                            to={song?.profile_id ? `/profile/${song.profile_id}` : '#'}
+                                            to={song?.profile_id ? profilePath(song) : '#'}
                                              className={song?.profile_id ? 'retro-link retro-mono text-2xl' : 'text-gray-500 cursor-not-allowed retro-mono text-2xl'}
                                         >
                                             {song?.profile_name || 'Profile'}
@@ -796,7 +797,7 @@ const Song = () => {
                                                 >
                                                     <div className="flex items-start space-x-4">
                                                         <Link
-                                                            to={review.profile_id ? `/profile/${review.profile_id}` : '#'}
+                                                            to={review.profile_id ? profilePath(review) : '#'}
                                                             className={review.profile_id ? 'hover:underline' : 'cursor-not-allowed'}
                                                         >
                                                             <img
@@ -811,7 +812,7 @@ const Song = () => {
                                                         <div className="flex-1">
                                                             <div className="flex items-center justify-between">
                                                                 <Link
-                                                                    to={review.profile_id ? `/profile/${review.profile_id}` : '#'}
+                                                                    to={review.profile_id ? profilePath(review) : '#'}
                                                                     className={review.profile_id ? 'retro-link retro-mono text-lg' : 'text-gray-500 cursor-not-allowed text-sm font-semibold'}
                                                                 >
                                                                     {review.user_name}
@@ -940,7 +941,7 @@ const Song = () => {
                                                 return (
                                                 <li key={rowKey} className="flex items-start gap-3">
                                                     <Link
-                                                        to={item.actor_profile_id ? `/profile/${item.actor_profile_id}` : '#'}
+                                                        to={item.actor_profile_id ? profilePath({ profile_slug: item.actor_profile_slug, profile_id: item.actor_profile_id }) : '#'}
                                                         className="flex-shrink-0"
                                                     >
                                                         <img
@@ -953,7 +954,7 @@ const Song = () => {
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm text-gray-200 leading-snug">
                                                             <Link
-                                                                to={item.actor_profile_id ? `/profile/${item.actor_profile_id}` : '#'}
+                                                                to={item.actor_profile_id ? profilePath({ profile_slug: item.actor_profile_slug, profile_id: item.actor_profile_id }) : '#'}
                                                                 className="retro-link retro-mono text-lg"
                                                             >
                                                                 {item.actor_name}
@@ -1020,7 +1021,7 @@ const Song = () => {
                                                             {s.title}
                                                         </p>
                                                         <Link
-                                                            to={`/profile/${s.profile_id}`}
+                                                            to={profilePath(s)}
                                                             className="retro-mono text-base retro-link truncate block"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >

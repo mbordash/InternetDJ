@@ -7,6 +7,7 @@ import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import {Helmet} from "react-helmet-async";
 import { AuthContext } from '../context/AuthContext';
+import profilePath from '../utils/profilePath';
 
 const IDJ_COIN_MINT = 'DTLkUR3Sfp1LcPVZMSv8toTTK3iwU7WTdF66TawwJpKN';
 const RAYDIUM_SWAP_URL = `https://raydium.io/swap/?inputMint=sol&outputMint=${IDJ_COIN_MINT}&referrer=HjSJR8xGc1NbB3eULRUYC5EjZL6UpRJqBrtqFmhz8hi9`;
@@ -226,7 +227,7 @@ function IDJCoin() {
                             </button>
                             {claimStatus === 'needs_wallet' && user?.profile_id && (
                                 <Link
-                                    to={`/profile/${user.profile_id}`}
+                                    to={profilePath(user)}
                                     className="inline-block bg-white/10 text-white border border-white/10 px-6 py-3 rounded-full hover:bg-white/15 transition-colors font-semibold"
                                 >
                                     Add Solana Wallet in Profile
@@ -315,7 +316,7 @@ function IDJCoin() {
                     ) : (
                         <div className="space-y-4">
                             {topEarners.map((earner) => (
-                                <Link key={earner.id} to={`/profile/${earner.id}`} className="block">
+                                <Link key={earner.id} to={profilePath(earner)} className="block">
                                     <div className="flex items-center space-x-4 p-2 bg-white/5 border border-white/10 rounded-md shadow-sm hover:bg-white/10 transition-colors">
                                         <img
                                             src={earner.picture_url || getDefaultAvatar(earner.id || earner.name)}

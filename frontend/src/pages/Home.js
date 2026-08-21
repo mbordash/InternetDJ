@@ -8,6 +8,7 @@ import { Helmet } from 'react-helmet-async';
 import API_URL from '../utils/api';
 import IDJCoinLogo from '../assets/idj-coin.png';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
+import profilePath from '../utils/profilePath';
 
 function Home() {
     const { user } = useContext(AuthContext);
@@ -79,6 +80,8 @@ function Home() {
                     return profiles.map(p => ({
                         user_id: Number(p.user_id || 0),
                         profile_id: Number(p.profile_id || 0),
+                        // Carried through so links can use the vanity address.
+                        profile_slug: p.profile_slug || p.slug || null,
                         name: p.name || p.email || 'Unknown',
                         created_at: p.created_at || null,
                         total_plays: Number(p.total_plays) || 0,
@@ -132,6 +135,7 @@ function Home() {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || 'Unknown Artist',
         });
     };
@@ -219,7 +223,7 @@ function Home() {
                         {song.title}
                     </Link>
                     <Link
-                        to={`/profile/${song.profile_id}`}
+                        to={profilePath(song)}
                         className="retro-mono text-lg retro-link block truncate"
                     >
                         {song.profile_name || 'Unknown Artist'}
@@ -233,7 +237,7 @@ function Home() {
     const profileRow = (p, rank) => (
         <Link
             key={p.profile_id}
-            to={`/profile/${p.profile_id}`}
+            to={profilePath(p)}
             className="flex items-center gap-3 py-1.5 px-2 hover:bg-cyan-400/10 transition-colors group"
         >
             {rank != null && (

@@ -6,6 +6,7 @@ import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
+import profilePath from '../utils/profilePath';
 
 function Browse() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -94,6 +95,7 @@ function Browse() {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || 'Unknown Artist',
         });
     };
@@ -150,7 +152,7 @@ function Browse() {
 
     const ArtistLink = ({ song, className = '' }) => (
         <Link
-            to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
+            to={song.profile_id ? profilePath(song) : '#'}
             className={`retro-mono text-lg truncate ${song.profile_id ? 'retro-link' : 'text-gray-500 cursor-not-allowed'} ${className}`}
             title={song.profile_name}
         >

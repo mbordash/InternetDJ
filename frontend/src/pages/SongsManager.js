@@ -194,11 +194,14 @@ const SongsManager = () => {
             return;
         }
         const finalGenres = [...songForm.genres];
-        if (songForm.genreInput.trim()) {
-            const newTag = songForm.genreInput.trim();
-            if (newTag && !finalGenres.includes(newTag) && finalGenres.length < 3) {
-                finalGenres.push(newTag);
-            }
+        const leftover = songForm.genreInput.trim();
+        if (leftover) {
+            // Split a run-on entry rather than storing it as a single genre.
+            (splitTypedGenres(leftover) || [leftover]).forEach(part => {
+                if (finalGenres.length < 3 && !finalGenres.some(g => g.toLowerCase() === part.toLowerCase())) {
+                    finalGenres.push(part);
+                }
+            });
         }
         if (finalGenres.length > 3) {
             setError('Maximum 3 genres allowed');
@@ -270,6 +273,61 @@ const SongsManager = () => {
         .split(' ')
         .filter(word => word && word !== 'and' && word !== 'n')
         .join(' ');
+
+    // The form only used to commit a tag on a comma, so anything still in the box
+    // at submit time became one giant genre — that's where entries like
+    // "Trance Analog Trance Tech House" come from. Longest-match against the
+    // genres already in use pulls those apart, while leaving real multi-word
+    // genres ("Deep House") and brand-new ones alone.
+    const splitTypedGenres = (text) => {
+        const words = looseGenreKey(text).split(' ').filter(Boolean);
+        if (words.length < 2 || knownGenres.length === 0) return null;
+
+        const vocab = new Map();
+        knownGenres.forEach(g => {
+            const key = looseGenreKey(g.key || g.label);
+            if (key && key.split(' ').length <= 3) vocab.set(key, g.label);
+        });
+        if (vocab.size === 0) return null;
+        const maxWords = Math.max(...[...vocab.keys()].map(k => k.split(' ').length));
+
+        const found = [];
+        const gaps = [];
+        let i = 0;
+        while (i < words.length) {
+            let matched = null;
+            for (let n = Math.min(maxWords, words.length - i); n >= 1; n--) {
+                const candidate = words.slice(i, i + n).join(' ');
+                if (vocab.has(candidate)) { matched = { label: vocab.get(candidate), n }; break; }
+            }
+            if (matched) { found.push(matched.label); i += matched.n; }
+            else { gaps.push(words[i]); i += 1; }
+        }
+
+        const unique = [...new Set(found)];
+        const tolerance = Math.max(1, Math.floor(words.length * 0.25));
+        return unique.length >= 2 && gaps.length <= tolerance ? unique : null;
+    };
+
+    // One place that turns whatever is in the box into chips, used by comma,
+    // Enter, Tab, blur and submit alike.
+    const commitSongGenreInput = () => {
+        const typed = songForm.genreInput.trim();
+        if (!typed) return;
+        const parts = splitTypedGenres(typed) || [typed];
+        const next = [...songForm.genres];
+        parts.forEach(part => {
+            if (next.length < 3 && !next.some(g => g.toLowerCase() === part.toLowerCase())) {
+                next.push(part);
+            }
+        });
+        if (next.length === songForm.genres.length && parts.length) {
+            setError(songForm.genres.length >= 3 ? 'Maximum 3 genres allowed' : null);
+        } else {
+            setError(null);
+        }
+        setSongForm({ ...songForm, genres: next, genreInput: '' });
+    };
 
     const genreSuggestions = (typed, chosen) => {
         const q = looseGenreKey(typed);
@@ -378,11 +436,15 @@ const SongsManager = () => {
             return;
         }
         const finalGenres = [...editFormData.genres];
-        if (editFormData.genreInput.trim()) {
-            const newTag = editFormData.genreInput.trim();
-            if (newTag && !finalGenres.includes(newTag) && finalGenres.length < 3) {
-                finalGenres.push(newTag);
-            }
+        const editLeftover = editFormData.genreInput.trim();
+        if (editLeftover) {
+            // Same run-on split as the upload form, so editing can't reintroduce
+            // a genre like "Trance Analog Trance Tech House".
+            (splitTypedGenres(editLeftover) || [editLeftover]).forEach(part => {
+                if (finalGenres.length < 3 && !finalGenres.some(g => g.toLowerCase() === part.toLowerCase())) {
+                    finalGenres.push(part);
+                }
+            });
         }
         if (finalGenres.length > 3) {
             setError('Maximum 3 genres allowed');
@@ -658,6 +720,15 @@ const SongsManager = () => {
                                             className="flex-1 outline-none border-none p-0 m-1 min-w-[100px] text-sm bg-transparent text-white placeholder:text-gray-500"
                                         ref={songGenreInputRef}
                                         autoComplete="off"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === 'Tab') {
+                                                if (songForm.genreInput.trim()) {
+                                                    e.preventDefault();
+                                                    commitSongGenreInput();
+                                                }
+                                            }
+                                        }}
+                                        onBlur={commitSongGenreInput}
                                     />
                                 </div>
                                 {genreSuggestions(songForm.genreInput, songForm.genres).length > 0 && (
