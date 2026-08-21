@@ -40,7 +40,7 @@ function About() {
     };
 
     return (
-    <div className="text-gray-100 pt-2 min-h-screen">
+    <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
                 <title>About InternetDJ</title>
                 <meta
@@ -124,17 +124,17 @@ function About() {
 
             <div className="container mx-auto px-4 py-8">
                 <section className="mb-12">
-                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Our History</h2>
-                    <p className="text-gray-600 mb-4">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Our History</h2>
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
                         Founded in 1997, InternetDJ emerged during the early days of the internet as a platform for independent artists to share their music without the barriers of traditional record labels. Over the decades, we’ve evolved from a simple music-sharing site to a comprehensive creative suite, incorporating cutting-edge technology while staying true to our artist-first ethos.
                     </p>
-                    <p className="text-gray-600 mb-4">
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
                         Key milestones include the launch of our drag-and-drop music editor in 2005, the introduction of AI-driven mastering in 2018, and the integration of IDJ Coin in 2023 to reward community contributions. Today, InternetDJ serves millions of users worldwide, from hobbyists to chart-topping producers.
                     </p>
                 </section>
 
                 <section className="mb-12">
-                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Our Values</h2>
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Our Values</h2>
                     <ul className="list-disc list-inside text-gray-600 space-y-2">
                         <li><strong>Artist Ownership:</strong> Your music is yours. We never claim rights or use your work without permission.</li>
                         <li><strong>Community-Driven:</strong> We believe in the power of collaboration and mutual support among creators.</li>
@@ -144,8 +144,8 @@ function About() {
                 </section>
 
                 <section>
-                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Join Us</h2>
-                    <p className="text-gray-600 mb-4">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Join Us</h2>
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
                         Whether you’re an aspiring artist, a seasoned producer, or a music enthusiast, InternetDJ welcomes you. Start creating, connect with others, and be part of a global movement that celebrates creativity and independence.
                     </p>
                     <Link
@@ -158,8 +158,8 @@ function About() {
                 </section>
 
                 <section className="mt-12 pt-6 border-t border-white/10">
-                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Legal</h2>
-                    <p className="text-gray-600 mb-4">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Legal</h2>
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
                         Review the policies that govern your use of InternetDJ:
                     </p>
                     <div className="flex flex-wrap gap-4">
@@ -181,15 +181,15 @@ function About() {
                 </section>
 
                 <section className="mt-12 pt-6 border-t border-white/10">
-                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">Copyright &amp; Music Ownership</h2>
-                    <p className="text-gray-600 mb-4">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Copyright &amp; Music Ownership</h2>
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
                         InternetDJ does not claim ownership of any music uploaded to our platform. All music, recordings, compositions, and related content remain the exclusive property of their respective rights holders. InternetDJ serves solely as a hosting and distribution platform and holds no rights, licenses, or claims over any uploaded content beyond what is strictly necessary to operate the service.
                     </p>
                 </section>
 
                 <section className="mt-12 pt-6 border-t border-white/10">
-                    <h2 className="text-2xl font-bold mb-4 font-semibold tracking-tight">DMCA &amp; Copyright Infringement</h2>
-                    <p className="text-gray-600 mb-4">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">DMCA &amp; Copyright Infringement</h2>
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
                         InternetDJ respects intellectual property rights and complies with the Digital Millennium Copyright Act (DMCA). If you believe that content hosted on InternetDJ infringes your copyright, please send a written notification containing the following information to our designated DMCA agent:
                     </p>
                     <ul className="list-disc list-inside text-gray-600 space-y-2 mb-4">

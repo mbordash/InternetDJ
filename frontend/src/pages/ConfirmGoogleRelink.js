@@ -19,19 +19,20 @@ function ConfirmGoogleRelink() {
     }, [searchParams]);
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-                <h1 className="text-3xl font-bold text-gray-900 text-center mb-6">Confirm Google Account Re-link</h1>
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="retro-panel retro-cut max-w-md w-full p-8">
+                <div className="retro-eyebrow text-center mb-3">&gt;&gt; Account Link</div>
+                <h1 className="retro-display retro-chrome text-2xl text-center mb-6">Confirm Google Account Re-link</h1>
                 {error && (
-                    <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                    <div className="mb-6 p-4 border border-fuchsia-500/60 bg-fuchsia-500/10 retro-mono text-lg text-fuchsia-200">
                         {error}
                         <p className="mt-2">
-                            Return to <Link to="/login" className="text-blue-600 hover:text-primary-brand-800 font-medium">Login</Link>
+                            Return to <Link to="/login" className="retro-link">Login</Link>
                         </p>
                     </div>
                 )}
                 {!error && (
-                    <div className="text-center text-gray-700">
+                    <div className="retro-mono text-xl text-cyan-200 text-center">
                         Confirming Google account re-link, please wait...
                     </div>
                 )}

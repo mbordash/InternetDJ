@@ -455,7 +455,7 @@ router.get('/:profileId', async (req, res, next) => {
       return res.status(500).json({ error: 'Invalid profile data' });
     }
     const songs = await pool.query(`
-      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.is_featured, p.user_id, p.name as profile_name,
+      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, p.user_id, p.name as profile_name,
              (SELECT COUNT(*)
               FROM playlist_songs ps
                      JOIN playlists pl ON ps.playlist_id = pl.id
@@ -470,6 +470,7 @@ router.get('/:profileId', async (req, res, next) => {
       profile_id: Number(song.profile_id),
       plays: Number(song.plays) || 0,
       is_featured: Boolean(song.is_featured),
+      allow_download: Boolean(song.allow_download),
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
       likes_count: Number(song.likes_count) || 0,

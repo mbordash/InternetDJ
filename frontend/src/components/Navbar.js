@@ -1,11 +1,14 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
+import { useContext, useEffect, useState, useRef } from 'react';
 import API_URL from '../utils/api';
-import IDJHeaderLogo from '../assets/internetdj-logo-header.png';
+import { AuthContext } from '../context/AuthContext';
+import Logo from './Logo';
 
 function Navbar() {
-    const [user, setUser] = useState(null);
+    // Auth lives in AuthContext. The navbar used to keep its own copy and fetch
+    // /auth/me a second time, which meant logging out cleared the header but left
+    // every page still rendering the signed-in view.
+    const { user, setUser, sessionExpired, setSessionExpired } = useContext(AuthContext);
     const [isOpen, setIsOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -15,33 +18,20 @@ function Navbar() {
 
     useEffect(() => {
         const token = localStorage.getItem('token');
-        const urlParams = new URLSearchParams(location.search);
-        const sessionExpired = urlParams.get('sessionExpired');
-
-        if (sessionExpired && token) {
+        if (new URLSearchParams(location.search).get('sessionExpired') && token) {
             localStorage.removeItem('token');
             setUser(null);
-            return;
         }
+    }, [location, setUser]);
 
-        if (token) {
-            axios
-                .get(`${API_URL}/auth/me`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
-                .then((res) => {
-                    setUser(res.data);
-                })
-                .catch((err) => {
-                    console.error('Error fetching user:', err);
-                    if (err.response && err.response.status === 403) {
-                        localStorage.removeItem('token');
-                        setUser(null);
-                        navigate('/login?sessionExpired=true');
-                    }
-                });
+    // AuthContext detects the expired token; the navbar does the redirect,
+    // since AuthProvider is mounted outside the Router.
+    useEffect(() => {
+        if (sessionExpired) {
+            setSessionExpired(false);
+            navigate('/login?sessionExpired=true');
         }
-    }, [navigate, location]);
+    }, [sessionExpired, setSessionExpired, navigate]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -55,7 +45,8 @@ function Navbar() {
 
     const logout = () => {
         localStorage.removeItem('token');
-        setUser(null);
+        setUser(null); // AuthContext, so every page re-renders as signed out
+
         navigate('/');
         setIsDropdownOpen(false);
         setIsOpen(false);
@@ -89,47 +80,65 @@ function Navbar() {
 
     const isActive = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
 
-    const getNavLinkClass = (path) => (
-        `text-sm font-medium px-3 py-2 rounded-full transition-colors ${
-            isActive(path)
-                ? 'bg-white/10 text-white'
-                : 'text-gray-300 hover:text-white hover:bg-white/5'
-        }`
+    const getNavLinkClass = (path) => `retro-navlink ${isActive(path) ? 'is-active' : ''}`;
+
+    const SearchIcon = () => (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
     );
 
+    const searchForm = (extraClass = '') => (
+        <form onSubmit={handleSearch} className={`flex items-stretch ${extraClass}`}>
+            <label htmlFor="idj-search" className="sr-only">Search songs or profiles</label>
+            <input
+                id="idj-search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="search songs or profiles..."
+                className="retro-input h-10 px-3 flex-1 w-full md:w-72"
+            />
+            <button
+                type="submit"
+                aria-label="Search"
+                className="retro-btn retro-btn--hot h-10 px-4 shrink-0"
+                style={{ clipPath: 'none' }}
+            >
+                <SearchIcon />
+            </button>
+        </form>
+    );
+
+    // Menu entries differ by auth state; rendered in both the desktop dropdown
+    // and the mobile sheet so the two can't drift apart.
+    const accountLinks = user
+        ? [
+            { to: `/profile/${user.profile_id || user.id}`, label: 'Profile' },
+            { to: `/profile/${user.profile_id || user.id}/songs-manager`, label: 'Songs Manager' },
+            { to: '/playlists', label: 'Playlists' },
+            { to: `/profile/${user.profile_id || user.id}/collaborations`, label: 'Collabs' },
+            { to: '/settings', label: 'Settings' },
+        ]
+        : [
+            { to: '/register', label: 'Sign Up Free — Artists' },
+            { to: '/discover', label: 'Browse as Listener' },
+            { to: '/login', label: 'Login' },
+        ];
+
     return (
-        <nav className="fixed top-0 left-0 right-0 bg-black/85 backdrop-blur-md border-b border-white/10 text-white shadow-lg z-30">
+        <nav className="retro-topbar fixed top-0 left-0 right-0 text-white z-30">
             <div className="container mx-auto px-4 py-3">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                        <Link to="/" className="flex items-center space-x-0">
-                            <img
-                                src={IDJHeaderLogo}
-                                alt="Internet DJ Logo"
-                                className="h-20 w-auto absolute top-1 z-20 object-contain"
-                            />
+                        <Link to="/" aria-label="InternetDJ home" className="flex items-center shrink-0">
+                            {/* Switch the variant here to try another concept:
+                                'disc' | 'crest' | 'tube' | 'tape' */}
+                            <Logo variant="disc" mode="lockup" className="h-11 w-auto" />
                         </Link>
 
-                        <div className="w-20 md:w-20"></div>
-
-                        <div className="hidden md:flex items-center space-x-3">
-                            <form onSubmit={handleSearch} className="flex items-center">
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search songs or profiles..."
-                                    className="h-10 bg-white/10 text-white px-3 rounded-l-full border border-white/10 border-r-0 focus:outline-none focus:ring-2 focus:ring-primary-brand-400 w-64 md:w-72 placeholder:text-gray-300"
-                                />
-                                <button
-                                    type="submit"
-                                    className="h-10 spotify-pill px-4 rounded-r-full transition-colors inline-flex items-center justify-center"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </button>
-                            </form>
+                        <div className="hidden md:flex items-center space-x-5">
+                            {searchForm()}
                             {navItems.map((item) => (
                                 <Link key={item.to} to={item.to} className={getNavLinkClass(item.to)}>
                                     {item.label}
@@ -140,9 +149,10 @@ function Navbar() {
 
                     <div className="flex items-center">
                         <button
-                            className="md:hidden focus:outline-none"
+                            className="md:hidden retro-icon-btn p-2"
                             onClick={() => setIsOpen(!isOpen)}
                             aria-label="Toggle menu"
+                            aria-expanded={isOpen}
                         >
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
@@ -153,13 +163,14 @@ function Navbar() {
                             {user ? (
                                 <button
                                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                    className="flex items-center space-x-2 focus:outline-none"
+                                    className="flex items-center space-x-2 focus:outline-none group"
+                                    aria-expanded={isDropdownOpen}
                                 >
                                     {user.picture ? (
                                         <img
                                             src={user.picture}
                                             alt={user.name || 'User'}
-                                            className="w-8 h-8 rounded-full object-cover"
+                                            className="w-8 h-8 object-cover border border-cyan-400/50 group-hover:border-fuchsia-400 transition-colors"
                                             onError={(e) => {
                                                 console.warn('Profile image failed to load:', user.picture);
                                                 e.target.style.display = 'none';
@@ -169,15 +180,17 @@ function Navbar() {
                                         />
                                     ) : null}
                                     <div
-                                        className={`w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white text-sm font-semibold ${
+                                        className={`w-8 h-8 border border-cyan-400/50 bg-fuchsia-900/40 items-center justify-center retro-pixel text-[0.5rem] text-cyan-200 ${
                                             user.picture ? 'hidden' : 'flex'
                                         }`}
                                     >
                                         {getInitials(user.name)}
                                     </div>
-                                    <span className="text-gray-200 text-sm">{user.name || 'User'}</span>
+                                    <span className="retro-mono text-xl text-cyan-200 group-hover:text-fuchsia-300 transition-colors">
+                                        {user.name || 'User'}
+                                    </span>
                                     <svg
-                                        className={`w-4 h-4 text-gray-300 transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                                        className={`w-4 h-4 text-fuchsia-400 transform transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -188,89 +201,40 @@ function Navbar() {
                             ) : (
                                 <button
                                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                    className="spotify-pill px-4 py-2 rounded-full transition-colors"
+                                    className="retro-btn retro-btn--hot px-5 py-2 text-xs"
+                                    aria-expanded={isDropdownOpen}
                                 >
                                     Account
                                 </button>
                             )}
 
                             {isDropdownOpen && (
-                                <div className="absolute right-0 mt-2 w-52 bg-zinc-900 border border-white/10 rounded-xl shadow-lg py-1 z-10">
+                                <div className="retro-panel retro-cut absolute right-0 mt-3 w-60 py-2 z-10">
+                                    <div className="retro-eyebrow px-3 pb-2">
+                                        {user ? '// Your Deck //' : '// Get Started //'}
+                                    </div>
+                                    {accountLinks.map((item) => (
+                                        <Link
+                                            key={item.to + item.label}
+                                            to={item.to}
+                                            className="retro-menu-item"
+                                            onClick={() => setIsDropdownOpen(false)}
+                                        >
+                                            &gt; {item.label}
+                                        </Link>
+                                    ))}
                                     {user ? (
-                                        <>
-                                            <Link
-                                                to={`/profile/${user.profile_id || user.id}`}
-                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Profile
-                                            </Link>
-                                            <Link
-                                                to={`/profile/${user.profile_id || user.id}/songs-manager`}
-                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Songs Manager
-                                            </Link>
-                                            <Link
-                                                to="/playlists"
-                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Playlists
-                                            </Link>
-                                            <Link
-                                                to={`/profile/${user.profile_id || user.id}/collaborations`}
-                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Collabs
-                                            </Link>
-                                            <Link
-                                                to="/settings"
-                                                className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Settings
-                                            </Link>
-                                            <button
-                                                onClick={logout}
-                                                className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
-                                            >
-                                                Logout
-                                            </button>
-                                        </>
+                                        <button onClick={logout} className="retro-menu-item">
+                                            &gt; Logout
+                                        </button>
                                     ) : (
-                                        <>
-                                            <Link
-                                                to="/register"
-                                                className="block px-4 py-3 text-sm font-medium text-white hover:bg-primary-brand-500/20"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Sign Up Free — Artists
-                                            </Link>
-                                            <Link
-                                                to="/discover"
-                                                className="block px-4 py-3 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Browse as Listener
-                                            </Link>
-                                            <Link
-                                                to="/login"
-                                                className="block px-4 py-3 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Login
-                                            </Link>
-                                            <a
-                                                href={`${API_URL}/auth/google`}
-                                                className="block px-4 py-3 text-sm text-gray-200 hover:bg-white/10"
-                                                onClick={() => setIsDropdownOpen(false)}
-                                            >
-                                                Google Login
-                                            </a>
-                                        </>
+                                        <a
+                                            href={`${API_URL}/auth/google`}
+                                            className="retro-menu-item"
+                                            onClick={() => setIsDropdownOpen(false)}
+                                        >
+                                            &gt; Google Login
+                                        </a>
                                     )}
                                 </div>
                             )}
@@ -279,12 +243,51 @@ function Navbar() {
                 </div>
 
                 {isOpen && (
-                    <div className="md:hidden mt-4 pb-4 bg-black/70 border border-white/10 rounded-xl p-3">
-                        {/* Mobile menu - add sign up links similarly if needed */}
-                        <form onSubmit={handleSearch} className="mb-4 flex items-center">
-                            {/* search */}
-                        </form>
-                        {/* your original mobile links */}
+                    <div className="md:hidden mt-4 retro-panel retro-cut p-4 space-y-4">
+                        {searchForm('w-full')}
+
+                        <div>
+                            <div className="retro-eyebrow mb-2">// Explore //</div>
+                            {navItems.map((item) => (
+                                <Link
+                                    key={item.to}
+                                    to={item.to}
+                                    className="retro-menu-item"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    &gt; {item.label}
+                                </Link>
+                            ))}
+                        </div>
+
+                        <div>
+                            <div className="retro-eyebrow mb-2">
+                                {user ? '// Your Deck //' : '// Get Started //'}
+                            </div>
+                            {accountLinks.map((item) => (
+                                <Link
+                                    key={item.to + item.label}
+                                    to={item.to}
+                                    className="retro-menu-item"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    &gt; {item.label}
+                                </Link>
+                            ))}
+                            {user ? (
+                                <button onClick={logout} className="retro-menu-item">
+                                    &gt; Logout
+                                </button>
+                            ) : (
+                                <a
+                                    href={`${API_URL}/auth/google`}
+                                    className="retro-menu-item"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    &gt; Google Login
+                                </a>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

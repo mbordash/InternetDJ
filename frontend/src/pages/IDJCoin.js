@@ -151,7 +151,7 @@ function IDJCoin() {
     }, [loading, user, claimStatus, searchParams]);
 
     return (
-        <div className="text-gray-100 pt-2 min-h-screen">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
                 <title>IDJ Solana Coin - Earn</title>
                 <meta
@@ -183,7 +183,7 @@ function IDJCoin() {
                                 }}
                             />
                             <div className="flex-1">
-                                    <h1 className="text-3xl font-bold mb-6 text-white">IDJ Coin - Liquidity & Allocation</h1>
+                                    <h1 className="retro-display retro-chrome text-3xl mb-6">IDJ Coin - Liquidity & Allocation</h1>
                                         <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">Overview</h2>
                                         <p className="text-gray-300 mb-4">
                                     IDJ Coin (symbol: iDJc) is the backbone of the InternetDJ ecosystem, enabling decentralized rewards, community growth, and platform sustainability. By buying and holding IDJ Coin, you directly support musicians on InternetDJ, helping fund artist grants, platform development, and creative initiatives. With a total initial supply of 1 billion coins, IDJ Coin is strategically allocated to support founders, liquidity, ownership, and future development.
@@ -203,7 +203,7 @@ function IDJCoin() {
                         </div>
                     </section>
 
-                    <section className="mb-12 spotify-surface border border-white/10 rounded-xl p-6">
+                    <section className="mb-12 retro-panel retro-cut border border-white/10 rounded-xl p-6">
                         <h2 className="text-2xl font-bold mb-3 text-white tracking-tight">Limited-Time IDJC Claim</h2>
                         <p className="text-gray-300 mb-2">
                             {claimCampaignText}
@@ -254,7 +254,7 @@ function IDJCoin() {
 
                     <section className="mb-12">
                         <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">Token Allocation</h2>
-                        <ul className="list-disc list-inside text-gray-300 space-y-2">
+                        <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li>
                                 <strong>Founders Grant (200M coins):</strong> 20 initial InternetDJ members each receive 10,000,000 coins, vested monthly over time to align with long-term commitment.
                             </li>
@@ -275,7 +275,7 @@ function IDJCoin() {
 
                     <section className="mb-12">
                         <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">How IDJC Earnings Work</h2>
-                        <ul className="list-disc list-inside text-gray-300 space-y-2">
+                        <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li><strong>Listen-based rewards:</strong> Artists earn from counted song listens.</li>
                             <li><strong>Daily formula:</strong> 1 IDJC per 10 listens, calculated per profile each day.</li>
                             <li><strong>Daily cap:</strong> Maximum 10 IDJC can be earned per day.</li>
@@ -308,10 +308,10 @@ function IDJCoin() {
                 </div>
 
                 {/* Right Column: Top 10 Profile Earners */}
-                <div className="w-1/4 spotify-surface border border-white/10 p-6 rounded-xl shadow-md">
+                <div className="w-1/4 retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md">
                     <h2 className="text-2xl font-bold mb-4 text-white">Top 10 Earners</h2>
                     {topEarners.length === 0 ? (
-                        <p className="text-gray-300">No top earners found.</p>
+                        <p className="retro-mono text-xl text-gray-300">No top earners found.</p>
                     ) : (
                         <div className="space-y-4">
                             {topEarners.map((earner) => (
@@ -327,7 +327,7 @@ function IDJCoin() {
                                         />
                                         <div>
                                             <p className="font-semibold text-white">{earner.name}</p>
-                                            <p className="text-sm text-gray-300">{earner.total_earned} IDJC Earned</p>
+                                            <p className="retro-mono text-lg text-gray-400">{earner.total_earned} IDJC Earned</p>
                                         </div>
                                     </div>
                                 </Link>

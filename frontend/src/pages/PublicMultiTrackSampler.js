@@ -48,7 +48,7 @@ const SampleBlock = ({ sample, zoom, duration, waveformColor }) => {
 
     return (
         <div
-            className="absolute h-12 flex items-center space-x-2 p-1 bg-white/5 border border-white/10 rounded-md shadow-sm"
+            className="absolute h-12 flex items-center space-x-2 p-1 bg-cyan-400/5 border border-cyan-400/25 rounded-md shadow-sm"
             style={{
                 left: `${sample.start_time * zoom}px`,
                 width: `${Math.max(blockWidth, 100)}px`,
@@ -68,7 +68,7 @@ const Timeline = ({ trackId, samples, playheadPosition, zoom, sampleDurations, w
 
     return (
         <div
-            className="relative h-12 border border-white/10 bg-white/5"
+            className="relative h-12 border border-cyan-400/25 bg-cyan-400/5"
             style={{ width: `${timelineDuration * zoom}px` }}
         >
             {Array.from({ length: numMinorMarkers }, (_, i) => {
@@ -80,7 +80,7 @@ const Timeline = ({ trackId, samples, playheadPosition, zoom, sampleDurations, w
                 return (
                     <div
                         key={`grid-${i}`}
-                        className={`absolute top-0 z-0 border-l ${isMajorMarker ? 'border-white/30 h-full' : 'border-white/15 h-1/2'}`}
+                        className={`absolute top-0 z-0 border-l ${isMajorMarker ? 'border-cyan-400/45 h-full' : 'border-cyan-400/30 h-1/2'}`}
                         style={{ left: `${pixelPosition}px` }}
                     />
                 );
@@ -662,13 +662,13 @@ const PublicMultiTrackSampler = () => {
                         };
                         fetchProject();
                     }}
-                    className="mt-4 inline-block py-2 px-4 bg-primary-brand text-white font-semibold rounded-md hover:bg-primary-brand-500"
+                    className="retro-btn retro-btn--hot mt-4 inline-block py-2 px-4 text-xs"
                 >
                     Retry
                 </button>
                 <Link
                     to="/projects"
-                    className="mt-4 ml-4 inline-block py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                    className="mt-4 ml-4 inline-block py-2 px-4 bg-cyan-400/10 text-white font-semibold rounded-md hover:bg-cyan-400/15"
                 >
                     Back to Projects
                 </Link>
@@ -708,18 +708,18 @@ const PublicMultiTrackSampler = () => {
                 </p>
             )}
             {error && <p className="text-red-500 mb-4">{error}</p>}
-            <div className="mb-8 flex items-center space-x-4 bg-gray-800 p-4 rounded-lg shadow-[0_4px_10px_rgba(0,0,0,0.3)]">
+            <div className="mb-8 flex items-center space-x-4 bg-[#140628] p-4 rounded-lg shadow-[0_4px_10px_rgba(0,0,0,0.3)]">
                 <button
                     onClick={handlePlayAllClick}
                     disabled={isLoadingDurations}
-                    className={`w-24 px-4 py-2 bg-gray-800 text-primary-brand font-semibold rounded-lg border border-primary-brand hover:bg-blue-900 hover:text-white hover:shadow-[0_0_10px_rgba(59,130,246,0.5)] focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-center`}
+                    className={`w-24 px-4 py-2 bg-[#140628] text-primary-brand font-semibold rounded-lg border border-primary-brand hover:bg-blue-900 hover:text-white hover:shadow-[0_0_10px_rgba(59,130,246,0.5)] focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-center`}
                 >
                     {isLoadingDurations ? 'Loading...' : isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Play'}
                 </button>
                 <button
                     onClick={handleStop}
                     disabled={isLoadingDurations}
-                    className={`w-24 px-4 py-2 bg-gray-800 text-red-400 font-semibold rounded-lg border border-red-500 hover:bg-red-900 hover:text-white hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] focus:outline-none focus:ring-4 focus:ring-red-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-center`}
+                    className={`w-24 px-4 py-2 bg-[#140628] text-red-400 font-semibold rounded-lg border border-red-500 hover:bg-red-900 hover:text-white hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] focus:outline-none focus:ring-4 focus:ring-red-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-center`}
                 >
                     Stop
                 </button>
@@ -731,7 +731,7 @@ const PublicMultiTrackSampler = () => {
                 <div className="grid grid-cols-[200px_1fr] gap-1 min-w-[3200px]">
                     <div className="h-12"></div>
                     <div
-                        className="h-12 bg-gray-800 relative border-b border-gray-600"
+                        className="h-12 bg-[#140628] relative border-b border-cyan-400/30"
                         style={{ width: `${timelineDuration * zoom}px` }}
                     >
                         {Array.from({ length: numMarkers }, (_, i) => {
@@ -747,7 +747,7 @@ const PublicMultiTrackSampler = () => {
                                         {realTime.toFixed(1)}s
                                     </div>
                                     <div
-                                        className="absolute top-0 bottom-0 border-l border-gray-600 z-0"
+                                        className="absolute top-0 bottom-0 border-l border-cyan-400/30 z-0"
                                         style={{ left: `${pixelPosition}px` }}
                                     />
                                 </React.Fragment>
@@ -770,7 +770,7 @@ const PublicMultiTrackSampler = () => {
                         return (
                             <React.Fragment key={track.id}>
                                 <div
-                                    className={`flex items-start p-2 bg-gray-700 bg-opacity-50 backdrop-blur-sm rounded-lg`}
+                                    className={`flex items-start p-2 bg-[#1d0a38] bg-opacity-50 backdrop-blur-sm rounded-lg`}
                                     style={{ height: track.track_type === 'midi' ? '360px' : '48px' }}
                                 >
                                     <span className="flex-1 text-sm text-gray-200">{track.name}</span>

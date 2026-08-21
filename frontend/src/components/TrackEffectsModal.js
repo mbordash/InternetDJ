@@ -48,14 +48,14 @@ const Knob = ({ label, value, onChange, min = 0, max = 1, step = 0.01, decimals 
         <div className="flex flex-col items-center space-y-1">
             <div
                 ref={knobRef}
-                className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center cursor-pointer shadow-inner md:w-12 md:h-12"
+                className="w-10 h-10 bg-[#1d0a38] rounded-full flex items-center justify-center cursor-pointer shadow-inner border border-cyan-400/30 md:w-12 md:h-12"
                 style={{ transform: `rotate(${angle}deg)` }}
                 onMouseDown={handleMouseDown}
             >
-                <div className="w-1 h-3 bg-purple-500 rounded-full absolute top-1 md:h-4"></div>
+                <div className="w-1 h-3 bg-fuchsia-400 rounded-full absolute top-1 md:h-4"></div>
             </div>
-            <label className="text-xs text-gray-300 text-center">{label}</label>
-            <span className="text-xs text-gray-400">{value.toFixed(decimals)}</span>
+            <label className="retro-mono text-base text-cyan-300 text-center">{label}</label>
+            <span className="retro-mono text-base text-gray-400">{value.toFixed(decimals)}</span>
         </div>
     );
 };
@@ -133,7 +133,7 @@ const TrackEffectsModal = ({ track, onClose, onEffectsChange }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 text-gray-200 rounded-lg p-6 w-[450px] shadow-lg">
+            <div className="retro-panel retro-cut p-6 w-[450px] shadow-lg">
                 <h2 className="text-xl font-semibold mb-4">Effects for {track.name}</h2>
                 {['reverb', 'delay', 'distortion'].map(effect => (
                     <div key={effect} className="mb-6">
@@ -142,7 +142,7 @@ const TrackEffectsModal = ({ track, onClose, onEffectsChange }) => {
                                 type="checkbox"
                                 checked={effectsSettings[effect]?.enabled || false}
                                 onChange={() => handleEffectToggle(effect)}
-                                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded"
+                                className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-cyan-400/30 rounded"
                             />
                             <span className="capitalize text-sm font-medium">{effect}</span>
                         </label>
@@ -221,7 +221,7 @@ const TrackEffectsModal = ({ track, onClose, onEffectsChange }) => {
                 <div className="flex justify-end space-x-2">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-[#1d0a38] focus:outline-none focus:ring-2 focus:ring-gray-500"
                     >
                         Cancel
                     </button>

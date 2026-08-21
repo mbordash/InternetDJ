@@ -33,7 +33,7 @@ function Collabs() {
     }, []);
 
     return (
-        <div className="text-gray-100 pt-2 min-h-screen">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
                 <title>Public Collaborations | InternetDJ</title>
                 <meta name="description" content="Explore public collaborations from InternetDJ members and jump into tracks from the community." />
@@ -46,14 +46,14 @@ function Collabs() {
                     {user ? (
                         <Link
                             to={`/profile/${user.profile_id || user.id}/collaborations`}
-                            className="spotify-pill px-4 py-2 rounded-full text-sm transition-colors"
+                            className="retro-btn retro-btn--hot px-4 py-2 rounded-full text-sm transition-colors"
                         >
                             Create/Manage Collabs
                         </Link>
                     ) : (
                         <Link
                             to="/login"
-                            className="spotify-pill px-4 py-2 rounded-full text-sm transition-colors"
+                            className="retro-btn retro-btn--hot px-4 py-2 rounded-full text-sm transition-colors"
                         >
                             Log in to create or join
                         </Link>
@@ -61,19 +61,19 @@ function Collabs() {
                 </div>
 
                 {isLoading && (
-                    <div className="spotify-surface p-6 border border-white/10 rounded-xl text-gray-300">
+                    <div className="retro-panel retro-cut p-6 border border-white/10 rounded-xl text-gray-300">
                         Loading collaborations...
                     </div>
                 )}
 
                 {!isLoading && error && (
-                    <div className="spotify-surface p-6 border border-white/10 rounded-xl text-red-400">
+                    <div className="retro-panel retro-cut p-6 border border-white/10 rounded-xl text-red-400">
                         {error}
                     </div>
                 )}
 
                 {!isLoading && !error && collabs.length === 0 && (
-                    <div className="spotify-surface p-6 border border-white/10 rounded-xl text-gray-300">
+                    <div className="retro-panel retro-cut p-6 border border-white/10 rounded-xl text-gray-300">
                         No public collaborations yet.
                     </div>
                 )}
@@ -81,7 +81,7 @@ function Collabs() {
                 {!isLoading && !error && collabs.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {collabs.map((collab) => (
-                            <article key={collab.id} className="spotify-surface border border-white/10 rounded-xl p-5">
+                            <article key={collab.id} className="retro-panel retro-cut border border-white/10 rounded-xl p-5">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
                                         <h2 className="text-xl font-semibold text-white mb-2">{collab.title}</h2>

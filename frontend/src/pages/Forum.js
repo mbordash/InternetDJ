@@ -251,7 +251,7 @@ function Forum() {
     if (error && posts.length === 0) {
         return (
             <div className="container mx-auto px-4 py-8 text-center text-gray-100">
-                <p className="text-red-400 text-lg">{error}</p>
+                <p className="retro-mono text-2xl text-fuchsia-400">{error}</p>
             </div>
         );
     }
@@ -308,13 +308,16 @@ function Forum() {
                     })}
                 </script>
             </Helmet>
-            <div className="text-gray-100 pt-2">
+            <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
                 <div className="container mx-auto px-4 py-8">
                     <div className="flex flex-col lg:flex-row lg:space-x-8">
                         {/* Main Content */}
                         <div className="lg:w-3/4">
                             <div className="flex items-center justify-between mb-8">
-                                <h1 className="text-3xl font-bold">Discussion Forum</h1>
+                                <div>
+                                    <div className="retro-eyebrow mb-2">// Message Board //</div>
+                                    <h1 className="retro-display retro-chrome text-2xl sm:text-3xl">Discussion Forum</h1>
+                                </div>
                                 <button
                                     onClick={() => {
                                         setShowForm(!showForm);
@@ -324,7 +327,7 @@ function Forum() {
                                             setImagePreview(null);
                                         }
                                     }}
-                                    className="bg-primary-brand-500 text-white px-4 py-2 rounded-md hover:bg-primary-brand-700 transition-colors"
+                                    className="retro-btn retro-btn--hot px-5 py-2 text-xs shrink-0"
                                 >
                                     {showForm ? 'Cancel' : 'Start a Discussion'}
                                 </button>
@@ -332,8 +335,8 @@ function Forum() {
 
                             {/* Create/Edit Post Form */}
                             {showForm && (
-                                <section className="mb-12 spotify-surface p-4">
-                                    <h2 className="text-2xl font-bold mb-4 text-white">{editingPost ? 'Edit Post' : 'Start a Discussion'}</h2>
+                                <section className="mb-12 retro-panel retro-cut p-4">
+                                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">{editingPost ? 'Edit Post' : 'Start a Discussion'}</h2>
                                      <form onSubmit={handleCreateOrUpdatePost} className="space-y-4">
                                          <div>
                                              <input
@@ -341,7 +344,7 @@ function Forum() {
                                                  value={newPost.title}
                                                  onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
                                                  placeholder="Post title"
-                                                 className="w-full px-3 py-2 border border-white/10 rounded-md bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                                                 className="retro-field"
                                              />
                                          </div>
                                          <div>
@@ -355,7 +358,7 @@ function Forum() {
                                          </div>
                                          {!editingPost && (
                                              <div>
-                                                 <label htmlFor="image-upload" className="text-gray-300 mr-2">
+                                                 <label htmlFor="image-upload" className="retro-mono text-xl text-gray-300 mr-2">
                                                      Image
                                                  </label>
                                                  <input
@@ -363,7 +366,7 @@ function Forum() {
                                                      type="file"
                                                      accept="image/jpeg,image/png,image/gif"
                                                      onChange={handleImageChange}
-                                                     className="w-full px-3 py-2 border border-white/10 rounded-md bg-white/5 text-white"
+                                                     className="retro-field"
                                                  />
                                                  {imagePreview && (
                                                      <div className="mt-2">
@@ -376,15 +379,15 @@ function Forum() {
                                              <button
                                                  type="submit"
                                                  disabled={isSubmitting}
-                                                 className={`spotify-pill px-4 py-2 rounded-full transition-colors ${
-                                                     isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-brand-700'
+                                                 className={`retro-btn retro-btn--hot px-4 py-2 text-xs ${
+                                                     isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
                                                  }`}
                                              >
                                                  {editingPost ? 'Update Post' : 'Create Post'}
                                              </button>
                                              {isSubmitting && (
-                                                 <div className="absolute top-0 left-0 right-0 h-1 bg-primary-brand-200 rounded-t-md">
-                                                     <div className="h-full bg-primary-brand-500 animate-pulse" style={{ width: '100%' }} />
+                                                 <div className="absolute top-0 left-0 right-0 h-1 bg-cyan-500/30 rounded-t-md">
+                                                     <div className="h-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 animate-pulse" style={{ width: '100%' }} />
                                                  </div>
                                              )}
                                          </div>
@@ -394,31 +397,31 @@ function Forum() {
 
                             {/* Posts List */}
                             <section>
-                                <h2 className="text-2xl font-bold mb-4 text-white">Recent Posts</h2>
+                                <h2 className="retro-display text-lg retro-glow-magenta mb-4">Recent Posts</h2>
                                 {posts.length === 0 ? (
-                                    <p className="text-gray-300">No posts available.</p>
+                                    <p className="retro-mono text-xl text-gray-300">No posts available.</p>
                                 ) : (
                                     <div className="overflow-x-auto">
-                                        <table className="min-w-full">
+                                        <table className="retro-table">
                                             <thead>
-                                            <tr className="bg-white/5 text-gray-300">
-                                                <th className="px-4 py-2 text-left">Post</th>
-                                                <th className="px-4 py-2 text-left">Comments</th>
-                                                <th className="px-4 py-2 text-left">Last Reply</th>
+                                            <tr>
+                                                <th>Post</th>
+                                                <th>Comments</th>
+                                                <th>Last Reply</th>
                                             </tr>
                                             </thead>
                                             <tbody>
                                             {posts.map((post, index) => (
                                                 <tr
                                                     key={post.id}
-                                                    className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'}
+                                                    
                                                 >
-                                                    <td className="px-4 py-2 flex items-center space-x-2">
+                                                    <td className="flex items-center space-x-3">
                                                         {post.user_picture ? (
                                                             <img
                                                                 src={post.user_picture}
                                                                 alt={post.user_name}
-                                                                className="w-12 h-12 rounded-md object-cover"
+                                                                className="w-12 h-12 object-cover border border-cyan-400/30"
                                                                 onError={(e) => {
                                                                     e.target.style.display = 'none';
                                                                     e.target.nextSibling.style.display = 'block';
@@ -426,21 +429,21 @@ function Forum() {
                                                                 loading="lazy"
                                                             />
                                                         ) : (
-                                                            <div className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs" style={{ display: post.user_picture ? 'none' : 'flex' }}>
+                                                            <div className="w-12 h-12 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300" style={{ display: post.user_picture ? 'none' : 'flex' }}>
                                                              ?
                                                          </div>
                                                      )}
                                                      <div className="flex-1">
                                                          <Link
                                                              to={`/forum/post/${post.id}`}
-                                                             className="text-white hover:text-primary-brand-300 hover:underline"
+                                                             className="retro-display text-xs text-white hover:text-cyan-200"
                                                          >
                                                              {post.title}
                                                          </Link>
-                                                         <div className="text-sm text-gray-300">
+                                                         <div className="retro-mono text-lg text-gray-400">
                                                              <Link
                                                                  to={`/profile/${post.profile_id}`}
-                                                                 className="text-gray-100 hover:text-primary-brand-300 hover:underline"
+                                                                 className="retro-link"
                                                              >
                                                                  {post.user_name}
                                                              </Link>
@@ -456,7 +459,7 @@ function Forum() {
                                                              {canEditPost(post) && (
                                                                  <button
                                                                      onClick={() => handleEditPost(post)}
-                                                                     className="text-primary-brand-300 hover:text-primary-brand-200"
+                                                                     className="retro-link"
                                                                      title="Edit post"
                                                                  >
                                                                      <PencilIcon className="w-5 h-5" />
@@ -472,14 +475,14 @@ function Forum() {
                                                          </div>
                                                      )}
                                                     </td>
-                                                    <td className="px-4 py-2">{post.comment_count} comments</td>
-                                                    <td className="px-4 py-2">
+                                                    <td className="retro-mono text-lg text-cyan-300">{post.comment_count} comments</td>
+                                                    <td className="retro-mono text-lg text-gray-400">
                                                         {post.last_commented_at ? (
                                                             <>
                                                                 {formatDate(post.last_commented_at)} by{' '}
                                                                 <Link
                                                                     to={`/profile/${post.last_commenter_id}`}
-                                                                    className="text-gray-100 hover:text-primary-brand-300 hover:underline"
+                                                                    className="retro-link"
                                                                 >
                                                                     {post.last_commenter_name || 'Unknown'}
                                                                 </Link>
@@ -497,7 +500,7 @@ function Forum() {
                                 {posts.length < total && (
                                     <button
                                         onClick={() => setPage(page + 1)}
-                                        className="mt-4 spotify-pill px-4 py-2 rounded-full transition-colors"
+                                        className="mt-4 retro-btn retro-btn--hot px-4 py-2 text-xs"
                                     >
                                         Load More
                                     </button>
@@ -507,24 +510,24 @@ function Forum() {
 
                         {/* Right Column: Popular Posts */}
                         <div className="lg:w-1/4 mt-8 lg:mt-0">
-                            <section className="spotify-surface p-4">
-                                <h2 className="text-xl font-bold mb-4 text-white">Popular Posts</h2>
+                            <section className="retro-panel retro-cut p-4">
+                                <h2 className="retro-display text-base retro-glow-cyan mb-4">Popular Posts</h2>
                                 {popularPosts.length === 0 ? (
-                                    <p className="text-gray-300">No popular posts yet.</p>
+                                    <p className="retro-mono text-xl text-gray-300">No popular posts yet.</p>
                                 ) : (
                                     <ul className="space-y-3">
                                         {popularPosts.map((post) => (
                                             <li key={post.id} className="border-b border-white/10 pb-2">
                                                 <Link
                                                     to={`/forum/post/${post.id}`}
-                                                    className="text-white hover:text-primary-brand-300 hover:underline text-sm"
+                                                    className="retro-link retro-mono text-lg"
                                                 >
                                                     {post.title}
                                                 </Link>
-                                                <div className="text-xs text-gray-300">
+                                                <div className="retro-mono text-base text-gray-400">
                                                     <Link
                                                         to={`/profile/${post.profile_id}`}
-                                                        className="text-gray-100 hover:text-primary-brand-300 hover:underline"
+                                                        className="retro-link"
                                                     >
                                                         {post.user_name}
                                                     </Link>

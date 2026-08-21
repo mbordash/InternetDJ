@@ -7,7 +7,7 @@ import SITE_URL from '../utils/site';
 import { AuthContext } from '../context/AuthContext';
 
 function Settings() {
-    const { user } = useContext(AuthContext);
+    const { user, loading: authLoading } = useContext(AuthContext);
     const navigate = useNavigate();
     const baseUrl = SITE_URL;
     const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
@@ -18,6 +18,9 @@ function Settings() {
     const [success, setSuccess] = useState(null);
 
     useEffect(() => {
+        // AuthContext starts as { user: null, loading: true }, so redirecting on
+        // a null user alone bounces signed-in people who land here directly.
+        if (authLoading) return;
         if (!user) {
             navigate('/login');
             return;
@@ -41,7 +44,7 @@ function Settings() {
         };
 
         loadPreferences();
-    }, [user, navigate]);
+    }, [user, authLoading, navigate]);
 
     const handleToggleProfileActivity = async () => {
         try {
@@ -84,7 +87,7 @@ function Settings() {
     };
 
     return (
-        <div className="text-gray-100 pt-2 min-h-screen">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
                 <title>Settings | InternetDJ</title>
                 <meta name="description" content="Manage your InternetDJ preferences and notification settings." />
@@ -92,7 +95,11 @@ function Settings() {
             </Helmet>
 
             <div className="container mx-auto px-4 py-8 max-w-2xl">
-                <h1 className="text-3xl font-bold text-white mb-8 tracking-tight">Settings</h1>
+                <header className="mb-8">
+                    <div className="retro-eyebrow mb-3">// Control Panel //</div>
+                    <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">Settings</h1>
+                    <div className="retro-rule mt-4" />
+                </header>
 
                 {error && (
                     <div className="mb-4 p-4 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300">
@@ -107,20 +114,20 @@ function Settings() {
                 )}
 
                 {isLoading ? (
-                    <div className="spotify-surface border border-white/10 rounded-xl p-6">
-                        <p className="text-gray-300">Loading preferences...</p>
+                    <div className="retro-panel retro-cut p-6">
+                        <p className="retro-mono text-xl text-gray-300">Loading preferences...</p>
                     </div>
                 ) : (
                     <>
                         <section className="mb-8">
-                            <div className="spotify-surface border border-white/10 rounded-xl p-6">
-                                <h2 className="text-xl font-semibold text-white mb-6">Notifications</h2>
+                            <div className="retro-panel retro-cut p-6">
+                                <h2 className="retro-display text-base retro-glow-cyan mb-6">Notifications</h2>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                                    <div className="retro-card retro-cut flex items-center justify-between p-4">
                                         <div className="flex-1">
-                                                            <h3 className="text-white font-medium mb-1">Profile Activity</h3>
-                                            <p className="text-sm text-gray-400">
+                                                            <h3 className="retro-display text-xs text-white mb-1">Profile Activity</h3>
+                                            <p className="retro-mono text-lg text-gray-400">
                                                                 Receive emails when someone likes, reviews, or replies to your content,
                                                                 follows your profile, or updates a collaboration you own.
                                             </p>
@@ -128,9 +135,9 @@ function Settings() {
 
                                         <button
                                                             onClick={handleToggleProfileActivity}
-                                                            className={`ml-4 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                                                            className={`retro-btn ml-4 px-4 py-2 text-[0.6rem] whitespace-nowrap ${
                                                                 emailProfileActivityEnabled
-                                                    ? 'bg-primary-brand-500 text-white hover:bg-primary-brand-600'
+                                                    ? 'retro-btn--hot'
                                                     : 'bg-white/10 text-gray-300 hover:bg-white/20'
                                             }`}
                                         >
@@ -138,19 +145,19 @@ function Settings() {
                                         </button>
                                     </div>
 
-                                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                                                    <div className="retro-card retro-cut flex items-center justify-between p-4">
                                                         <div className="flex-1">
-                                                            <h3 className="text-white font-medium mb-1">Artist Activity</h3>
-                                                            <p className="text-sm text-gray-400">
+                                                            <h3 className="retro-display text-xs text-white mb-1">Artist Activity</h3>
+                                                            <p className="retro-mono text-lg text-gray-400">
                                                                 Receive emails when artists you follow upload new songs.
                                                             </p>
                                                         </div>
 
                                                         <button
                                                             onClick={handleToggleArtistActivity}
-                                                            className={`ml-4 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                                                            className={`retro-btn ml-4 px-4 py-2 text-[0.6rem] whitespace-nowrap ${
                                                                 emailArtistActivityEnabled
-                                                                    ? 'bg-primary-brand-500 text-white hover:bg-primary-brand-600'
+                                                                    ? 'retro-btn--hot'
                                                                     : 'bg-white/10 text-gray-300 hover:bg-white/20'
                                                             }`}
                                                         >
@@ -162,11 +169,11 @@ function Settings() {
                         </section>
 
                         <section>
-                            <div className="spotify-surface border border-white/10 rounded-xl p-6">
-                                <h2 className="text-xl font-semibold text-white mb-4">About</h2>
+                            <div className="retro-panel retro-cut p-6">
+                                <h2 className="retro-display text-base retro-glow-cyan mb-4">About</h2>
                                 <div className="space-y-2 text-sm text-gray-300">
-                                    <p>InternetDJ — Create, share, and collaborate on music.</p>
-                                    <p className="text-xs text-gray-500">
+                                    <p className="retro-mono text-xl text-gray-300">InternetDJ &mdash; create, share, and collaborate on music.</p>
+                                    <p className="retro-mono text-base text-gray-500">
                                             All in-app notifications are always delivered. These settings only control
                                             whether you receive emails for profile activity and artist activity notifications.
                                     </p>

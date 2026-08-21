@@ -175,59 +175,75 @@ const Footer = () => {
     };
 
     return (
-        <footer className={`bg-[#0f0f0f] text-white py-5 w-full border-t border-white/10 ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}>
+        <footer className={`retro-deck text-white py-4 w-full ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}>
             <div className="container mx-auto px-4">
                 {currentSong ? (
-                    <div className="spotify-surface px-4 py-3 flex items-center justify-between space-x-4 w-full">
+                    <div className="retro-panel retro-cut px-4 py-3 flex items-center gap-4 w-full">
                         {/* Album Cover */}
-                        <Link to={`/song/${currentSong.id}`} className="flex-shrink-0">
+                        <Link to={`/song/${currentSong.id}`} className="flex-shrink-0 relative retro-scanlines block">
                             {currentSong.image_url ? (
                                 <img
                                     src={currentSong.image_url}
                                     alt={currentSong.title}
-                                    className="w-12 h-12 rounded-md object-cover"
+                                    className="w-14 h-14 object-cover border border-cyan-400/50"
                                     onError={(e) => {
                                         e.target.style.display = 'none';
                                         e.target.nextSibling.style.display = 'flex';
                                     }}
                                 />
                             ) : (
-                                <div className="w-12 h-12 rounded-md bg-gray-600 flex items-center justify-center text-gray-400 text-sm">
-                                    No Image
+                                <div className="w-14 h-14 border border-cyan-400/50 bg-fuchsia-900/40 flex items-center justify-center retro-pixel text-[0.5rem] text-cyan-300">
+                                    NO ART
                                 </div>
                             )}
+                            {isPlaying && (
+                                <span className="retro-eq absolute bottom-1 right-1">
+                                    <span /><span /><span /><span />
+                                </span>
+                            )}
                         </Link>
-                        <div className="flex-1">
-                            {/* Artist Name and Song Title */}
-                            <div className="text-sm font-semibold truncate">
-                                {currentSong.profile_id && currentSong.profile_name ? (
+
+                        <div className="flex-1 min-w-0">
+                            {/* Now-playing readout */}
+                            <div className="flex items-baseline gap-2 min-w-0">
+                                <span className="retro-eyebrow hidden sm:inline shrink-0">
+                                    {isPlaying ? 'On Air' : 'Paused'}
+                                </span>
+                                <div className="retro-display text-xs truncate">
                                     <Link
-                                        to={`/profile/${currentSong.profile_id}`}
-                                        className="hover:underline"
-                                        aria-label={`View profile of ${currentSong.profile_name}`}
+                                        to={`/song/${currentSong.id}`}
+                                        className="text-white hover:text-cyan-200 transition-colors"
+                                        aria-label={`View song ${currentSong.title}`}
                                     >
-                                        {currentSong.profile_name}
+                                        {currentSong.title}
                                     </Link>
-                                ) : (
-                                    <span>{currentSong.profile_name || 'Unknown Artist'}</span>
-                                )}
-                                {' - '}
-                                <Link
-                                    to={`/song/${currentSong.id}`}
-                                    className="hover:underline"
-                                    aria-label={`View song ${currentSong.title}`}
-                                >
-                                    {currentSong.title}
-                                </Link>
+                                </div>
                             </div>
-                            {/* Time Display */}
-                            <p className="text-xs text-gray-300">
-                                {formatTime(state.currentTime)} / {formatTime(state.duration)}
-                            </p>
+
+                            <div className="flex items-baseline gap-3 min-w-0">
+                                <div className="retro-mono text-lg truncate">
+                                    {currentSong.profile_id && currentSong.profile_name ? (
+                                        <Link
+                                            to={`/profile/${currentSong.profile_id}`}
+                                            className="retro-link"
+                                            aria-label={`View profile of ${currentSong.profile_name}`}
+                                        >
+                                            {currentSong.profile_name}
+                                        </Link>
+                                    ) : (
+                                        <span className="text-gray-400">{currentSong.profile_name || 'Unknown Artist'}</span>
+                                    )}
+                                </div>
+                                <p className="retro-mono text-lg text-cyan-300 shrink-0 ml-auto tabular-nums"
+                                   style={{ textShadow: '0 0 8px rgba(0,240,255,0.6)' }}>
+                                    {formatTime(state.currentTime)} / {formatTime(state.duration)}
+                                </p>
+                            </div>
+
                             {/* Progress Bar */}
                             <div
                                 ref={progressBarRef}
-                                className="w-full h-1 bg-white/10 rounded-full mt-2 cursor-pointer relative"
+                                className="retro-progress w-full mt-2"
                                 onClick={handleSeek}
                                 role="slider"
                                 aria-label="Seek audio"
@@ -236,74 +252,79 @@ const Footer = () => {
                                 aria-valuenow={state.progress}
                             >
                                 <div
-                                    className="h-full bg-primary-brand-400 rounded-full absolute top-0 left-0"
+                                    className="retro-progress__fill"
                                     style={{ width: `${state.progress}%`, transition: 'width 0.05s linear' }}
                                 />
                             </div>
                         </div>
-                        <div className="flex items-center space-x-4">
+
+                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                             {/* Previous Song Button */}
                             <button
                                 onClick={prevSong}
-                                className={`p-2 rounded-full hover:bg-white/10 focus:outline-none ${currentQueueIndex <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className="retro-icon-btn p-2"
                                 disabled={currentQueueIndex <= 0}
                                 aria-label="Previous song"
                             >
-                                <BackwardIcon className="w-6 h-6" />
+                                <BackwardIcon className="w-5 h-5" />
                             </button>
                             {/* Play/Pause Button */}
                             <button
                                 onClick={togglePlayPause}
-                                className="p-2 rounded-full bg-primary-brand-500 text-white hover:bg-primary-brand-400 focus:outline-none"
+                                className="retro-transport w-11 h-11"
                                 aria-label={isPlaying ? 'Pause' : 'Play'}
                             >
                                 {isPlaying ? (
                                     <PauseIcon className="w-6 h-6" />
                                 ) : (
-                                    <PlayIcon className="w-6 h-6" />
+                                    <PlayIcon className="w-6 h-6 ml-0.5" />
                                 )}
                             </button>
                             {/* Next Song Button */}
                             <button
                                 onClick={nextSong}
-                                className={`p-2 rounded-full hover:bg-white/10 focus:outline-none ${currentQueueIndex >= songQueue.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className="retro-icon-btn p-2"
                                 disabled={currentQueueIndex >= songQueue.length - 1}
                                 aria-label="Next song"
                             >
-                                <ForwardIcon className="w-6 h-6" />
+                                <ForwardIcon className="w-5 h-5" />
                             </button>
                             {/* Stop Button */}
                             <button
                                 onClick={stopPlayback}
-                                className="p-2 rounded-full hover:bg-white/10 focus:outline-none"
+                                className="retro-icon-btn p-2"
                                 aria-label="Stop playback"
                             >
-                                <XMarkIcon className="w-6 h-6" />
+                                <XMarkIcon className="w-5 h-5" />
                             </button>
                             {/* Like Button */}
                             {isAuthenticated && (
                                 <button
                                     onClick={handleLikeSong}
-                                    className={`p-2 rounded-full hover:bg-white/10 focus:outline-none ${isLiked ? 'text-primary-brand-400' : 'text-white'}`}
+                                    className={`retro-icon-btn p-2 ${isLiked ? 'retro-icon-btn--on' : ''}`}
                                     aria-label={isLiked ? 'Unlike song' : 'Like song'}
                                 >
                                     {isLiked ? (
-                                        <HeartIconSolid className="w-6 h-6" />
+                                        <HeartIconSolid className="w-5 h-5" />
                                     ) : (
-                                        <HeartIconOutline className="w-6 h-6" />
+                                        <HeartIconOutline className="w-5 h-5" />
                                     )}
                                 </button>
                             )}
                         </div>
                     </div>
                 ) : (
-                    <div className="flex justify-between items-center w-full text-gray-300">
-                        <p>© {new Date().getFullYear()} InternetDJ.co - All rights reserved.</p>
-                        <div className="flex items-center space-x-4">
-                            <span>Serving Independent Music since 1997</span>
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-3 w-full">
+                        <p className="retro-mono text-lg text-gray-400">
+                            &copy; {new Date().getFullYear()} InternetDJ.co &mdash; all rights reserved.
+                        </p>
+                        <div className="flex items-center gap-4">
+                            <span className="retro-eyebrow hidden md:inline">
+                                Serving Independent Music Since 1997
+                            </span>
                             <Link
                                 to="/about"
-                                className="flex items-center text-white hover:text-gray-300 transition-colors"
+                                className="retro-icon-btn p-1.5"
                                 aria-label="Learn more about InternetDJ"
                             >
                                 <InformationCircleIcon className="w-6 h-6" />
@@ -312,7 +333,7 @@ const Footer = () => {
                                 href="https://discord.gg/AbebAd3yS8"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-white hover:text-gray-300 transition-colors"
+                                className="retro-icon-btn p-1.5"
                                 aria-label="Join our Discord server"
                             >
                                 <DiscordIcon className="w-6 h-6" />
@@ -321,7 +342,7 @@ const Footer = () => {
                                 href="https://x.com/internetdjco"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-white hover:text-gray-300 transition-colors"
+                                className="retro-icon-btn p-1.5"
                                 aria-label="Follow us on X"
                             >
                                 <XIcon className="w-6 h-6" />
@@ -331,7 +352,7 @@ const Footer = () => {
                 )}
                 {likeError && (
                     <div className="mt-2">
-                        <p className="text-red-400 text-sm">{likeError}</p>
+                        <p className="retro-mono text-lg text-fuchsia-400">!! {likeError}</p>
                     </div>
                 )}
             </div>

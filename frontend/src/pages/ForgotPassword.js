@@ -55,23 +55,24 @@ function ForgotPassword() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-                <h1 className="text-3xl font-bold text-gray-900 text-center mb-6">Forgot Password</h1>
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="retro-panel retro-cut max-w-md w-full p-8">
+                <div className="retro-eyebrow text-center mb-3">&gt;&gt; Recovery</div>
+                <h1 className="retro-display retro-chrome text-2xl text-center mb-6">Forgot Password</h1>
                 {error && (
-                    <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                    <div className="mb-6 p-4 border border-fuchsia-500/60 bg-fuchsia-500/10 retro-mono text-lg text-fuchsia-200">
                         {error}
                     </div>
                 )}
                 {success && (
-                    <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-md">
+                    <div className="mb-6 p-4 border border-cyan-400/60 bg-cyan-400/10 retro-mono text-lg text-cyan-200">
                         {success}
                     </div>
                 )}
 
                 <form onSubmit={handleForgotPassword} className="space-y-6">
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="email" className="retro-label">
                             Email
                         </label>
                         <input
@@ -79,12 +80,12 @@ function ForgotPassword() {
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
+                            className="retro-field mt-1"
                             placeholder="Enter your email"
                             required
                         />
                     </div>
-                    <div className="flex justify-center">
+                    <div className="flex justify-center p-2 border border-cyan-400/25 bg-black/30">
                         <ReCAPTCHA
                             ref={recaptchaRef}
                             sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY}
@@ -93,16 +94,16 @@ function ForgotPassword() {
                     </div>
                     <button
                         type="submit"
-                        className="w-full bg-primary-brand-500 hover:bg-primary-brand-700 text-white font-medium px-6 py-3 rounded-md transition-colors duration-200"
+                        className="retro-btn retro-btn--hot w-full px-6 py-3 text-xs"
                     >
                         Send Reset Email
                     </button>
                 </form>
 
                 <div className="text-center mt-4">
-                    <p className="text-sm text-gray-600">
+                    <p className="retro-mono text-lg text-gray-400">
                         Remember your password?{' '}
-                        <Link to="/login" className="text-blue-600 hover:text-primary-brand-800 font-medium">
+                        <Link to="/login" className="retro-link">
                             Login
                         </Link>
                     </p>

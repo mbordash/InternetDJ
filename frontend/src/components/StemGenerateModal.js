@@ -149,20 +149,20 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 text-gray-200 rounded-lg shadow-lg w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+            <div className="retro-panel retro-cut w-full max-w-lg flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-cyan-400/25">
                     <h2 className="text-lg font-semibold">✨ Generate Sample — {track.name}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none" aria-label="Close">×</button>
                 </div>
                 <div className="p-5 space-y-4 overflow-y-auto">
                     <div>
-                        <label className="block text-sm font-medium mb-1" htmlFor="stem-gen-type">Stem Type</label>
+                        <label className="retro-label" htmlFor="stem-gen-type">Stem Type</label>
                         <select
                             id="stem-gen-type"
                             value={type}
                             onChange={(e) => setType(e.target.value)}
                             disabled={isBusy}
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm disabled:opacity-50"
+                            className="retro-field w-full disabled:opacity-50"
                         >
                             {STEM_TYPES.map(t => (
                                 <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
@@ -170,7 +170,7 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1" htmlFor="stem-gen-prompt">Describe it</label>
+                        <label className="retro-label" htmlFor="stem-gen-prompt">Describe it</label>
                         <textarea
                             id="stem-gen-prompt"
                             rows="3"
@@ -178,12 +178,12 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                             onChange={(e) => setPrompt(e.target.value)}
                             disabled={isBusy}
                             placeholder="e.g. 'deep rolling line with sub hits'"
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+                            className="w-full px-3 py-2 bg-[#1d0a38] border border-cyan-400/30 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
                         />
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="stem-gen-bpm">BPM</label>
+                            <label className="retro-label" htmlFor="stem-gen-bpm">BPM</label>
                             <input
                                 id="stem-gen-bpm"
                                 type="number"
@@ -192,35 +192,35 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                                 value={stemBpm}
                                 onChange={(e) => setStemBpm(Number(e.target.value))}
                                 disabled={isBusy}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm disabled:opacity-50"
+                                className="retro-field w-full disabled:opacity-50"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="stem-gen-key">Key</label>
+                            <label className="retro-label" htmlFor="stem-gen-key">Key</label>
                             <select
                                 id="stem-gen-key"
                                 value={stemKey}
                                 onChange={(e) => setStemKey(e.target.value)}
                                 disabled={isBusy}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm disabled:opacity-50"
+                                className="retro-field w-full disabled:opacity-50"
                             >
                                 {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="stem-gen-duration">Length (sec)</label>
+                            <label className="retro-label" htmlFor="stem-gen-duration">Length (sec)</label>
                             <select
                                 id="stem-gen-duration"
                                 value={duration}
                                 onChange={(e) => setDuration(Number(e.target.value))}
                                 disabled={isBusy}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm disabled:opacity-50"
+                                className="retro-field w-full disabled:opacity-50"
                             >
                                 {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => <option key={d} value={d}>{d}</option>)}
                             </select>
                         </div>
                     </div>
-                    <p className="text-xs text-gray-400">
+                    <p className="retro-mono text-base text-gray-400">
                         BPM defaults to this project&apos;s tempo so the stem lines up. It will drop at the playhead ({startSeconds.toFixed(1)}s).
                     </p>
                     {dailyRemaining !== null && (
@@ -231,14 +231,14 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                     )}
                     {readyStem?.url && (
                         <div className="space-y-2">
-                            <p className="text-sm text-green-400">Stem ready — have a listen before you add it.</p>
+                            <p className="retro-mono text-lg text-cyan-300">Stem ready — have a listen before you add it.</p>
                             <audio controls src={readyStem.url} className="w-full" />
                         </div>
                     )}
-                    {error && <p className="text-sm text-red-400">{error}</p>}
+                    {error && <p className="retro-mono text-lg text-fuchsia-400">{error}</p>}
                 </div>
-                <div className="flex justify-end space-x-3 px-5 py-3 border-t border-gray-700">
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-700 rounded-lg text-sm hover:bg-gray-600">Cancel</button>
+                <div className="flex justify-end space-x-3 px-5 py-3 border-t border-cyan-400/25">
+                    <button onClick={onClose} className="px-4 py-2 bg-[#1d0a38] rounded-lg text-sm hover:bg-gray-600">Cancel</button>
                     <button
                         onClick={handleGenerate}
                         disabled={isBusy || !prompt.trim() || (dailyRemaining !== null && dailyRemaining <= 0)}

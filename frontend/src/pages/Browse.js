@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useMemo } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { SpeakerWaveIcon, PlayIcon, PauseIcon, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
-import {Helmet} from "react-helmet-async";
+import { Helmet } from "react-helmet-async";
 
 function Browse() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -14,16 +14,27 @@ function Browse() {
     const [featuredSong, setFeaturedSong] = useState(null);
     const [unreviewedSongs, setUnreviewedSongs] = useState([]);
     const [error, setError] = useState(null);
+    const [genreQuery, setGenreQuery] = useState('');
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const tagResponse = await axios.get(`${API_URL}/music/by-tags`);
-                const limitedTags = tagResponse.data.map(tag => ({
-                    ...tag,
-                    songs: tag.songs.slice(0, 10),
-                }));
-                setTags(Array.isArray(tagResponse.data) ? limitedTags : []);
+                // Tolerate both API shapes so the frontend and backend can be
+                // deployed in either order: the slim response carries `count`
+                // and `thumbs`, the old one carried a full `songs` array.
+                const genres = (Array.isArray(tagResponse.data) ? tagResponse.data : []).map(tag => {
+                    const songs = Array.isArray(tag.songs) ? tag.songs : [];
+                    return {
+                        tag: tag.tag,
+                        label: tag.label || tag.tag,
+                        count: typeof tag.count === 'number' ? tag.count : songs.length,
+                        thumbs: Array.isArray(tag.thumbs)
+                            ? tag.thumbs
+                            : songs.map(song => song.image_url).filter(Boolean).slice(0, 3),
+                    };
+                });
+                setTags(genres);
 
                 const featuredResponse = await axios.get(`${API_URL}/music/featured`);
                 setFeaturedSong(featuredResponse.data[0] || null);
@@ -56,14 +67,6 @@ function Browse() {
                 });
                 console.log(`Play recorded for song ID: ${song.id}`);
                 sessionStorage.setItem(playedKey, 'true');
-                setTags((prevTags) =>
-                    prevTags.map((tag) => ({
-                        ...tag,
-                        songs: tag.songs.map((s) =>
-                            s.id === song.id ? { ...s, plays: (Number(s.plays) || 0) + 1 } : s
-                        ),
-                    }))
-                );
                 if (featuredSong?.id === song.id) {
                     setFeaturedSong((prev) => ({
                         ...prev,
@@ -95,16 +98,144 @@ function Browse() {
         });
     };
 
+    const toggleSong = (song) => {
+        if (currentSong?.id === song.id) {
+            togglePlayPause();
+        } else {
+            handleSongPlay(song);
+        }
+    };
+
+    // Artwork plus its hover play control. Shared by the table, the mobile
+    // cards, the featured slot and the review queue so they stay in sync.
+    const SongThumb = ({ song, size, iconSize = 'w-5 h-5' }) => {
+        const isLive = currentSong?.id === song.id;
+        return (
+            <div className={`relative flex-shrink-0 ${size} retro-scanlines overflow-hidden border border-cyan-400/30`}>
+                {song.image_url ? (
+                    <Link to={`/song/${song.id}`} tabIndex={0}>
+                        <img
+                            src={song.image_url}
+                            alt={song.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                e.target.style.display = 'none';
+                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                            }}
+                            loading="lazy"
+                        />
+                    </Link>
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-fuchsia-900/50 to-cyan-900/40 flex items-center justify-center retro-pixel text-cyan-300 text-[0.5rem]">
+                        ?
+                    </div>
+                )}
+                {isLive && isPlaying && (
+                    <span className="retro-eq absolute bottom-1 right-1 z-10">
+                        <span /><span /><span /><span />
+                    </span>
+                )}
+                {song.mp3_url && (
+                    <button
+                        onClick={() => toggleSong(song)}
+                        className="retro-play-overlay z-20"
+                        aria-label={isLive && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
+                    >
+                        {isLive && isPlaying ? <PauseIcon className={iconSize} /> : <PlayIcon className={iconSize} />}
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    const ArtistLink = ({ song, className = '' }) => (
+        <Link
+            to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
+            className={`retro-mono text-lg truncate ${song.profile_id ? 'retro-link' : 'text-gray-500 cursor-not-allowed'} ${className}`}
+            title={song.profile_name}
+        >
+            {song.profile_name}
+        </Link>
+    );
+
+    const PlayCount = ({ song }) => (
+        <span className="retro-mono text-lg text-cyan-300 inline-flex items-center gap-1">
+            {Number(song.plays) || 0}
+            <SpeakerWaveIcon className="w-4 h-4" />
+        </span>
+    );
+
+    const LikeCount = ({ song }) => (
+        <span className="retro-mono text-lg inline-flex items-center gap-1 text-gray-300">
+            {Number(song.likes_count) || 0}
+            <HeartIconSolid
+                className={`w-4 h-4 ${Number(song.likes_count) > 0 ? 'text-fuchsia-400' : 'text-gray-500'}`}
+            />
+        </span>
+    );
+
+    const visibleGenres = useMemo(() => {
+        const q = genreQuery.trim().toLowerCase();
+        return q ? tags.filter(g => g.label.toLowerCase().includes(q)) : tags;
+    }, [tags, genreQuery]);
+
+    // A genre tile: three covers from the genre's top tracks, then name + count.
+    const GenreCard = ({ genre }) => (
+        <Link
+            to={`/tag/${encodeURIComponent(genre.tag)}`}
+            className="retro-card retro-cut p-3 flex flex-col gap-3 group"
+            aria-label={`Browse ${genre.label} \u2014 ${genre.count} tracks`}
+        >
+            <div className="flex gap-1.5">
+                {[0, 1, 2].map((i) => {
+                    const cover = genre.thumbs[i];
+                    return (
+                        <div
+                            key={i}
+                            className="relative flex-1 aspect-square overflow-hidden retro-scanlines border border-cyan-400/25"
+                        >
+                            {cover ? (
+                                <img
+                                    src={cover}
+                                    alt=""
+                                    loading="lazy"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-fuchsia-900/40 to-cyan-900/30" />
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="flex items-end justify-between gap-2 min-w-0">
+                <div className="min-w-0">
+                    <h2 className="retro-display text-sm text-white capitalize truncate group-hover:text-cyan-200 transition-colors">
+                        {genre.label}
+                    </h2>
+                    <span className="retro-mono text-lg text-cyan-300">
+                        {genre.count} track{genre.count === 1 ? '' : 's'}
+                    </span>
+                </div>
+                <span className="retro-mono text-lg text-fuchsia-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    enter &raquo;&raquo;
+                </span>
+            </div>
+        </Link>
+    );
+
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
-                <p className="text-red-400 text-lg">{error}</p>
+            <div className="container mx-auto px-4 py-16 text-center">
+                <p className="retro-pixel text-sm text-fuchsia-400">!! SIGNAL LOST !!</p>
+                <p className="retro-mono text-2xl text-gray-300 mt-4">{error}</p>
             </div>
         );
     }
 
     return (
-        <div className="text-gray-100 pt-2">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
             <Helmet>
                 <title>Browse Music Genres</title>
                 <meta
@@ -121,411 +252,115 @@ function Browse() {
                 <meta name="twitter:description" content="Browse and stream house, trance, hip-hop, drum n bass, breaks and other electronic music." />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
-            <div className="container mx-auto px-4 py-8">
-                <div className="flex flex-col md:flex-row md:space-x-4">
-                    <div className="w-full md:w-3/4">
-                        <h1 className="text-3xl font-bold mb-8 text-white">Browse by Genre Tag</h1>
-                        {tags.length === 0 ? (
-                            <p className="text-gray-300">No tags available.</p>
-                        ) : (
-                            <div className="space-y-12">
-                                {tags.map((tag) => (
-                                    <section key={tag.tag} className="mb-12 spotify-surface p-4">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h2 className="text-2xl font-bold capitalize text-white">{tag.tag}</h2>
-                                            <Link
-                                                to={`/tag/${encodeURIComponent(tag.tag)}`}
-                                                className="px-4 py-2 spotify-pill rounded-full transition-colors"
-                                                aria-label={`View all songs in ${tag.tag} genre`}
-                                            >
-                                                View All
-                                            </Link>
-                                        </div>
-                                        {tag.songs.length === 0 ? (
-                                            <p className="text-gray-300">No songs available for this tag.</p>
-                                        ) : (
-                                            <div className="md:overflow-x-auto">
-                                                {/* Table for Desktop */}
-                                                <table className="min-w-full hidden md:table table-fixed">
-                                                    <thead>
-                                                    <tr className="bg-white/5">
-                                                        <th className="px-4 py-2 text-left text-gray-300 w-[60%]">Song</th>
-                                                        <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Plays</th>
-                                                        <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Likes</th>
-                                                    </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                    {tag.songs.map((song, index) => (
-                                                        <tr
-                                                            key={song.id}
-                                                            className={`${
-                                                                index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'
-                                                            } hover:bg-white/10 transition-colors`}
-                                                        >
-                                                            <td className="px-4 py-2 flex items-center space-x-2">
-                                                                <div className="relative flex-shrink-0 w-12 h-12">
-                                                                    {song.image_url ? (
-                                                                        <Link to={`/song/${song.id}`} tabIndex={0}>
-                                                                            <img
-                                                                                src={song.image_url}
-                                                                                alt={song.title}
-                                                                                className="w-12 h-12 rounded-md object-cover"
-                                                                                onError={(e) => {
-                                                                                    console.error(
-                                                                                        `Failed to load song image for song ${song.id}:`,
-                                                                                        song.image_url
-                                                                                    );
-                                                                                    e.target.style.display = 'none';
-                                                                                    e.target.nextSibling.style.display = 'block';
-                                                                                }}
-                                                                                loading="lazy"
-                                                                            />
-                                                                        </Link>
-                                                                    ) : (
-                                                                        <div
-                                                                            className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
-                                                                            style={{
-                                                                                display: song.image_url ? 'none' : 'flex',
-                                                                            }}
-                                                                        >
-                                                                            ?
-                                                                        </div>
-                                                                    )}
-                                                                    {song.mp3_url && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                if (currentSong?.id === song.id) {
-                                                                                    togglePlayPause();
-                                                                                } else {
-                                                                                    handleSongPlay(song);
-                                                                                }
-                                                                            }}
-                                                                            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md"
-                                                                            aria-label={currentSong?.id === song.id && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
-                                                                        >
-                                                                            {currentSong?.id === song.id && isPlaying ? (
-                                                                                <PauseIcon className="w-4 h-4 text-white" />
-                                                                            ) : (
-                                                                                <PlayIcon className="w-4 h-4 text-white" />
-                                                                            )}
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex items-center space-x-2 flex-1">
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <Link
-                                                                            to={`/song/${song.id}`}
-                                                                            className="text-white hover:text-primary-brand-300 hover:underline font-medium block truncate"
-                                                                            title={song.title}
-                                                                        >
-                                                                            {song.title}
-                                                                        </Link>
-                                                                        <div className="text-sm text-gray-300 truncate">
-                                                                            <Link
-                                                                                to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                                                                className={
-                                                                                    song.profile_id
-                                                                                        ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
-                                                                                        : 'text-gray-500 cursor-not-allowed'
-                                                                                }
-                                                                                title={song.profile_name}
-                                                                            >
-                                                                                {song.profile_name}
-                                                                            </Link>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-4 py-2">
-                                  <span className="inline-flex items-center">
-                                    {Number(song.plays) || 0}
-                                      <SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" />
-                                  </span>
-                                                            </td>
-                                                            <td className="px-4 py-2">
-                                  <span className="inline-flex items-center">
-                                    {Number(song.likes_count) || 0}
-                                      <HeartIconSolid
-                                          className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
-                                      />
-                                  </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                    </tbody>
-                                                </table>
 
-                                                {/* Card Layout for Mobile */}
-                                                <div className="md:hidden space-y-4">
-                                                    {tag.songs.map((song) => (
-                                                        <div
-                                                            key={song.id}
-                                                                    className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors"
-                                                        >
-                                                            <div className="flex items-center space-x-4">
-                                                                <div className="relative flex-shrink-0 w-16 h-16">
-                                                                    {song.image_url ? (
-                                                                        <Link to={`/song/${song.id}`} tabIndex={0}>
-                                                                            <img
-                                                                                src={song.image_url}
-                                                                                alt={song.title}
-                                                                                className="w-16 h-16 rounded-md object-cover"
-                                                                                onError={(e) => {
-                                                                                    console.error(
-                                                                                        `Failed to load song image for song ${song.id}:`,
-                                                                                        song.image_url
-                                                                                    );
-                                                                                    e.target.style.display = 'none';
-                                                                                    e.target.nextSibling.style.display = 'block';
-                                                                                }}
-                                                                                loading="lazy"
-                                                                            />
-                                                                        </Link>
-                                                                    ) : (
-                                                                        <div
-                                                                            className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
-                                                                            style={{
-                                                                                display: song.image_url ? 'none' : 'flex',
-                                                                            }}
-                                                                        >
-                                                                            ?
-                                                                        </div>
-                                                                    )}
-                                                                    {song.mp3_url && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                if (currentSong?.id === song.id) {
-                                                                                    togglePlayPause();
-                                                                                } else {
-                                                                                    handleSongPlay(song);
-                                                                                }
-                                                                            }}
-                                                                            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md"
-                                                                            aria-label={currentSong?.id === song.id && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
-                                                                        >
-                                                                            {currentSong?.id === song.id && isPlaying ? (
-                                                                                <PauseIcon className="w-4 h-4 text-white" />
-                                                                            ) : (
-                                                                                <PlayIcon className="w-4 h-4 text-white" />
-                                                                            )}
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <Link
-                                                                        to={`/song/${song.id}`}
-                                                                        className="text-white hover:text-primary-brand-300 hover:underline font-medium"
-                                                                    >
-                                                                        {song.title}
-                                                                    </Link>
-                                                                    <div className="text-sm text-gray-300">
-                                                                        <Link
-                                                                            to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                                                            className={
-                                                                                song.profile_id
-                                                                                    ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
-                                                                                    : 'text-gray-500 cursor-not-allowed'
-                                                                            }
-                                                                        >
-                                                                            {song.profile_name}
-                                                                        </Link>
-                                                                    </div>
-                                                                    <div className="text-sm text-gray-300 mt-1">
-                                                                        Plays: {Number(song.plays) || 0}
-                                                                        <SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" />
-                                                                    </div>
-                                                                    <div className="text-sm text-gray-300">
-                                                                        Likes: {Number(song.likes_count) || 0}
-                                                                        <HeartIconSolid
-                                                                            className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </section>
+            <div className="container mx-auto px-4 py-10">
+
+                <header className="mb-10">
+                    <div className="retro-eyebrow mb-3">&gt;&gt; The Record Crates</div>
+                    <h1 className="retro-display retro-chrome text-3xl sm:text-5xl">Browse by Genre</h1>
+                    <div className="retro-rule mt-4" />
+                </header>
+
+                <div className="flex flex-col lg:flex-row gap-8">
+                    <div className="w-full lg:w-3/4 min-w-0">
+                        <div className="flex flex-wrap items-center gap-3 mb-6">
+                            <div className="flex items-stretch flex-1 min-w-[200px]">
+                                <label htmlFor="genre-filter" className="sr-only">Filter genres by name</label>
+                                <input
+                                    id="genre-filter"
+                                    type="search"
+                                    value={genreQuery}
+                                    onChange={(e) => setGenreQuery(e.target.value)}
+                                    placeholder="filter genres..."
+                                    className="retro-field flex-1"
+                                />
+                                {genreQuery.trim() && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setGenreQuery('')}
+                                        className="retro-btn px-3 text-[0.6rem] shrink-0"
+                                        aria-label="Clear genre filter"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                            <span className="retro-mono text-lg text-cyan-300 shrink-0">
+                                {genreQuery.trim()
+                                    ? `${visibleGenres.length} of ${tags.length} genres`
+                                    : `${tags.length} genre${tags.length === 1 ? '' : 's'}`}
+                            </span>
+                        </div>
+
+                        {tags.length === 0 ? (
+                            <p className="retro-mono text-xl text-gray-400">&gt; no genres available yet.</p>
+                        ) : visibleGenres.length === 0 ? (
+                            <p className="retro-mono text-xl text-gray-400">
+                                &gt; nothing matches "{genreQuery.trim()}".
+                            </p>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {visibleGenres.map((genre) => (
+                                    <GenreCard key={genre.tag} genre={genre} />
                                 ))}
                             </div>
                         )}
                     </div>
 
-                    <aside className="w-full md:w-1/4 mt-8 md:mt-0 md:pl-4">
-                        <div className="mb-8">
-                            <h2 className="text-xl font-bold mb-4 text-white">Featured Song</h2>
+                    <aside className="w-full lg:w-1/4 space-y-8">
+                        <section className="retro-panel retro-cut p-4">
+                            <h2 className="retro-eyebrow mb-3">// Featured Song //</h2>
                             {featuredSong ? (
-                                <div className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors">
-                                    <div className="relative">
-                                        <Link to={`/song/${featuredSong.id}`} tabIndex={0}>
-                                            <img
-                                                src={featuredSong.image_url || 'https://via.placeholder.com/150'}
-                                                alt={featuredSong.title}
-                                                className="w-full h-auto aspect-square rounded-md object-cover mb-2"
-                                            />
-                                        </Link>
-                                        {featuredSong.mp3_url && (
-                                            <button
-                                                onClick={() => {
-                                                    if (currentSong?.id === featuredSong.id) {
-                                                        togglePlayPause();
-                                                    } else {
-                                                        handleSongPlay(featuredSong);
-                                                    }
-                                                }}
-                                                className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md"
-                                                aria-label={currentSong?.id === featuredSong.id && isPlaying ? `Pause ${featuredSong.title}` : `Play ${featuredSong.title}`}
-                                            >
-                                                {currentSong?.id === featuredSong.id && isPlaying ? (
-                                                    <PauseIcon className="w-12 h-12 text-white" />
-                                                ) : (
-                                                    <PlayIcon className="w-12 h-12 text-white" />
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <Link
-                                        to={`/song/${featuredSong.id}`}
-                                        className="text-white hover:text-gray-300 hover:underline font-semibold"
-                                    >
-                                        {featuredSong.title}
-                                    </Link>
-                                    <div className="text-sm text-gray-300 mb-2">
+                                <>
+                                    <SongThumb song={featuredSong} size="w-full aspect-square" iconSize="w-10 h-10" />
+                                    <div className="mt-3">
                                         <Link
-                                            to={featuredSong.profile_id ? `/profile/${featuredSong.profile_id}` : '#'}
-                                            className={
-                                                featuredSong.profile_id
-                                                    ? 'text-white hover:text-gray-300 hover:underline'
-                                                    : 'text-gray-500 cursor-not-allowed'
-                                            }
+                                            to={`/song/${featuredSong.id}`}
+                                            className="retro-display text-sm text-white hover:text-cyan-200 block truncate"
                                         >
-                                            {featuredSong.profile_name}
+                                            {featuredSong.title}
                                         </Link>
+                                        <ArtistLink song={featuredSong} className="block" />
+                                        <div className="flex items-center gap-4 mt-2">
+                                            <PlayCount song={featuredSong} />
+                                            <LikeCount song={featuredSong} />
+                                        </div>
                                     </div>
-                                    <div className="text-sm text-gray-300 mb-2">
-                    <span className="inline-flex items-center">
-                      Plays: {Number(featuredSong.plays) || 0}
-                        <SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" />
-                    </span>
-                                        <span className="inline-flex items-center ml-4">
-                      Likes: {Number(featuredSong.likes_count) || 0}
-                                            <HeartIconSolid
-                                                className={`w-4 h-4 ml-1 ${Number(featuredSong.likes_count) > 0 ? 'text-red-600' : 'text-gray-300'}`}
-                                            />
-                    </span>
-                                    </div>
-                                </div>
+                                </>
                             ) : (
-                                <p className="text-gray-300">No featured song available.</p>
+                                <p className="retro-mono text-lg text-gray-400">&gt; no featured song.</p>
                             )}
-                        </div>
+                        </section>
 
-                        <div>
-                            <h2 className="text-xl font-bold mb-4 text-white">Songs Awaiting Reviews</h2>
+                        <section className="retro-panel retro-cut p-4">
+                            <h2 className="retro-eyebrow mb-3">// Awaiting Reviews //</h2>
                             {unreviewedSongs.length === 0 ? (
-                                <p className="text-gray-300">No unreviewed songs available.</p>
+                                <p className="retro-mono text-lg text-gray-400">&gt; queue is empty.</p>
                             ) : (
-                                <ul className="space-y-4">
+                                <ul className="space-y-3">
                                     {unreviewedSongs.map((song) => (
-                                        <li
-                                            key={song.id}
-                                            className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors"
-                                        >
-                                            <div className="flex items-center space-x-2">
-                                                <div className="relative flex-shrink-0 w-16 h-16">
-                                                    {song.image_url ? (
-                                                        <Link to={`/song/${song.id}`} tabIndex={0}>
-                                                            <img
-                                                                src={song.image_url}
-                                                                alt={song.title}
-                                                                className="w-16 h-16 rounded-md object-cover"
-                                                                onError={(e) => {
-                                                                    console.error(
-                                                                        `Failed to load song image for song ${song.id}:`,
-                                                                        song.image_url
-                                                                    );
-                                                                    e.target.style.display = 'none';
-                                                                    e.target.nextSibling.style.display = 'block';
-                                                                }}
-                                                                loading="lazy"
-                                                            />
-                                                        </Link>
-                                                    ) : (
-                                                        <div
-                                                            className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
-                                                            style={{
-                                                                display: song.image_url ? 'none' : 'flex',
-                                                            }}
-                                                        >
-                                                            ?
-                                                        </div>
-                                                    )}
-                                                    {song.mp3_url && (
-                                                        <button
-                                                            onClick={() => {
-                                                                if (currentSong?.id === song.id) {
-                                                                    togglePlayPause();
-                                                                } else {
-                                                                    handleSongPlay(song);
-                                                                }
-                                                            }}
-                                                            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md"
-                                                            aria-label={currentSong?.id === song.id && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
-                                                        >
-                                                            {currentSong?.id === song.id && isPlaying ? (
-                                                                <PauseIcon className="w-4 h-4 text-white" />
-                                                            ) : (
-                                                                <PlayIcon className="w-4 h-4 text-white" />
-                                                            )}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <Link
-                                                        to={`/song/${song.id}`}
-                                                        className="text-white hover:text-primary-brand-300 hover:underline font-medium"
-                                                    >
-                                                        {song.title}
-                                                    </Link>
-                                                    <div className="text-sm text-gray-300">
-                                                        <Link
-                                                            to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                                            className={
-                                                                song.profile_id
-                                                                    ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
-                                                                    : 'text-gray-500 cursor-not-allowed'
-                                                            }
-                                                        >
-                                                            {song.profile_name}
-                                                        </Link>
-                                                    </div>
-                                                    <div className="text-sm text-gray-300">
-                            <span className="inline-flex items-center">
-                              Plays: {Number(song.plays) || 0}
-                                <SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" />
-                            </span>
-                                                        <span className="inline-flex items-center ml-4">
-                              Likes: {Number(song.likes_count) || 0}
-                                                            <HeartIconSolid
-                                                                className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`}
-                                                            />
-                            </span>
-                                                    </div>
-                                                    <Link
-                                                        to={`/song/${song.id}#review`}
-                                                        className="text-primary-brand-300 hover:text-primary-brand-200 hover:underline text-sm font-medium"
-                                                    >
-                                                        Write a Review
-                                                    </Link>
-                                                </div>
+                                        <li key={song.id} className="flex items-start gap-3 pb-3 border-b border-white/5 last:border-0 last:pb-0">
+                                            <SongThumb song={song} size="w-14 h-14" iconSize="w-4 h-4" />
+                                            <div className="flex-1 min-w-0">
+                                                <Link
+                                                    to={`/song/${song.id}`}
+                                                    className="retro-display text-[0.7rem] text-white hover:text-cyan-200 block truncate"
+                                                >
+                                                    {song.title}
+                                                </Link>
+                                                <ArtistLink song={song} className="block" />
+                                                <Link
+                                                    to={`/song/${song.id}#review`}
+                                                    className="retro-mono text-lg text-fuchsia-400 hover:text-fuchsia-300"
+                                                >
+                                                    &gt; write a review
+                                                </Link>
                                             </div>
                                         </li>
                                     ))}
                                 </ul>
                             )}
-                        </div>
+                        </section>
                     </aside>
                 </div>
             </div>

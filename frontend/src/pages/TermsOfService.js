@@ -9,7 +9,7 @@ function TermsOfService() {
     const baseUrl = SITE_URL;
 
     return (
-        <div className="text-gray-100 pt-2 min-h-screen">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
                 <title>Terms of Service | InternetDJ</title>
                 <meta name="description" content="InternetDJ Terms of Service - the rules and terms for using the platform." />
@@ -32,8 +32,8 @@ function TermsOfService() {
                     </p>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">1. Eligibility & Accounts</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">1. Eligibility & Accounts</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             You must be at least 13 years old to use the Service. You are responsible for
                             maintaining the confidentiality of your account credentials and for all activity
                             that occurs under your account. Notify us promptly of any unauthorized use.
@@ -41,13 +41,13 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">2. Your Content</h2>
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">2. Your Content</h2>
                         <p className="text-gray-300 mb-3">
                             You retain ownership of the music, audio, images, and other content you upload or
                             create ("Your Content"). You represent that you have the rights necessary to upload
                             and share Your Content.
                         </p>
-                        <p className="text-gray-300">
+                        <p className="retro-mono text-xl text-gray-300">
                             By publishing content publicly, you grant InternetDJ a limited, non-exclusive license
                             to host, store, display, and stream that content solely for the purpose of operating
                             and promoting the Service. We will not use Your Content to train AI models without
@@ -56,9 +56,9 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">3. Acceptable Use</h2>
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">3. Acceptable Use</h2>
                         <p className="text-gray-300 mb-3">You agree not to:</p>
-                        <ul className="list-disc list-inside text-gray-300 space-y-2">
+                        <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li>Upload content that infringes the intellectual property or other rights of any party.</li>
                             <li>Post unlawful, harmful, harassing, defamatory, or otherwise objectionable content.</li>
                             <li>Attempt to disrupt, attack, or gain unauthorized access to the Service or other accounts.</li>
@@ -68,8 +68,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">4. Intellectual Property</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">4. Intellectual Property</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             The Service, including its software, design, and branding, is owned by InternetDJ and
                             protected by applicable laws. Except for Your Content, you may not copy, modify, or
                             distribute any part of the Service without our permission.
@@ -77,8 +77,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">5. Copyright & DMCA</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">5. Copyright & DMCA</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             We respect intellectual property rights. If you believe content on the Service
                             infringes your copyright, contact us at{' '}
                             <a href="mailto:internetdjco@gmail.com" className="text-primary-brand-400 hover:underline">internetdjco@gmail.com</a>{' '}
@@ -88,8 +88,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">6. IDJ Coin</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">6. IDJ Coin</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             Any rewards or tokens offered through the Service, including IDJ Coin, are provided as
                             part of community features and are subject to additional rules. They are not financial
                             instruments and may change or be discontinued at our discretion.
@@ -97,8 +97,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">7. Termination</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">7. Termination</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             We may suspend or terminate your access to the Service at any time if you violate
                             these Terms or to protect the Service and its users. You may stop using the Service
                             and request account deletion at any time.
@@ -106,8 +106,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">8. Disclaimers</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">8. Disclaimers</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             The Service is provided "as is" and "as available" without warranties of any kind,
                             whether express or implied. We do not warrant that the Service will be uninterrupted,
                             secure, or error-free.
@@ -115,8 +115,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">9. Indemnification</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">9. Indemnification</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             You agree to defend, indemnify, and hold harmless InternetDJ and its officers,
                             employees, and affiliates from any claims, damages, losses, or expenses arising from
                             your use of the Service, your Content, your violation of these Terms, or your
@@ -125,8 +125,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">10. Limitation of Liability</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">10. Limitation of Liability</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             To the maximum extent permitted by law, InternetDJ will not be liable for any
                             indirect, incidental, special, consequential, or punitive damages, or any loss of
                             data, profits, or revenue arising from your use of the Service. Our total liability
@@ -137,8 +137,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">11. Governing Law</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">11. Governing Law</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             These Terms are governed by the laws of the State of New York, United States,
                             without regard to conflict of law principles. You agree that any dispute arising from
                             these Terms will be brought exclusively in the state or federal courts located in New
@@ -147,8 +147,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">12. Changes to These Terms</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">12. Changes to These Terms</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             We may update these Terms from time to time. We will revise the "Last updated" date
                             above, and your continued use of the Service after changes take effect constitutes
                             acceptance of the revised Terms.
@@ -156,8 +156,8 @@ function TermsOfService() {
                     </section>
 
                     <section className="mb-2">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">13. Contact Us</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">13. Contact Us</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             Questions about these Terms? Contact us at{' '}
                             <a href="mailto:internetdjco@gmail.com" className="text-primary-brand-400 hover:underline">internetdjco@gmail.com</a>.
                         </p>

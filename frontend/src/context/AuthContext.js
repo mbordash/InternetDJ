@@ -8,6 +8,7 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [sessionExpired, setSessionExpired] = useState(false);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -28,6 +29,7 @@ export const AuthProvider = ({ children }) => {
                     );
                     if (err.response?.status === 401 || err.response?.status === 403) {
                         localStorage.removeItem('token'); // Clear invalid token
+                        setSessionExpired(true);
                     }
                 }
             }
@@ -38,7 +40,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, setUser, loading }}>
+        <AuthContext.Provider value={{ user, setUser, loading, sessionExpired, setSessionExpired }}>
             {children}
         </AuthContext.Provider>
     );

@@ -148,16 +148,16 @@ const Projects = () => {
             </Helmet>
 
             {/* Hero Section */}
-            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8">
-                <h1 className="text-3xl font-bold mb-4 text-white">InternetDJ: Your Browser-Based Music Studio</h1>
-                <p className="text-lg text-gray-300 mb-4">
+            <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8">
+                <h1 className="retro-display retro-chrome text-2xl sm:text-3xl mb-4">InternetDJ: Your Browser-Based Music Studio</h1>
+                <p className="retro-mono text-xl text-gray-300 mb-4">
                     Create music anywhere with InternetDJ’s <strong>browser-based Digital Audio Workstation</strong>. Sequence <strong>MIDI notes</strong>, mix <strong>audio samples</strong>, design <strong>custom instruments</strong>, apply <strong>effects</strong>, and <strong>export to MP3</strong>—no downloads needed. We’re in early development and building this with your input. Join our forum to share ideas and make this studio epic!
                 </p>
                 <div className="flex flex-wrap gap-4">
                     {user ? (
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center px-4 py-2 bg-primary-brand-500 text-white font-semibold rounded-full shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                            className="retro-btn retro-btn--hot inline-flex items-center px-4 py-2 text-xs"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
                             Start a Project
@@ -165,7 +165,7 @@ const Projects = () => {
                     ) : (
                         <Link
                             to="/login"
-                            className="inline-flex items-center px-4 py-2 bg-primary-brand-500 text-white font-semibold rounded-full shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                            className="retro-btn inline-flex items-center px-4 py-2 text-xs"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
                             Log In to Create
@@ -173,7 +173,7 @@ const Projects = () => {
                     )}
                     <Link
                         to="/forum"
-                        className="inline-flex items-center px-4 py-2 bg-primary-brand-600 text-white font-semibold rounded-full shadow-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                        className="retro-btn inline-flex items-center px-4 py-2 text-xs"
                     >
                         Join the Forum
                     </Link>
@@ -183,11 +183,11 @@ const Projects = () => {
             {/* Create Project Modal */}
             {showCreateModal && user && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-[#111827] border border-white/10 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 text-gray-100">
-                        <h3 className="text-lg font-bold mb-4 text-white">Create New Project</h3>
+                    <div className="retro-panel retro-cut p-6 max-w-sm w-full mx-4 text-gray-100">
+                        <h3 className="retro-display text-base retro-glow-cyan mb-4">Create New Project</h3>
                         <form onSubmit={handleCreateProject} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Project Title</label>
+                                <label className="retro-label">Project Title</label>
                                 <input
                                     type="text"
                                     value={newProjectTitle}
@@ -201,13 +201,13 @@ const Projects = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateModal(false)}
-                                    className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                    className="retro-btn py-2 px-4 text-xs"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                    className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                 >
                                     Create
                                 </button>
@@ -221,14 +221,14 @@ const Projects = () => {
 
             <div className="flex flex-col md:flex-row gap-8 items-start">
                 <div className="flex-1 max-w-4xl">
-                    <h2 className="text-2xl font-bold mb-4 text-white">Your Digital Audio Workstation Projects</h2>
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Your Digital Audio Workstation Projects</h2>
                     {user ? (
                         <>
-                            {error && <p className="text-red-400 mb-4">{error}</p>}
-                            {success && <p className="text-emerald-400 mb-4">{success}</p>}
+                            {error && <p className="retro-mono text-xl text-fuchsia-400 mb-4">{error}</p>}
+                            {success && <p className="retro-mono text-xl text-cyan-300 mb-4">{success}</p>}
                             <div className="space-y-4">
                                 {projects.length === 0 ? (
-                                    <p className="text-gray-300">No projects found. Start one using the button above!</p>
+                                    <p className="retro-mono text-xl text-gray-300">No projects found. Start one using the button above!</p>
                                 ) : (
                                     projects.map((project) => (
                                         <div
@@ -239,17 +239,17 @@ const Projects = () => {
                                                 to={`/projects/${project.id}`}
                                                 className="flex-1"
                                             >
-                                                <h3 className="text-lg font-semibold text-white">{project.title}</h3>
-                                                <p className="text-sm text-gray-300">
+                                                <h3 className="retro-display text-xs text-white">{project.title}</h3>
+                                                <p className="retro-mono text-lg text-gray-400">
                                                     Created: {new Date(project.created_at).toLocaleDateString()}
                                                 </p>
-                                                <p className="text-sm text-gray-300">
+                                                <p className="retro-mono text-lg text-gray-400">
                                                     Visibility: {project.is_public ? 'Public' : 'Private'}
                                                 </p>
                                             </Link>
                                             <button
                                                 onClick={() => openDeleteConfirm(project.id)}
-                                                className="ml-4 py-1 px-3 bg-red-500 text-white font-semibold rounded-md shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                                className="retro-btn ml-4 py-1 px-3 text-[0.6rem] !border-red-400 !text-red-300"
                                             >
                                                 Delete
                                             </button>
@@ -259,29 +259,29 @@ const Projects = () => {
                             </div>
                         </>
                     ) : (
-                        <p className="text-lg text-gray-300">
-                            Please <Link to="/login" className="text-primary-brand hover:underline">log in</Link> to create and manage your projects.
+                        <p className="retro-mono text-xl text-gray-300">
+                            Please <Link to="/login" className="retro-link">log in</Link> to create and manage your projects.
                         </p>
                     )}
 
                     {/* Confirmation Modal */}
                     {deleteProjectId && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                            <div className="bg-[#111827] border border-white/10 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 text-gray-100">
-                                <h3 className="text-lg font-bold mb-4 text-white">Confirm Delete</h3>
-                                <p className="text-gray-300 mb-6">
+                            <div className="retro-panel retro-cut p-6 max-w-sm w-full mx-4 text-gray-100">
+                                <h3 className="retro-display text-base retro-glow-cyan mb-4">Confirm Delete</h3>
+                                <p className="retro-mono text-xl text-gray-300 mb-6">
                                     Are you sure you want to delete this project? This action cannot be undone.
                                 </p>
                                 <div className="flex justify-end space-x-4">
                                     <button
                                         onClick={closeDeleteConfirm}
-                                        className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                        className="retro-btn py-2 px-4 text-xs"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         onClick={handleDeleteProject}
-                                        className="py-2 px-4 bg-red-500 text-white font-semibold rounded-md shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                        className="retro-btn py-2 px-4 text-xs !border-red-400 !text-red-300"
                                     >
                                         Delete
                                     </button>
@@ -291,24 +291,24 @@ const Projects = () => {
                     )}
                 </div>
 
-                <div className="w-full md:w-1/3 spotify-surface border border-white/10 rounded-xl p-6">
-                    <h2 className="text-2xl font-bold mb-4 text-white">Explore Community Creations</h2>
-                    <p className="text-gray-300 mb-4">
+                <div className="w-full md:w-1/3 retro-panel retro-cut border border-white/10 rounded-xl p-6">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Explore Community Creations</h2>
+                    <p className="retro-mono text-xl text-gray-300 mb-4">
                         Check out what others are making with InternetDJ Digital Audio Workstation! Inspired? Share your own projects to join the community.
                     </p>
                     <div className="space-y-4">
                         {publicProjects.length === 0 ? (
-                            <p className="text-gray-300">
+                            <p className="retro-mono text-xl text-gray-300">
                                 No public projects yet.{' '}
                                 {user ? (
                                     <button
                                         onClick={() => setShowCreateModal(true)}
-                                        className="text-primary-brand hover:underline"
+                                        className="retro-link"
                                     >
                                         Create one to share!
                                     </button>
                                 ) : (
-                                    <Link to="/login" className="text-primary-brand hover:underline">
+                                    <Link to="/login" className="retro-link">
                                         Log in to contribute!
                                     </Link>
                                 )}
@@ -317,7 +317,7 @@ const Projects = () => {
                             publicProjects.map((project) => (
                                 <div
                                     key={project.id}
-                                    className="p-4 bg-white/5 border border-white/10 rounded-xl shadow-sm hover:bg-white/10 transition-colors"
+                                    className="retro-card retro-cut p-4"
                                 >
                                     <div className="flex items-start">
                                         <div className="flex-shrink-0 mr-4">
@@ -333,9 +333,9 @@ const Projects = () => {
                                         </div>
                                         <div className="flex-1">
                                             <Link to={`/public/${project.id}`} className="block">
-                                                <h3 className="text-lg font-semibold text-white hover:underline">{project.title}</h3>
+                                                <h3 className="retro-display text-xs text-white hover:text-cyan-200">{project.title}</h3>
                                             </Link>
-                                            <p className="text-sm text-gray-300">
+                                            <p className="retro-mono text-lg text-gray-400">
                                                 Created: {new Date(project.created_at).toLocaleDateString()}
                                             </p>
                                             <p className="text-sm text-gray-300 flex items-center">
@@ -343,7 +343,7 @@ const Projects = () => {
                                                 {project.creator && project.profile_id ? (
                                                     <Link
                                                         to={`/profile/${project.profile_id}`}
-                                                        className="text-primary-brand hover:underline ml-1"
+                                                        className="retro-link ml-1"
                                                         aria-label={`View ${project.creator}'s profile`}
                                                     >
                                                         {project.creator}
@@ -362,53 +362,53 @@ const Projects = () => {
             </div>
 
             {/* Feature Showcase */}
-            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8">
-                <h2 className="text-2xl font-bold mb-4 text-white">What Can You Create with InternetDJ Digital Audio Workstation?</h2>
-                <p className="text-gray-300 mb-4">
+            <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8">
+                <h2 className="retro-display text-lg retro-glow-magenta mb-4">What Can You Create with InternetDJ Digital Audio Workstation?</h2>
+                <p className="retro-mono text-xl text-gray-300 mb-4">
                     From beats to melodies, our Digital Audio Workstation empowers your creativity. Here’s what you can do today, with more features on the way!
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faMusic} className="w-8 h-8 text-primary-brand-300" />
+                        <FontAwesomeIcon icon={faMusic} className="w-8 h-8 text-cyan-300" />
                         <div>
-                            <h3 className="text-lg font-semibold text-white">MIDI Sequencing</h3>
-                            <p className="text-sm text-gray-300">
+                            <h3 className="retro-display text-xs text-white">MIDI Sequencing</h3>
+                            <p className="retro-mono text-lg text-gray-400">
                                 Craft melodies and rhythms with our intuitive MIDI editor, right in your browser.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faVolumeUp} className="w-8 h-8 text-primary-brand-300" />
+                        <FontAwesomeIcon icon={faVolumeUp} className="w-8 h-8 text-cyan-300" />
                         <div>
-                            <h3 className="text-lg font-semibold text-white">Audio Samples</h3>
-                            <p className="text-sm text-gray-300">
+                            <h3 className="retro-display text-xs text-white">Audio Samples</h3>
+                            <p className="retro-mono text-lg text-gray-400">
                                 Drag and drop from our sample library or upload your own to mix and layer sounds.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faHeadphones} className="w-8 h-8 text-primary-brand-300" />
+                        <FontAwesomeIcon icon={faHeadphones} className="w-8 h-8 text-cyan-300" />
                         <div>
-                            <h3 className="text-lg font-semibold text-white">Custom Instruments</h3>
-                            <p className="text-sm text-gray-300">
+                            <h3 className="retro-display text-xs text-white">Custom Instruments</h3>
+                            <p className="retro-mono text-lg text-gray-400">
                                 Design unique synths with customizable settings for endless sonic possibilities.
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faSlidersH} className="w-8 h-8 text-primary-brand-300" />
+                        <FontAwesomeIcon icon={faSlidersH} className="w-8 h-8 text-cyan-300" />
                         <div>
-                            <h3 className="text-lg font-semibold text-white">Effects</h3>
-                            <p className="text-sm text-gray-300">
+                            <h3 className="retro-display text-xs text-white">Effects</h3>
+                            <p className="retro-mono text-lg text-gray-400">
                                 Add reverb, delay, and more to polish your tracks. New effects coming soon!
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
-                        <FontAwesomeIcon icon={faFileAudio} className="w-8 h-8 text-primary-brand-300" />
+                        <FontAwesomeIcon icon={faFileAudio} className="w-8 h-8 text-cyan-300" />
                         <div>
-                            <h3 className="text-lg font-semibold text-white">MP3 Export</h3>
-                            <p className="text-sm text-gray-300">
+                            <h3 className="retro-display text-xs text-white">MP3 Export</h3>
+                            <p className="retro-mono text-lg text-gray-400">
                                 Export your tracks as MP3s to share or upload to InternetDJ’s music platform.
                             </p>
                         </div>

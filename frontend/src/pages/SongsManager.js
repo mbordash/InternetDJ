@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { SpeakerWaveIcon, StarIcon, PencilIcon, TrashIcon, ChartBarIcon, XMarkIcon } from '@heroicons/react/24/solid';
+import { SpeakerWaveIcon, StarIcon, PencilIcon, TrashIcon, ChartBarIcon, XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
 import API_URL from '../utils/api';
 import { Line } from 'react-chartjs-2';
 import Chart from 'chart.js/auto';
@@ -67,7 +67,17 @@ const SongsManager = () => {
     const editMp3InputRef = useRef(null);
     const editImageInputRef = useRef(null);
     const songGenreInputRef = useRef(null);
+    // Existing genres, used to suggest what artists already use. This is what
+    // actually stops new spelling variants appearing; typing something new is
+    // still allowed.
+    const [knownGenres, setKnownGenres] = useState([]);
     const editGenreInputRef = useRef(null);
+
+    useEffect(() => {
+        axios.get(`${API_URL}/music/genres`)
+            .then(res => setKnownGenres(Array.isArray(res.data) ? res.data : []))
+            .catch(() => setKnownGenres([]));  // suggestions are optional
+    }, []);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -249,6 +259,48 @@ const SongsManager = () => {
         setShowUploadForm(false);
     };
 
+    // Punctuation is stripped from both sides so 'd&b' matches the alias stored
+    // as 'd b'. This is only for ranking suggestions — the authoritative
+    // normalisation stays on the server, and being approximate here is fine.
+    const looseGenreKey = (text) => (text || '')
+        .toLowerCase()
+        .replace(/[`´'‘’.\-_/\\&+]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .split(' ')
+        .filter(word => word && word !== 'and' && word !== 'n')
+        .join(' ');
+
+    const genreSuggestions = (typed, chosen) => {
+        const q = looseGenreKey(typed);
+        if (!q) return [];
+        const taken = new Set((chosen || []).map(t => t.toLowerCase()));
+        // `aliases` comes from the API and carries the abbreviations artists
+        // actually type, so 'dnb' finds Drum and Bass.
+        return knownGenres
+            .filter(g => !taken.has(g.label.toLowerCase()))
+            .filter(g =>
+                looseGenreKey(g.label).includes(q) ||
+                looseGenreKey(g.key).includes(q) ||
+                (g.aliases || []).some(alias => looseGenreKey(alias).includes(q))
+            )
+            .slice(0, 6);
+    };
+
+    const applySongGenreSuggestion = (label) => {
+        if (songForm.genres.length >= 3) {
+            setError('Maximum 3 genres allowed');
+            return;
+        }
+        if (!songForm.genres.includes(label)) {
+            setSongForm({ ...songForm, genres: [...songForm.genres, label], genreInput: '' });
+            setError(null);
+        } else {
+            setSongForm({ ...songForm, genreInput: '' });
+        }
+        if (songGenreInputRef.current) songGenreInputRef.current.focus();
+    };
+
     const removeSongGenreTag = (tagToRemove) => {
         setSongForm({
             ...songForm,
@@ -377,6 +429,29 @@ const SongsManager = () => {
         editGenreInputRef.current.focus();
     };
 
+    const handleToggleDownload = async (song) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setError('You must be logged in to change download settings');
+            return;
+        }
+
+        const nextValue = !song.allow_download;
+        try {
+            await axios.patch(
+                `${API_URL}/music/${song.id}/allow-download`,
+                { allow_download: nextValue },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setSongs((prevSongs) => prevSongs.map((s) =>
+                s.id === song.id ? { ...s, allow_download: nextValue } : s
+            ));
+            setError(null);
+        } catch (err) {
+            setError(`Failed to update download setting: ${err.response?.data?.error || err.message}`);
+        }
+    };
+
     const handleDelete = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -500,15 +575,16 @@ const SongsManager = () => {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-2 min-h-screen">
-            <h1 className="text-3xl font-bold mb-6 text-white">Songs Manager</h1>
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
+            <div className="container mx-auto px-4 py-8 max-w-4xl">
+            <h1 className="retro-display retro-chrome text-3xl mb-6">Songs Manager</h1>
 
             {/* Upload Song Button */}
             {!showUploadForm && (
                 <div className="mb-8">
                         <button
                         onClick={() => setShowUploadForm(true)}
-                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm  focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
                     >
                         Upload New Song
                     </button>
@@ -517,9 +593,9 @@ const SongsManager = () => {
 
             {/* Song Upload Section */}
             {showUploadForm && (
-                <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100">
+                <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold text-white">Upload a Song</h2>
+                        <h2 className="retro-display text-base retro-glow-cyan">Upload a Song</h2>
                         <button
                             onClick={() => setShowUploadForm(false)}
                             className="text-primary-brand-300 hover:text-primary-brand-200 focus:outline-none"
@@ -534,7 +610,7 @@ const SongsManager = () => {
                             <p className="text-lg text-emerald-400">Song uploaded successfully!</p>
                             <button
                                 onClick={handleUploadMore}
-                                className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm hover:bg-primary-brand-700"
+                                className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                             >
                                 Upload More
                             </button>
@@ -542,7 +618,7 @@ const SongsManager = () => {
                     ) : (
                         <form onSubmit={handleSongSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Song Title</label>
+                                <label className="retro-label">Song Title</label>
                                 <input
                                     type="text"
                                     name="title"
@@ -553,20 +629,20 @@ const SongsManager = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Genres (up to 3, comma-separated)</label>
+                                <label className="retro-label">Genres (up to 3, comma-separated)</label>
                                 <div
                                     className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm focus-within:ring-2 focus-within:ring-primary-brand-500 focus-within:border-primary-brand-500 flex flex-wrap items-center gap-1 min-h-[38px] bg-white/5"
                                 >
                                     {songForm.genres.map((tag, index) => (
                                         <span
                                             key={index}
-                                            className="inline-flex items-center bg-primary-brand-100 text-primary-brand-800 text-sm font-medium px-2 py-0.5 rounded-full mr-1 my-1"
+                                            className="retro-chip inline-flex items-center px-2 py-0.5 mr-1 my-1"
                                         >
                                             {tag}
                                             <button
                                                 type="button"
                                                 onClick={() => removeSongGenreTag(tag)}
-                                                className="ml-1 text-primary-brand-300 hover:text-primary-brand-200 focus:outline-none"
+                                                className="ml-1 text-cyan-300 hover:text-fuchsia-300 focus:outline-none"
                                                 aria-label={`Remove ${tag} genre`}
                                             >
                                                 <XMarkIcon className="w-4 h-4" />
@@ -581,12 +657,31 @@ const SongsManager = () => {
                                         placeholder={songForm.genres.length === 0 ? "e.g., Rock, Drum 'n' Bass, Electronic" : ""}
                                             className="flex-1 outline-none border-none p-0 m-1 min-w-[100px] text-sm bg-transparent text-white placeholder:text-gray-500"
                                         ref={songGenreInputRef}
+                                        autoComplete="off"
                                     />
                                 </div>
-                                        <p className="mt-1 text-sm text-gray-400">Enter genres and press comma to add (max 3).</p>
+                                {genreSuggestions(songForm.genreInput, songForm.genres).length > 0 && (
+                                    <ul className="retro-panel retro-cut mt-2 p-1">
+                                        {genreSuggestions(songForm.genreInput, songForm.genres).map((g) => (
+                                            <li key={g.key}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => applySongGenreSuggestion(g.label)}
+                                                    className="retro-menu-item flex items-center justify-between gap-3"
+                                                >
+                                                    <span>&gt; {g.label}</span>
+                                                    <span className="retro-mono text-base text-cyan-300/70 shrink-0">
+                                                        {g.count} track{g.count === 1 ? '' : 's'}
+                                                    </span>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                        <p className="retro-mono text-lg text-gray-400 mt-1">Press comma to add, or pick a suggestion (max 3).</p>
                             </div>
                             <div>
-                                        <label className="block text-sm font-medium text-gray-200">Description</label>
+                                        <label className="retro-label">Description</label>
                                 <textarea
                                     name="description"
                                     value={songForm.description}
@@ -596,7 +691,7 @@ const SongsManager = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">MP3 (320kbps) File</label>
+                                <label className="retro-label">MP3 (320kbps) File</label>
                                 <input
                                     type="file"
                                     name="mp3"
@@ -608,7 +703,7 @@ const SongsManager = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Song Image (Optional, JPEG or PNG)</label>
+                                <label className="retro-label">Song Image (Optional, JPEG or PNG)</label>
                                 <input
                                     type="file"
                                     name="image"
@@ -632,10 +727,10 @@ const SongsManager = () => {
                             <button
                                 type="submit"
                                 disabled={isUploading}
-                                className={`w-full py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm ${
+                                className={`retro-btn retro-btn--hot w-full py-2 px-4 text-xs ${
                                     isUploading
                                         ? 'opacity-50 cursor-not-allowed'
-                                        : 'hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand'
+                                        : ' focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand'
                                 }`}
                             >
                                 {isUploading ? 'Uploading...' : 'Upload Song'}
@@ -646,10 +741,10 @@ const SongsManager = () => {
             )}
 
             {/* Songs List */}
-            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md text-gray-100">
-                <h2 className="text-2xl font-bold mb-4 text-white">Your Songs</h2>
+            <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md text-gray-100">
+                <h2 className="retro-display text-base retro-glow-cyan mb-4">Your Songs</h2>
                 {songs.length === 0 ? (
-                    <p className="text-gray-300">No songs uploaded yet.</p>
+                    <p className="retro-mono text-xl text-gray-300">No songs uploaded yet.</p>
                 ) : (
                     <div className="space-y-6">
                         {songs.map((song) => (
@@ -681,7 +776,7 @@ const SongsManager = () => {
                                                     {song.genre.split(',').slice(0, 3).map((tag, index) => (
                                                         <span
                                                             key={index}
-                                                            className="inline-flex items-center bg-primary-brand-100 text-primary-brand-800 text-xs font-medium px-2 py-0.5 rounded-full"
+                                                            className="retro-chip inline-flex items-center px-2 py-0.5"
                                                         >
                                                             {tag.trim()}
                                                         </span>
@@ -711,9 +806,26 @@ const SongsManager = () => {
                                                     </>
                                                 )}
                                             </span>
+                                            {song.allow_download && (
+                                                <>
+                                                    <span> | </span>
+                                                    <span className="inline-flex items-center text-primary-brand-300">
+                                                        Downloadable
+                                                        <ArrowDownTrayIcon className="w-4 h-4 ml-1" />
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => handleToggleDownload(song)}
+                                            className={`p-2 ${song.allow_download ? 'text-primary-brand-300 hover:text-primary-brand-200' : 'text-gray-500 hover:text-gray-400'}`}
+                                            title={song.allow_download ? 'Public downloads enabled — click to disable' : 'Public downloads disabled — click to enable'}
+                                            aria-pressed={Boolean(song.allow_download)}
+                                        >
+                                            <ArrowDownTrayIcon className="w-5 h-5" />
+                                        </button>
                                         <button
                                             onClick={() => {
                                                 setEditSongId(song.id);
@@ -758,7 +870,7 @@ const SongsManager = () => {
                                 {editSongId === song.id && (
                                     <form onSubmit={handleEditSubmit} className="mt-4 space-y-6">
                                         <div>
-                                                <label className="block text-sm font-medium text-gray-200">Title</label>
+                                                <label className="retro-label">Title</label>
                                             <input
                                                 type="text"
                                                 name="title"
@@ -769,20 +881,20 @@ const SongsManager = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-200">Genres (up to 3, comma-separated)</label>
+                                            <label className="retro-label">Genres (up to 3, comma-separated)</label>
                                             <div
                                                 className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm focus-within:ring-2 focus-within:ring-primary-brand-500 focus-within:border-primary-brand-500 flex flex-wrap items-center gap-1 min-h-[38px] bg-white/5"
                                             >
                                                 {editFormData.genres.map((tag, index) => (
                                                     <span
                                                         key={index}
-                                                        className="inline-flex items-center bg-primary-brand-100 text-primary-brand-800 text-sm font-medium px-2 py-0.5 rounded-full mr-1 my-1"
+                                                        className="retro-chip inline-flex items-center px-2 py-0.5 mr-1 my-1"
                                                     >
                                                         {tag}
                                                         <button
                                                             type="button"
                                                             onClick={() => removeEditGenreTag(tag)}
-                                                            className="ml-1 text-primary-brand-300 hover:text-primary-brand-200 focus:outline-none"
+                                                            className="ml-1 text-cyan-300 hover:text-fuchsia-300 focus:outline-none"
                                                             aria-label={`Remove ${tag} genre`}
                                                         >
                                                             <XMarkIcon className="w-4 h-4" />
@@ -802,7 +914,7 @@ const SongsManager = () => {
                                             <p className="mt-1 text-sm text-gray-400">Enter genres and press comma to add (max 3).</p>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-200">Description</label>
+                                            <label className="retro-label">Description</label>
                                             <textarea
                                                 name="description"
                                                 value={editFormData.description}
@@ -812,7 +924,7 @@ const SongsManager = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-200">MP3 File (Optional)</label>
+                                            <label className="retro-label">MP3 File (Optional)</label>
                                             <input
                                                 type="file"
                                                 name="mp3"
@@ -823,7 +935,7 @@ const SongsManager = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-200">Song Image (Optional, JPEG or PNG)</label>
+                                            <label className="retro-label">Song Image (Optional, JPEG or PNG)</label>
                                             <input
                                                 type="file"
                                                 name="image"
@@ -836,7 +948,7 @@ const SongsManager = () => {
                                         <div className="flex space-x-4">
                                             <button
                                                 type="submit"
-                                                className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm hover:bg-primary-brand-700"
+                                                className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                             >
                                                 Save Changes
                                             </button>
@@ -864,7 +976,7 @@ const SongsManager = () => {
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+                    <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <h2 className="text-xl font-bold mb-4 text-white">Confirm Deletion</h2>
                         <p className="mb-6 text-gray-300">Are you sure you want to delete this song? This action cannot be undone.</p>
                         <div className="flex justify-end space-x-4">
@@ -895,7 +1007,7 @@ const SongsManager = () => {
                         <h2 className="text-xl font-bold mb-4 text-white">Song Statistics</h2>
                         <div className="mb-4 flex space-x-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Start Date</label>
+                                <label className="retro-label">Start Date</label>
                                 <input
                                     type="date"
                                     value={startDate}
@@ -904,7 +1016,7 @@ const SongsManager = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">End Date</label>
+                                <label className="retro-label">End Date</label>
                                 <input
                                     type="date"
                                     value={endDate}
@@ -915,7 +1027,7 @@ const SongsManager = () => {
                             <div className="flex items-end">
                                 <button
                                     onClick={handleDateFilter}
-                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                                    className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                 >
                                     Apply Filter
                                 </button>
@@ -948,6 +1060,7 @@ const SongsManager = () => {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 };

@@ -124,18 +124,19 @@ function Login() {
     const googleLoginUrl = `${API_URL}/auth/google?return=${encodeURIComponent(returnUrl)}`;
 
     return (
-        <div className="min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full spotify-surface p-8">
-                <h1 className="text-3xl font-bold text-white text-center mb-6">Login to InternetDJ</h1>
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="retro-panel retro-cut max-w-md w-full p-8">
+                <div className="retro-eyebrow text-center mb-3">&gt;&gt; Access Terminal</div>
+                <h1 className="retro-display retro-chrome text-2xl text-center mb-6">Login to InternetDJ</h1>
                 {error && (
-                    <div className="mb-6 p-4 bg-red-500/10 border border-red-400 text-red-300 rounded-md">
+                    <div className="mb-6 p-4 border border-fuchsia-500/60 bg-fuchsia-500/10 retro-mono text-lg text-fuchsia-200">
                         {error}
                     </div>
                 )}
 
                 <form onSubmit={handleEmailLogin} className="space-y-6 mb-4">
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                        <label htmlFor="email" className="retro-label">
                             Email
                         </label>
                         <input
@@ -143,13 +144,13 @@ function Login() {
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
+                            className="retro-field mt-1"
                             placeholder="Enter your email"
                             required
                         />
                     </div>
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                        <label htmlFor="password" className="retro-label">
                             Password
                         </label>
                         <input
@@ -157,12 +158,12 @@ function Login() {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
+                            className="retro-field mt-1"
                             placeholder="Enter your password"
                             required
                         />
                     </div>
-                    <div className="flex justify-center">
+                    <div className="flex justify-center p-2 border border-cyan-400/25 bg-black/30">
                         <ReCAPTCHA
                             ref={recaptchaRef}
                             sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY}
@@ -171,21 +172,21 @@ function Login() {
                     </div>
                     <button
                         type="submit"
-                        className="w-full bg-primary-brand-500 hover:bg-primary-brand-700 text-white font-medium px-6 py-3 rounded-md transition-colors duration-200"
+                        className="retro-btn retro-btn--hot w-full px-6 py-3 text-xs"
                     >
                         Login with Email
                     </button>
                 </form>
 
                 <div className="text-center mb-4">
-                    <Link to="/forgot-password" className="text-sm text-primary-brand-300 hover:text-primary-brand-200 font-medium">
+                    <Link to="/forgot-password" className="retro-link retro-mono text-lg">
                         Forgot Password?
                     </Link>
                 </div>
 
                 <a
                     href={googleLoginUrl}
-                    className="flex items-center justify-center w-full bg-primary-brand-500 hover:bg-primary-brand-700 text-white font-medium px-6 py-3 rounded-md transition-colors duration-200 mb-4"
+                    className="retro-btn w-full px-6 py-3 text-xs"
                 >
                     <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12.24 10.667H7.937v2.666h4.303c-.41 1.143-1.594 2.666-4.303 2.666-2.59 0-4.698-2.143-4.698-4.666s2.108-4.666 4.698-4.666c1.174 0 2.23.477 2.986 1.238l1.91-1.905C10.97 4.095 8.74 3 6.24 3 2.798 3 0 5.762 0 9.167s2.798 6.167 6.24 6.167c3.6 0 5.986-2.524 5.986-6.095 0-.41-.046-.81-.126-1.238z" />
@@ -195,9 +196,9 @@ function Login() {
                 </a>
 
                 <div className="text-center">
-                        <p className="text-sm text-gray-300">
+                        <p className="retro-mono text-lg text-gray-400">
                         Don't have an account?{' '}
-                            <Link to="/register" className="text-primary-brand-300 hover:text-primary-brand-200 font-medium">
+                            <Link to="/register" className="retro-link">
                             Register
                         </Link>
                     </p>

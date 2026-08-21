@@ -523,11 +523,11 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       wavesurferRef.current = WaveSurfer.create({
         container: waveformRef.current,
         media: sharedAudio,
-        waveColor: '#73cbf0',
-        progressColor: '#008dcb',
-        cursorColor: '#000',
+        waveColor: '#2f7f96',
+        progressColor: '#ff2f8e',
+        cursorColor: '#00f0ff',
         barWidth: 2,
-        barRadius: 2,
+        barRadius: 0,
         barGap: 2,
         height: 125,
         responsive: true,
@@ -742,7 +742,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   };
 
   return (
-      <div className="w-full bg-[#0f0f0f] border border-white/10 p-4 rounded-xl shadow-sm relative text-gray-100">
+      <div className="retro-panel retro-cut w-full p-4 relative text-gray-100">
         <style>
           {`
           .wavesurfer canvas {
@@ -790,11 +790,11 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
               </div>
           )}
         </div>
-        {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+        {error && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{error}</div>}
         <div className="flex items-center mt-4 space-x-4">
           <button
               onClick={togglePlayPause}
-              className="p-2 bg-gray-800 text-white rounded-full hover:bg-gray-700 focus:outline-none z-10"
+              className="retro-action p-2 z-10"
               disabled={isLoading || error}
           >
             {isPlaying ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6" />}
@@ -819,7 +819,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                     }
                     setShowMasteringModal(true);
                   }}
-                  className="p-2 bg-gray-800 text-white rounded-full hover:bg-gray-700 focus:outline-none z-10"
+                  className="retro-action p-2 z-10"
                   title="Auto Master"
                   disabled={isLoading || error || !isAuthenticated}
               >
@@ -828,21 +828,21 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           )}
           <button
               onClick={toggleEQModal}
-              className="p-2 bg-gray-800 text-white rounded-full hover:bg-gray-700 focus:outline-none z-10"
+              className="retro-action p-2 z-10"
               title="Equalizer"
               disabled={isLoading || error}
           >
             <AdjustmentsVerticalIcon className="h-6 w-6" />
           </button>
-          <div className="text-sm text-gray-300">
+          <div className="retro-mono text-xl text-cyan-300">
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
         {showMasteringModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-[#111827] border border-white/10 p-6 rounded-xl w-[400px] text-gray-100 shadow-2xl">
+              <div className="retro-panel retro-cut p-6 w-[400px] max-w-[92vw] text-gray-100">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-white">Auto Mastering</h3>
+                  <h3 className="retro-display text-sm retro-glow-cyan">Auto Mastering</h3>
                   <button
                       onClick={() => {
                         setShowMasteringModal(false);
@@ -913,7 +913,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                               setMasteredUrl(null);
                               setMasteringType(null);
                             }}
-                            className="flex-1 py-2 px-4 rounded-md bg-white/10 text-white hover:bg-white/15"
+                            className="retro-btn flex-1 py-2 px-4 text-[0.6rem]"
                         >
                           Try Another
                         </button>
@@ -922,7 +922,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                 )}
 
                 {masteringError && (
-                    <div className="mt-2 text-red-600 text-sm">
+                    <div className="retro-mono text-lg text-fuchsia-400 mt-2">
                       {masteringError}
                       {masteringError.includes('Too many') && (
                           <button
@@ -934,13 +934,13 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                       )}
                     </div>
                 )}
-                {saveError && <div className="mt-2 text-red-600 text-sm">{saveError}</div>}
+                {saveError && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{saveError}</div>}
               </div>
             </div>
         )}
 
         {showSuccessNotification && newSongId && (
-            <div className="fixed top-4 right-4 bg-primary-brand-600 text-white p-4 rounded-md shadow-lg z-50 flex items-center space-x-2 border border-white/10">
+            <div className="retro-panel retro-cut fixed top-4 right-4 p-4 z-50 flex items-center space-x-2 retro-mono text-lg">
               <span>Mastered track saved successfully!</span>
               <a
                   href={`/song/${newSongId}`}
@@ -960,7 +960,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         {showEQ && (
             <div
                 ref={modalRef}
-                className="fixed bg-[#111827] p-4 rounded-xl shadow-md w-full max-w-[90vw] sm:max-w-[600px] z-50 border border-white/10 text-gray-100"
+                className="retro-panel retro-cut fixed p-4 w-full max-w-[90vw] sm:max-w-[600px] z-50 text-gray-100"
                 style={{
                   top: `${modalPosition.top}px`,
                   left: `${modalPosition.left}px`,
@@ -971,7 +971,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                   className="flex justify-between items-center mb-4 cursor-move"
                   onMouseDown={handleDragStart}
               >
-                <h3 className="text-lg font-semibold text-white">Equalizer</h3>
+                <h3 className="retro-display text-sm retro-glow-cyan">Equalizer</h3>
                 <button
                     onClick={toggleEQModal}
                     className="p-1 text-gray-400 hover:text-white focus:outline-none"
@@ -1011,15 +1011,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                           className="w-8 h-24"
                           disabled={!filtersInitialized || eqLoading}
                       />
-                      <span className="text-xs text-gray-300 mt-2">{band} Hz</span>
-                      <span className="text-xs text-gray-300">{eqGains[band].toFixed(1)} dB</span>
+                      <span className="retro-mono text-base text-cyan-300 mt-2">{band} Hz</span>
+                      <span className="retro-mono text-base text-gray-300">{eqGains[band].toFixed(1)} dB</span>
                     </div>
                 ))}
               </div>
               <div className="mt-4 flex justify-end space-x-2">
                 <button
                     onClick={resetEQ}
-                    className="py-1 px-3 bg-white/10 text-white rounded-md hover:bg-white/15 focus:outline-none"
+                    className="retro-btn py-1 px-3 text-[0.6rem]"
                     disabled={!filtersInitialized || eqLoading}
                 >
                   Reset EQ
@@ -1036,7 +1036,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                   {isSaving ? 'Saving...' : 'Save EQ Settings'}
                 </button>
               </div>
-              {saveError && <div className="mt-2 text-red-600 text-sm">{saveError}</div>}
+              {saveError && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{saveError}</div>}
             </div>
         )}
       </div>

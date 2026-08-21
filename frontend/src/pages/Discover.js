@@ -280,70 +280,71 @@ function Discover() {
         }
     };
 
+    // Shared shell for the loading / error / empty states.
+    const StatusScreen = ({ eyebrow, children }) => (
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen flex items-center justify-center text-gray-100">
+            <div className="retro-panel retro-cut container mx-auto max-w-xl px-6 py-10 text-center">
+                <div className="retro-eyebrow mb-3">{eyebrow}</div>
+                {children}
+            </div>
+        </div>
+    );
+
     if (isLoading) {
         return (
-            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
-                <div className="container mx-auto px-4 py-8 text-center">
-                    <p className="text-gray-300 text-lg">Loading songs...</p>
-                </div>
-            </div>
+            <StatusScreen eyebrow="// Cueing Up //">
+                <p className="retro-mono text-2xl text-cyan-200">&gt; loading the next track&hellip;</p>
+            </StatusScreen>
         );
     }
 
     if (error) {
         return (
-            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
-                <div className="container mx-auto px-4 py-8 text-center spotify-surface max-w-xl">
-                    <p className="text-red-400 text-lg">{error}</p>
-                    {likeError && <p className="text-red-400 text-sm mt-2">{likeError}</p>}
-                    {!user ? (
-                        <Link
-                            to="/login"
-                            className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors mt-4"
-                        >
-                            Log In For Personalized Discover
-                        </Link>
-                    ) : (
-                        <button
-                            onClick={() => {
-                                setError(null);
-                                setLikeError(null);
-                                loadSongs();
-                            }}
-                            className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors mt-4"
-                        >
-                            Try Again
-                        </button>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    if (recommendedSongs.length === 0) {
-        return (
-            <div className="text-gray-100 pt-2 min-h-screen flex items-center justify-center">
-                <div className="container mx-auto px-4 py-8 text-center spotify-surface max-w-xl">
-                    <p className="text-gray-300 text-lg">No songs available to discover.</p>
+            <StatusScreen eyebrow="!! Signal Lost !!">
+                <p className="retro-mono text-2xl text-fuchsia-300">{error}</p>
+                {likeError && <p className="retro-mono text-lg text-fuchsia-400 mt-2">{likeError}</p>}
+                {!user ? (
+                    <Link to="/login" className="retro-btn retro-btn--hot px-6 py-3 text-xs mt-6">
+                        Log In For Personalized Discover
+                    </Link>
+                ) : (
                     <button
                         onClick={() => {
                             setError(null);
                             setLikeError(null);
                             loadSongs();
                         }}
-                        className="inline-block spotify-pill px-4 py-2 rounded-full transition-colors mt-4"
+                        className="retro-btn retro-btn--hot px-6 py-3 text-xs mt-6"
                     >
                         Try Again
                     </button>
-                </div>
-            </div>
+                )}
+            </StatusScreen>
+        );
+    }
+
+    if (recommendedSongs.length === 0) {
+        return (
+            <StatusScreen eyebrow="// Crate Empty //">
+                <p className="retro-mono text-2xl text-gray-300">&gt; no songs available to discover.</p>
+                <button
+                    onClick={() => {
+                        setError(null);
+                        setLikeError(null);
+                        loadSongs();
+                    }}
+                    className="retro-btn retro-btn--hot px-6 py-3 text-xs mt-6"
+                >
+                    Try Again
+                </button>
+            </StatusScreen>
         );
     }
 
     const selectedSong = recommendedSongs[currentIndex];
 
     return (
-        <div className="text-gray-100 pt-2 min-h-screen">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen text-gray-100">
             <Helmet>
                 <title>Auto AI DJ Discover Music</title>
                 <meta
@@ -360,40 +361,52 @@ function Discover() {
                 <meta name="twitter:description" content="Auto AI DJ continuous music discovery" />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
-            <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-6 text-white text-center">Discover New Music</h1>
+
+            <div className="container mx-auto px-4 py-10">
+                <header className="text-center mb-8">
+                    <div className="retro-eyebrow mb-3">&#10024; Auto A.I. DJ &#10024;</div>
+                    <h1 className="retro-display retro-chrome text-3xl sm:text-5xl">Discover</h1>
+                    <p className="retro-mono text-xl text-cyan-200 mt-3">
+                        One track at a time. Keep it, skip it, or kill it.
+                    </p>
+                </header>
 
                 {isGuest && (
-                    <div className="max-w-2xl mx-auto mb-6 spotify-surface px-4 py-3 text-center">
-                        <p className="text-sm text-gray-200">
-                            You are browsing a preview mix. Log in to unlock smarter recommendations based on your likes and skips.
+                    <div className="retro-panel retro-cut max-w-2xl mx-auto mb-8 px-5 py-4 text-center">
+                        <p className="retro-mono text-xl text-gray-300">
+                            &gt; preview mix. log in and the DJ starts learning your taste.
                         </p>
-                        <Link
-                            to="/login"
-                            className="inline-block mt-3 spotify-pill px-4 py-2 rounded-full text-sm transition-colors"
-                        >
-                            Log In For Better Discover Results
+                        <Link to="/login" className="retro-btn px-5 py-2 text-[0.6rem] mt-3">
+                            Log In For Better Results
                         </Link>
                     </div>
                 )}
 
-                <div className="max-w-md mx-auto spotify-surface p-6">
-                    <div className="relative mb-4">
+                <div className="retro-panel retro-cut max-w-md mx-auto p-5 sm:p-6">
+                    {/* Now-playing artwork */}
+                    <div className="relative mb-5 retro-scanlines overflow-hidden border border-cyan-400/40">
                         <Link to={`/song/${selectedSong.id}`}>
                             {selectedSong.image_url ? (
                                 <img
                                     src={selectedSong.image_url}
                                     alt={selectedSong.title}
-                                    className="w-full h-auto aspect-square object-cover rounded-md"
+                                    className="w-full h-auto aspect-square object-cover"
                                     onError={() => console.error('Song image failed to load:', selectedSong.image_url)}
                                     loading="lazy"
                                 />
                             ) : (
-                                <div className="w-full h-auto aspect-square rounded-md bg-zinc-800 flex items-center justify-center text-gray-400 text-xs">
-                                    No Image
+                                <div className="w-full aspect-square bg-gradient-to-br from-fuchsia-900/50 to-cyan-900/40 flex items-center justify-center retro-pixel text-cyan-300 text-xs">
+                                    NO ART
                                 </div>
                             )}
                         </Link>
+
+                        {isPreviewPlaying && (
+                            <span className="retro-eq absolute bottom-3 right-3 z-10">
+                                <span /><span /><span /><span />
+                            </span>
+                        )}
+
                         {selectedSong.mp3_url && (
                             <button
                                 onClick={(e) => {
@@ -406,33 +419,33 @@ function Discover() {
                                         playSong(selectedSong);
                                     }
                                 }}
-                                className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md"
+                                className="retro-play-overlay z-20"
                                 aria-label={isPreviewPlaying ? 'Pause song' : 'Play song'}
                             >
-                                {isPreviewPlaying ? (
-                                    <PauseIcon className="w-12 h-12 text-white" />
-                                ) : (
-                                    <PlayIcon className="w-12 h-12 text-white" />
-                                )}
+                                <span className="w-20 h-20 rounded-full border-2 border-cyan-300 bg-black/60 flex items-center justify-center shadow-[0_0_32px_rgba(0,240,255,0.6)]">
+                                    {isPreviewPlaying
+                                        ? <PauseIcon className="w-10 h-10 text-cyan-200" />
+                                        : <PlayIcon className="w-10 h-10 text-cyan-200 ml-1" />}
+                                </span>
                             </button>
                         )}
                     </div>
+
                     <div className="text-center">
                         <Link
                             to={`/song/${selectedSong.id}`}
-                            className="text-xl font-semibold text-white hover:underline"
+                            className="retro-display text-base text-white hover:text-cyan-200 block break-words"
                         >
                             {selectedSong.title}
                         </Link>
-                        <p className="text-gray-300">
-                            <Link
-                                to={`/profile/${selectedSong.profile_id}`}
-                                className="hover:underline"
-                            >
-                                {selectedSong.profile_name}
-                            </Link>
-                        </p>
-                        <div className="mt-1">
+                        <Link
+                            to={`/profile/${selectedSong.profile_id}`}
+                            className="retro-link retro-mono text-2xl"
+                        >
+                            {selectedSong.profile_name}
+                        </Link>
+
+                        <div className="mt-3">
                             {selectedSong?.genre ? (
                                 <div className="flex flex-wrap gap-2 justify-center">
                                     {selectedSong.genre
@@ -442,47 +455,61 @@ function Discover() {
                                             <Link
                                                 key={index}
                                                 to={`/tag/${genre.trim()}`}
-                                                className="inline-block bg-white/10 text-gray-100 text-sm font-semibold px-2 py-1 rounded-md hover:bg-white/20 transition-colors"
+                                                className="retro-chip"
                                             >
                                                 {genre.trim()}
                                             </Link>
                                         ))}
                                 </div>
                             ) : (
-                                <p className="text-sm text-gray-400">No genres specified</p>
+                                <p className="retro-mono text-lg text-gray-500">&gt; no genres specified</p>
                             )}
                         </div>
                     </div>
+
                     {autoplayBlocked && (
-                        <p className="text-yellow-400 text-sm mt-2 text-center">
-                            Please click the play button to start the song.
+                        <p className="retro-mono text-lg text-amber-300 mt-3 text-center">
+                            &gt; hit play to start the track.
                         </p>
                     )}
                     {likeError && (
-                        <p className="text-primary-brand-300 text-sm mt-2 text-center">{likeError}</p>
+                        <p className="retro-mono text-lg text-fuchsia-400 mt-3 text-center">{likeError}</p>
                     )}
-                    <div className="mt-6 flex justify-between">
-                        <button
-                            onClick={() => handlePreference(selectedSong.id, false)}
-                            className="p-4 bg-red-500 rounded-full hover:bg-red-600"
-                            aria-label="Dislike song"
-                        >
-                            <XMarkIcon className="w-8 h-8 text-white" />
-                        </button>
-                        <button
-                            onClick={() => handleSkip()}
-                            className="p-4 bg-primary-brand-500 rounded-full hover:bg-primary-brand-400"
-                            aria-label="Skip to next song"
-                        >
-                            <ForwardIcon className="w-8 h-8 text-white" />
-                        </button>
-                        <button
-                            onClick={() => handlePreference(selectedSong.id, !isSongLiked)}
-                            className={`p-4 ${(isSongLiked && !isGuest) ? 'bg-primary-brand-500 hover:bg-primary-brand-600' : 'bg-gray-500 hover:bg-gray-600'} rounded-full`}
-                            aria-label={isSongLiked ? 'Unlike song' : 'Like song'}
-                        >
-                            <HeartIcon className="w-8 h-8 text-white" />
-                        </button>
+
+                    {/* Transport: kill it, skip it, keep it. */}
+                    <div className="mt-7 flex justify-between items-start">
+                        <div className="flex flex-col items-center gap-2">
+                            <button
+                                onClick={() => handlePreference(selectedSong.id, false)}
+                                className="retro-arcade retro-arcade--nope"
+                                aria-label="Dislike song"
+                            >
+                                <XMarkIcon className="w-8 h-8" />
+                            </button>
+                            <span className="retro-arcade__cap">Nope</span>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-2">
+                            <button
+                                onClick={() => handleSkip()}
+                                className="retro-arcade retro-arcade--skip"
+                                aria-label="Skip to next song"
+                            >
+                                <ForwardIcon className="w-8 h-8" />
+                            </button>
+                            <span className="retro-arcade__cap">Skip</span>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-2">
+                            <button
+                                onClick={() => handlePreference(selectedSong.id, !isSongLiked)}
+                                className={`retro-arcade retro-arcade--yes ${(isSongLiked && !isGuest) ? 'retro-arcade--on' : ''}`}
+                                aria-label={isSongLiked ? 'Unlike song' : 'Like song'}
+                            >
+                                <HeartIcon className="w-8 h-8" />
+                            </button>
+                            <span className="retro-arcade__cap">Keep</span>
+                        </div>
                     </div>
                 </div>
             </div>
