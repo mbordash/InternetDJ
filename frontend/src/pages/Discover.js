@@ -6,6 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { Helmet } from 'react-helmet-async';
+import profilePath from '../utils/profilePath';
 
 function Discover() {
     const { user } = useContext(AuthContext);
@@ -439,7 +440,7 @@ function Discover() {
                             {selectedSong.title}
                         </Link>
                         <Link
-                            to={`/profile/${selectedSong.profile_id}`}
+                            to={profilePath(selectedSong)}
                             className="retro-link retro-mono text-2xl"
                         >
                             {selectedSong.profile_name}

@@ -24,11 +24,12 @@ COPY backend/ ./backend/
 # Build-time args for frontend (REACT_APP_* vars must be available at build time)
 ARG REACT_APP_RECAPTCHA_SITE_KEY
 ARG REACT_APP_API_URL=https://internetdj.co/api
-ARG REACT_APP_SOLANA_RPC_URL
+# REACT_APP_SOLANA_RPC_URL deliberately removed: any REACT_APP_* value is
+# compiled into the public bundle. The RPC provider URL and key now live only
+# on the server, behind /api/solana/rpc.
 
 ENV REACT_APP_RECAPTCHA_SITE_KEY=$REACT_APP_RECAPTCHA_SITE_KEY \
-    REACT_APP_API_URL=$REACT_APP_API_URL \
-    REACT_APP_SOLANA_RPC_URL=$REACT_APP_SOLANA_RPC_URL
+    REACT_APP_API_URL=$REACT_APP_API_URL
 
 # Build the frontend
 RUN cd frontend && npm run build

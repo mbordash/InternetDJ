@@ -8,6 +8,7 @@ import parse from 'html-react-parser';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import {Helmet} from "react-helmet-async";
+import profilePath from '../utils/profilePath';
 
 function Post() {
     const { postId } = useParams();
@@ -61,6 +62,9 @@ function Post() {
 
     const handleAddOrUpdateComment = async (e) => {
         e.preventDefault();
+        // A second submit can be in flight before React re-renders the disabled
+        // button, which is how the same reply reached the database repeatedly.
+        if (isSubmitting) return;
         if (!user) {
             navigate('/login');
             return;
@@ -92,7 +96,7 @@ function Post() {
                         headers: { Authorization: `Bearer ${token}` },
                     }
                 );
-                setComments(comments.map((c) => (c.id === editingComment.id ? response.data.comment : c)));
+                setComments((prev) => prev.map((c) => (c.id === editingComment.id ? response.data.comment : c)));
                 setEditingComment(null);
             } else {
                 response = await axios.post(
@@ -105,13 +109,14 @@ function Post() {
                         },
                     }
                 );
-                setComments([...comments, response.data.comment]);
+                setComments((prev) => [...prev, response.data.comment]);
             }
 
             setNewComment({ content: '', image: null, parent_comment_id: null });
             setImagePreview(null);
             setError(null);
-            document.getElementById('comment-image-upload').value = '';
+            const imageInput = document.getElementById('comment-image-upload');
+            if (imageInput) imageInput.value = '';
         } catch (err) {
             console.error('Comment error:', err);
             setError('Failed to save comment: ' + (err.response?.data?.error || err.message));
@@ -123,7 +128,7 @@ function Post() {
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            setNewComment({ ...newComment, image: file });
+            setNewComment((prev) => ({ ...prev, image: file }));
             setImagePreview(URL.createObjectURL(file));
         }
     };
@@ -140,7 +145,7 @@ function Post() {
             await axios.delete(`${API_URL}/forum/posts/${postId}/comments/${commentId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            setComments(comments.filter((comment) => comment.id !== commentId));
+            setComments((prev) => prev.filter((comment) => comment.id !== commentId));
             setError(null);
         } catch (err) {
             console.error('Delete comment error:', err);
@@ -176,7 +181,7 @@ function Post() {
     };
 
     const handleReply = (commentId) => {
-        setNewComment({ ...newComment, parent_comment_id: commentId });
+        setNewComment((prev) => ({ ...prev, parent_comment_id: commentId }));
         setEditingComment(null);
         document.getElementById('comment-content').focus();
     };
@@ -285,7 +290,7 @@ function Post() {
                             )}
                             <div>
                                 <Link
-                                    to={`/profile/${comment.profile_id}`}
+                                    to={profilePath(comment)}
                                     className="text-white hover:underline"
                                 >
                                     {comment.user_name}
@@ -447,7 +452,7 @@ function Post() {
                         )}
                         <div>
                             <Link
-                                to={`/profile/${post.profile_id}`}
+                                to={profilePath(post)}
                                 className="text-white hover:underline"
                             >
                                 {post.user_name}
@@ -496,7 +501,7 @@ function Post() {
                             <ReactQuill
                                 id="comment-content"
                                 value={newComment.content}
-                                onChange={(content) => setNewComment({ ...newComment, content })}
+                                onChange={(content) => setNewComment((prev) => ({ ...prev, content }))}
                                 modules={quillModules}
                                 placeholder="Your comment..."
                                 className="retro-field"
@@ -535,7 +540,7 @@ function Post() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setNewComment({ ...newComment, content: '', parent_comment_id: null });
+                                        setNewComment((prev) => ({ ...prev, content: '', parent_comment_id: null }));
                                         setEditingComment(null);
                                     }}
                                     className="retro-btn px-4 py-2 text-xs"

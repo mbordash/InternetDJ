@@ -200,7 +200,7 @@ router.patch('/:collaborationId', authenticate, ensureProfile, ensureCollaborati
         }
 
         const updatedCollaboration = await pool.query(
-            'SELECT c.*, p.name AS profile_name FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id WHERE c.id = ?',
+            'SELECT c.*, p.name AS profile_name, p.slug AS profile_slug FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id WHERE c.id = ?',
             [collaborationId]
         );
         if (!updatedCollaboration || updatedCollaboration.length === 0) {
@@ -217,6 +217,7 @@ router.patch('/:collaborationId', authenticate, ensureProfile, ensureCollaborati
                 is_public: !!collab.is_public,
                 allow_uploads: !!collab.allow_uploads,
                 profile_name: collab.profile_name || 'Unknown',
+                profile_slug: collab.profile_slug || null,
                 created_at: collab.created_at,
                 updated_at: collab.updated_at
             }
@@ -238,11 +239,11 @@ router.get('/', authenticate, ensureProfile, async (req, res) => {
 
     try {
         const owned = await pool.query(
-            'SELECT c.*, p.name AS profile_name FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id WHERE c.profile_id = ?',
+            'SELECT c.*, p.name AS profile_name, p.slug AS profile_slug FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id WHERE c.profile_id = ?',
             [profileId]
         );
         const invited = await pool.query(
-            'SELECT c.*, p.name AS profile_name FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id JOIN collaboration_permissions cp ON c.id = cp.collaboration_id WHERE cp.profile_id = ?',
+            'SELECT c.*, p.name AS profile_name, p.slug AS profile_slug FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id JOIN collaboration_permissions cp ON c.id = cp.collaboration_id WHERE cp.profile_id = ?',
             [profileId]
         );
 
@@ -257,6 +258,7 @@ router.get('/', authenticate, ensureProfile, async (req, res) => {
             is_public: !!c.is_public,
             allow_uploads: !!c.allow_uploads,
             profile_name: c.profile_name || 'Unknown',
+            profile_slug: c.profile_slug || null,
             created_at: c.created_at,
             updated_at: c.updated_at
         }));
@@ -320,6 +322,7 @@ router.get('/public', async (req, res) => {
         const collaborations = (rows || []).map((row) => ({
             id: Number(row.id),
             profile_id: Number(row.profile_id),
+            profile_slug: row.profile_slug || null,
             title: row.title || 'Untitled Collaboration',
             description: row.description || '',
             allow_uploads: !!row.allow_uploads,
@@ -351,7 +354,7 @@ router.get('/:collaborationId', authenticate, ensureProfile, async (req, res) =>
 
     try {
         const collaboration = await pool.query(
-            'SELECT c.*, p.name AS profile_name FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id WHERE c.id = ?',
+            'SELECT c.*, p.name AS profile_name, p.slug AS profile_slug FROM collaborations c LEFT JOIN profiles p ON c.profile_id = p.id WHERE c.id = ?',
             [collaborationId]
         );
         if (!collaboration || collaboration.length === 0) return res.status(404).json({ error: 'Collaboration not found' });
@@ -367,7 +370,7 @@ router.get('/:collaborationId', authenticate, ensureProfile, async (req, res) =>
         }
 
         const tracks = await pool.query(
-            'SELECT ct.*, p.name AS profile_name FROM collaboration_tracks ct LEFT JOIN profiles p ON ct.profile_id = p.id WHERE ct.collaboration_id = ?',
+            'SELECT ct.*, p.name AS profile_name, p.slug AS profile_slug FROM collaboration_tracks ct LEFT JOIN profiles p ON ct.profile_id = p.id WHERE ct.collaboration_id = ?',
             [collaborationId]
         );
 
@@ -380,6 +383,7 @@ router.get('/:collaborationId', authenticate, ensureProfile, async (req, res) =>
                 is_public: !!collab.is_public,
                 allow_uploads: !!collab.allow_uploads,
                 profile_name: collab.profile_name || 'Unknown',
+                profile_slug: collab.profile_slug || null,
                 created_at: collab.created_at,
                 updated_at: collab.updated_at,
                 tracks: (tracks || []).map(t => ({
@@ -389,6 +393,7 @@ router.get('/:collaborationId', authenticate, ensureProfile, async (req, res) =>
                     mp3_url: t.mp3_url,
                     is_master: !!t.is_master,
                     profile_name: t.profile_name || 'Unknown',
+                    profile_slug: t.profile_slug || null,
                     created_at: t.created_at
                 }))
             }
@@ -497,7 +502,7 @@ router.get('/:collaborationId/invitees', authenticate, ensureProfile, ensureColl
 
     try {
         const invitations = await pool.query(
-            'SELECT ci.id, ci.collaboration_id, ci.email, ci.status, ci.invited_at, ci.accepted_at, p.id AS profile_id, p.name AS profile_name ' +
+            'SELECT ci.id, ci.collaboration_id, ci.email, ci.status, ci.invited_at, ci.accepted_at, p.id AS profile_id, p.name AS profile_name, p.slug AS profile_slug ' +
             'FROM collaboration_invitations ci ' +
             'LEFT JOIN profiles p ON ci.email = (SELECT email FROM users WHERE id = p.user_id) ' +
             'WHERE ci.collaboration_id = ?',
@@ -512,6 +517,7 @@ router.get('/:collaborationId/invitees', authenticate, ensureProfile, ensureColl
                 email: inv.email,
                 profile_id: inv.profile_id ? Number(inv.profile_id) : null,
                 profile_name: inv.profile_name || 'Unknown',
+                profile_slug: inv.profile_slug || null,
                 status: inv.status,
                 invited_at: inv.invited_at,
                 accepted_at: inv.accepted_at

@@ -91,7 +91,7 @@ router.get('/:songId', async (req, res) => {
     }
     const reviews = await pool.query(`
       SELECT r.id, r.song_id, r.profile_id, r.review, r.feedback, r.created_at,
-             p.name AS user_name, p.picture_url
+             p.name AS user_name, p.slug AS profile_slug, p.picture_url
       FROM reviews r
       JOIN profiles p ON r.profile_id = p.id
       WHERE r.song_id = ?
@@ -101,6 +101,7 @@ router.get('/:songId', async (req, res) => {
       id: Number(review.id),
       song_id: Number(review.song_id),
       profile_id: Number(review.profile_id),
+      profile_slug: review.profile_slug || null,
       review: review.review || '',
       feedback: review.feedback ? review.feedback : null, // MariaDB returns JSON as object
       created_at: review.created_at,

@@ -243,7 +243,7 @@ router.get('/:playlistId/songs', authenticate, async (req, res) => {
 
         logger.debug('[DEBUG] Fetching songs for playlistId:', parsedPlaylistId);
         const rows = await pool.query(`
-            SELECT s.id, s.title, s.mp3_url, s.image_url, s.profile_id, pr.name as profile_name
+            SELECT s.id, s.title, s.mp3_url, s.image_url, s.profile_id, pr.name as profile_name, pr.slug as profile_slug
             FROM playlist_songs ps
                      JOIN songs s ON ps.song_id = s.id
                      JOIN profiles pr ON s.profile_id = pr.id
@@ -257,6 +257,7 @@ router.get('/:playlistId/songs', authenticate, async (req, res) => {
             mp3_url: row.mp3_url,
             image_url: row.image_url,
             profile_id: Number(row.profile_id),
+            profile_slug: row.profile_slug || null,
             profile_name: row.profile_name
         }));
         logger.debug('[DEBUG] Songs fetched:', serializeBigInt(songs));

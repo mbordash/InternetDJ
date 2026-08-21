@@ -7,6 +7,7 @@ const authenticate = require('../middleware/authenticate');
 const authenticateOptional = require('../middleware/authenticateOptional');
 const { buildPublicFileUrl } = require('../utils/storage');
 const { createNotification, NOTIFICATION_TYPES, sendIdjcTipEmail } = require('../utils/notifications');
+const { slugify, validateSlug } = require('../utils/slug');
 const router = express.Router();
 
 // Get recommended songs
@@ -39,7 +40,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
       let query = `
         SELECT
           s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description,
-          s.genre, s.plays, p.user_id, p.name as profile_name,
+          s.genre, s.plays, p.user_id, p.name as profile_name, p.slug as profile_slug,
           (SELECT COUNT(*)
            FROM playlist_songs ps2
                   JOIN playlists pl2 ON ps2.playlist_id = pl2.id
@@ -83,7 +84,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
       songs = await pool.query(`
         SELECT
           s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description,
-          s.genre, s.plays, p.user_id, p.name as profile_name,
+          s.genre, s.plays, p.user_id, p.name as profile_name, p.slug as profile_slug,
           (SELECT COUNT(*)
            FROM playlist_songs ps2
                   JOIN playlists pl2 ON ps2.playlist_id = pl2.id
@@ -108,7 +109,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
       songs = await pool.query(`
         SELECT
           s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description,
-          s.genre, s.plays, p.user_id, p.name as profile_name,
+          s.genre, s.plays, p.user_id, p.name as profile_name, p.slug as profile_slug,
           (SELECT COUNT(*)
            FROM playlist_songs ps2
                   JOIN playlists pl2 ON ps2.playlist_id = pl2.id
@@ -124,6 +125,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
     const sanitizedSongs = songs.map(song => ({
       id: Number(song.id),
       profile_id: Number(song.profile_id),
+      profile_slug: song.profile_slug || null,
       title: song.title || 'Untitled',
       mp3_url: song.mp3_url || null,
       image_url: song.image_url || null,
@@ -133,6 +135,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
       likes_count: Number(song.likes_count) || 0,
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
+      profile_slug: song.profile_slug || null,
     }));
 
     res.status(200).json(sanitizedSongs);
@@ -156,7 +159,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
     let songs = await pool.query(`
       SELECT
         s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description,
-        s.genre, s.plays, p.user_id, p.name as profile_name,
+        s.genre, s.plays, p.user_id, p.name as profile_name, p.slug as profile_slug,
         (SELECT COUNT(*)
          FROM playlist_songs ps2
                 JOIN playlists pl2 ON ps2.playlist_id = pl2.id
@@ -175,7 +178,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
       songs = await pool.query(`
         SELECT
           s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description,
-          s.genre, s.plays, p.user_id, p.name as profile_name,
+          s.genre, s.plays, p.user_id, p.name as profile_name, p.slug as profile_slug,
           (SELECT COUNT(*)
            FROM playlist_songs ps2
                   JOIN playlists pl2 ON ps2.playlist_id = pl2.id
@@ -200,7 +203,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
       songs = await pool.query(`
         SELECT
           s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description,
-          s.genre, s.plays, p.user_id, p.name as profile_name,
+          s.genre, s.plays, p.user_id, p.name as profile_name, p.slug as profile_slug,
           (SELECT COUNT(*)
            FROM playlist_songs ps2
                   JOIN playlists pl2 ON ps2.playlist_id = pl2.id
@@ -216,6 +219,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
     const sanitizedSongs = songs.map(song => ({
       id: Number(song.id),
       profile_id: Number(song.profile_id),
+      profile_slug: song.profile_slug || null,
       title: song.title || 'Untitled',
       mp3_url: song.mp3_url || null,
       image_url: song.image_url || null,
@@ -225,6 +229,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
       likes_count: Number(song.likes_count) || 0,
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
+      profile_slug: song.profile_slug || null,
     }));
 
     res.status(200).json(sanitizedSongs);
@@ -248,11 +253,37 @@ router.post('/', authenticate, async (req, res) => {
     facebook_url,
     youtube_url,
     instagram_url,
+    slug,
   } = req.body;
   const picture = req.files?.picture;
   const backgroundImage = req.files?.backgroundImage;
   const heroBackgroundImage = req.files?.heroBackgroundImage;
   try {
+    // Validate the vanity address before writing anything, so a bad address
+    // can't half-save a profile. Deliberately kept out of the big upsert below:
+    // that query is positional, and slotting another column into both value
+    // arrays is a good way to silently shift every field by one.
+    let slugToSave;              // undefined = leave alone, null = clear
+    if (typeof slug !== 'undefined') {
+      const wanted = String(slug || '').trim();
+      if (wanted === '') {
+        slugToSave = null;
+      } else {
+        const result = validateSlug(wanted);
+        if (!result.ok) {
+          return res.status(400).json({ error: result.error });
+        }
+        const clash = await pool.query(
+          'SELECT id FROM profiles WHERE slug = ? AND user_id <> ?',
+          [result.slug, req.user.id]
+        );
+        if (Array.isArray(clash) && clash.length > 0) {
+          return res.status(409).json({ error: 'That profile address is already taken.' });
+        }
+        slugToSave = result.slug;
+      }
+    }
+
     let pictureUrl = null;
     let backgroundValue = background || null;
     let heroBackgroundUrl = null;
@@ -370,6 +401,19 @@ router.post('/', authenticate, async (req, res) => {
         ]
     );
 
+    if (typeof slugToSave !== 'undefined') {
+      try {
+        await pool.query('UPDATE profiles SET slug = ? WHERE user_id = ?', [slugToSave, req.user.id]);
+      } catch (slugErr) {
+        // Two people can pass the availability check at the same moment; the
+        // unique index is what actually decides, so report that honestly.
+        if (slugErr && (slugErr.code === 'ER_DUP_ENTRY' || slugErr.errno === 1062)) {
+          return res.status(409).json({ error: 'That profile address was just taken. Try another.' });
+        }
+        throw slugErr;
+      }
+    }
+
     // Fetch updated profile
     const profiles = await pool.query('SELECT * FROM profiles WHERE user_id = ?', [req.user.id]);
     if (!profiles || profiles.length === 0) {
@@ -393,7 +437,7 @@ router.get('/latest', async (req, res) => {
   try {
     logger.debug('Hit /profile/latest endpoint');
     const rows = await pool.query(`
-      SELECT id, user_id, name, created_at, picture_url
+      SELECT id, user_id, name, slug, created_at, picture_url
       FROM profiles
       ORDER BY created_at DESC
         LIMIT 5
@@ -401,6 +445,7 @@ router.get('/latest', async (req, res) => {
     const sanitizedRows = rows.map((row) => ({
       user_id: Number(row.user_id),
       profile_id: Number(row.id),
+      profile_slug: row.slug || null,
       name: row.name || 'Unknown',
       created_at: row.created_at,
       picture_url: row.picture_url || null,
@@ -416,16 +461,17 @@ router.get('/most-popular', async (req, res) => {
   try {
     logger.debug('Hit /profile/most-popular endpoint');
     const rows = await pool.query(`
-      SELECT p.id, p.user_id, p.name, COALESCE(SUM(s.plays), 0) as total_plays, p.picture_url
+      SELECT p.id, p.user_id, p.name, p.slug, COALESCE(SUM(s.plays), 0) as total_plays, p.picture_url
       FROM profiles p
              LEFT JOIN songs s ON p.id = s.profile_id
-      GROUP BY p.id, p.user_id, p.name, p.picture_url
+      GROUP BY p.id, p.user_id, p.name, p.slug, p.picture_url
       ORDER BY total_plays DESC
         LIMIT 5
     `);
     const sanitizedRows = rows.map((row) => ({
       user_id: Number(row.user_id),
       profile_id: Number(row.id),
+      profile_slug: row.slug || null,
       name: row.name || 'Unknown',
       total_plays: Number(row.total_plays) || 0,
       picture_url: row.picture_url || null,
@@ -438,24 +484,54 @@ router.get('/most-popular', async (req, res) => {
   }
 });
 
+// Is this profile address free? Used by the edit form as you type.
+router.get('/slug-available/:slug', authenticate, async (req, res) => {
+  try {
+    const result = validateSlug(req.params.slug);
+    if (!result.ok) {
+      return res.json({ available: false, reason: result.error });
+    }
+    const rows = await pool.query(
+      'SELECT p.id FROM profiles p WHERE p.slug = ? AND p.user_id <> ?',
+      [result.slug, req.user.id]
+    );
+    const taken = Array.isArray(rows) && rows.length > 0;
+    res.json({
+      available: !taken,
+      slug: result.slug,
+      reason: taken ? 'That address is already taken.' : null,
+    });
+  } catch (err) {
+    logger.error('Error in GET /profile/slug-available:', err);
+    res.status(500).json({ error: 'Failed to check address' });
+  }
+});
+
 router.get('/:profileId', async (req, res, next) => {
   try {
-    const profileId = parseInt(req.params.profileId);
-    if (isNaN(profileId)) {
-      return next();
-    }
-    const profiles = await pool.query('SELECT * FROM profiles WHERE id = ?', [profileId]);
+    // A profile answers to its numeric id forever, and to its slug once set.
+    // Slugs can never be all digits, so the two can't be confused.
+    const identifier = String(req.params.profileId || '').trim();
+    const isNumericId = /^\d+$/.test(identifier);
+
+    const profiles = isNumericId
+      ? await pool.query('SELECT * FROM profiles WHERE id = ?', [parseInt(identifier, 10)])
+      : await pool.query('SELECT * FROM profiles WHERE slug = ?', [identifier.toLowerCase()]);
+
     if (!Array.isArray(profiles) || profiles.length === 0) {
-      logger.debug(`No profile found for profile_id: ${profileId}`);
-      return res.status(404).json({ error: 'Profile not found' });
+      logger.debug(`No profile found for identifier: ${identifier}`);
+      // Non-numeric misses fall through, matching the previous behaviour.
+      return isNumericId ? res.status(404).json({ error: 'Profile not found' }) : next();
     }
     const profile = profiles[0];
+    // Everything below keys off the real numeric id, whichever address was used.
+    const profileId = Number(profile.id);
     if (!profile || typeof profile !== 'object') {
       logger.error('Invalid profile data for profile_id:', profileId, profile);
       return res.status(500).json({ error: 'Invalid profile data' });
     }
     const songs = await pool.query(`
-      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, p.user_id, p.name as profile_name,
+      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, p.user_id, p.name as profile_name, p.slug as profile_slug,
              (SELECT COUNT(*)
               FROM playlist_songs ps
                      JOIN playlists pl ON ps.playlist_id = pl.id
@@ -468,11 +544,13 @@ router.get('/:profileId', async (req, res, next) => {
       ...song,
       id: Number(song.id),
       profile_id: Number(song.profile_id),
+      profile_slug: song.profile_slug || null,
       plays: Number(song.plays) || 0,
       is_featured: Boolean(song.is_featured),
       allow_download: Boolean(song.allow_download),
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
+      profile_slug: song.profile_slug || null,
       likes_count: Number(song.likes_count) || 0,
     }));
 
@@ -832,6 +910,7 @@ router.get('/:profileId/followers', async (req, res) => {
         p.id AS profile_id,
         p.user_id,
         p.name,
+        p.slug AS profile_slug,
         p.picture_url,
         f.created_at
       FROM follows f
@@ -842,6 +921,7 @@ router.get('/:profileId/followers', async (req, res) => {
 
     const followers = rows.map((row) => ({
       profile_id: Number(row.profile_id),
+      profile_slug: row.profile_slug || null,
       user_id: Number(row.user_id),
       name: row.name || 'Unknown',
       picture_url: row.picture_url || null,
@@ -879,6 +959,7 @@ router.get('/:profileId/following', async (req, res) => {
         p.id AS profile_id,
         p.user_id,
         p.name,
+        p.slug AS profile_slug,
         p.picture_url,
         f.created_at
       FROM follows f
@@ -889,6 +970,7 @@ router.get('/:profileId/following', async (req, res) => {
 
     const following = rows.map((row) => ({
       profile_id: Number(row.profile_id),
+      profile_slug: row.profile_slug || null,
       user_id: Number(row.user_id),
       name: row.name || 'Unknown',
       picture_url: row.picture_url || null,
@@ -922,7 +1004,7 @@ router.get('/:profileId/liked-songs-public', async (req, res) => {
         s.mp3_url,
         s.image_url,
         s.profile_id,
-        p.name AS profile_name,
+        p.name AS profile_name, p.slug AS profile_slug,
         (
           SELECT COUNT(*)
           FROM playlist_songs ps2
@@ -947,7 +1029,9 @@ router.get('/:profileId/liked-songs-public', async (req, res) => {
       mp3_url: row.mp3_url || null,
       image_url: row.image_url || null,
       profile_id: Number(row.profile_id),
+      profile_slug: row.profile_slug || null,
       profile_name: row.profile_name || 'Unknown Artist',
+      profile_slug: row.profile_slug || null,
       likes_count: Number(row.likes_count) || 0,
       added_at: row.added_at,
     }));
@@ -1049,7 +1133,7 @@ router.get('/:userId/followed-songs', authenticate, async (req, res) => {
                 JOIN playlists pl ON ps.playlist_id = pl.id
          WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count,
         p.user_id,
-        p.name as profile_name
+        p.name as profile_name, p.slug as profile_slug
       FROM follows f
              JOIN profiles p ON f.followed_profile_id = p.id
              JOIN songs s ON p.id = s.profile_id
@@ -1061,6 +1145,7 @@ router.get('/:userId/followed-songs', authenticate, async (req, res) => {
     const sanitizedSongs = songs.map((song) => ({
       id: Number(song.id),
       profile_id: Number(song.profile_id),
+      profile_slug: song.profile_slug || null,
       title: song.title || 'Untitled',
       mp3_url: song.mp3_url || null,
       image_url: song.image_url || null,
@@ -1071,6 +1156,7 @@ router.get('/:userId/followed-songs', authenticate, async (req, res) => {
       likes_count: Number(song.likes_count) || 0,
       user_id: Number(song.user_id),
       profile_name: song.profile_name || 'Unknown',
+      profile_slug: song.profile_slug || null,
     }));
 
     res.status(200).json(sanitizedSongs);
@@ -1218,7 +1304,7 @@ router.get('/top-earners', async (req, res) => {
       SELECT p.id, p.user_id, p.name, p.picture_url, COALESCE(SUM(pe.coins_earned), 0) as total_earned
       FROM profiles p
       LEFT JOIN profile_earnings pe ON p.id = pe.profile_id
-      GROUP BY p.id, p.user_id, p.name, p.picture_url
+      GROUP BY p.id, p.user_id, p.name, p.slug, p.picture_url
       ORDER BY total_earned DESC
       LIMIT 5
     `);

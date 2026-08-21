@@ -21,7 +21,7 @@ import {
 } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { createTransferCheckedInstruction, getMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
+import { createTransferCheckedInstruction, unpackMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { Buffer } from 'buffer';
 import { getWallets } from '@wallet-standard/app';
 import { SolanaSignTransaction, SolanaSignAndSendTransaction } from '@solana/wallet-standard-features';
@@ -32,8 +32,33 @@ import { getDefaultAvatar } from '../utils/defaultAvatar';
 import IconActionButton from '../components/IconActionButton';
 import sanitizeHtml from 'sanitize-html';
 import {Helmet} from "react-helmet-async";
+import profilePath from '../utils/profilePath';
 
 window.Buffer = window.Buffer || Buffer;
+
+/**
+ * Wait for a transaction to confirm using HTTP polling.
+ *
+ * connection.confirmTransaction() relies on a WebSocket subscription, and the
+ * RPC proxy is HTTP-only, so it would hang. getSignatureStatuses gives the same
+ * answer over plain requests, at a deliberately unhurried interval — the point
+ * of the proxy is to make fewer RPC calls, not to trade one burst for another.
+ */
+async function waitForConfirmation(connection, signature, { timeoutMs = 90000, intervalMs = 2000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const { value } = await connection.getSignatureStatuses([signature]);
+        const status = value && value[0];
+        if (status) {
+            if (status.err) return { err: status.err };
+            if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+                return { err: null };
+            }
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new Error('Timed out waiting for the transaction to confirm. It may still land \u2014 check your wallet before resending.');
+}
 
 const ProfilePage = () => {
     const { profileId } = useParams();
@@ -45,6 +70,7 @@ const ProfilePage = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
+        slug: '',
         location: '',
         genre: '',
         description: '',
@@ -81,10 +107,15 @@ const ProfilePage = () => {
     const [giftAmount, setGiftAmount] = useState('');
     const [giftError, setGiftError] = useState(null);
     const [giftSuccess, setGiftSuccess] = useState(null);
+    // Which step of the gift is running; null when idle. Doubles as the
+    // in-flight flag, so the button can't be pressed twice.
+    const [giftStage, setGiftStage] = useState(null);
     const [availableWallets, setAvailableWallets] = useState([]);
     const [selectedWalletKey, setSelectedWalletKey] = useState(null);
     const [shareStatus, setShareStatus] = useState('');
     const [isArtistInfoExpanded, setIsArtistInfoExpanded] = useState(false);
+    // Live check on the vanity address as it is typed.
+    const [slugStatus, setSlugStatus] = useState(null);   // { checking, available, reason }
     // Discography browsing, mirroring the genre pages.
     const [songSort, setSongSort] = useState('newest');
     const [songView, setSongView] = useState('list');
@@ -94,7 +125,10 @@ const ProfilePage = () => {
     const backgroundImageInputRef = useRef(null);
 
     const baseUrl = SITE_URL;
-    const profileShareUrl = `${baseUrl}/profile/${profileId}`;
+    // Share and canonical links prefer the vanity address, falling back to the
+    // numeric id, which always resolves.
+    const profileAddress = profile?.slug || profileId;
+    const profileShareUrl = `${baseUrl}/profile/${profileAddress}`;
 
     const backgroundOptions = [
         { id: 'bg-gradient-1', name: 'Blue Gradient', class: 'bg-gradient-1' },
@@ -113,10 +147,11 @@ const ProfilePage = () => {
     ];
 
     const IDJ_COIN_MINT = new PublicKey('DTLkUR3Sfp1LcPVZMSv8toTTK3iwU7WTdF66TawwJpKN');
-    const connection = new Connection(
-        process.env.REACT_APP_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
-        'confirmed'
-    );
+    // Routed through our own backend: the RPC provider key stays server-side,
+    // and the server can fail over between providers when one rate-limits us.
+    // Wallet signing still happens entirely in the browser.
+    const rpcEndpoint = `${API_URL.startsWith('http') ? API_URL : `${window.location.origin}${API_URL}`}/solana/rpc`;
+    const connection = new Connection(rpcEndpoint, 'confirmed');
 
     const processDescription = (description) => {
         if (!description) return description;
@@ -143,8 +178,8 @@ const ProfilePage = () => {
 
     useEffect(() => {
         const fetchProfileData = async () => {
-            if (!profileId || isNaN(parseInt(profileId))) {
-                setError('Invalid profile ID');
+            if (!profileId) {
+                setError('Invalid profile address');
                 return;
             }
             try {
@@ -155,11 +190,14 @@ const ProfilePage = () => {
                     return;
                 }
 
+                // The URL may be a slug; every other endpoint keys off the id.
+                const resolvedId = Number(response.data.profile.id);
+
                 const [followersResponse, followingResponse, likedSongsResponse, recentReviewsResponse] = await Promise.all([
-                    axios.get(`${API_URL}/profile/${profileId}/followers`),
-                    axios.get(`${API_URL}/profile/${profileId}/following`),
-                    axios.get(`${API_URL}/profile/${profileId}/liked-songs-public`),
-                    axios.get(`${API_URL}/profile/${profileId}/recent-reviews`),
+                    axios.get(`${API_URL}/profile/${resolvedId}/followers`),
+                    axios.get(`${API_URL}/profile/${resolvedId}/following`),
+                    axios.get(`${API_URL}/profile/${resolvedId}/liked-songs-public`),
+                    axios.get(`${API_URL}/profile/${resolvedId}/recent-reviews`),
                 ]);
 
                 setProfile(response.data.profile);
@@ -214,13 +252,14 @@ const ProfilePage = () => {
                     youtube_url: response.data.profile.youtube_url || '',
                     instagram_url: response.data.profile.instagram_url || '',
                     solana_address: response.data.profile.solana_address || '',
+                    slug: response.data.profile.slug || '',
                 });
 
                 console.log('Profile background:', response.data.profile.background);
 
-                if (user && user.id !== parseInt(profileId)) {
+                if (user && user.id !== Number(response.data.profile.user_id)) {
                     const token = localStorage.getItem('token');
-                    const followResponse = await axios.get(`${API_URL}/profile/${profileId}/follow-status`, {
+                    const followResponse = await axios.get(`${API_URL}/profile/${resolvedId}/follow-status`, {
                         headers: {
                             Authorization: `Bearer ${token}`,
                         },
@@ -243,6 +282,29 @@ const ProfilePage = () => {
 
         fetchProfileData();
     }, [profileId, user]);
+
+    // Ask the server whether an address is free, debounced so typing doesn't
+    // fire a request per keystroke.
+    useEffect(() => {
+        const wanted = (formData.slug || '').trim();
+        if (!isEditing || !wanted || wanted === (profile?.slug || '')) {
+            setSlugStatus(null);
+            return;
+        }
+        setSlugStatus({ checking: true });
+        const timer = setTimeout(async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get(`${API_URL}/profile/slug-available/${encodeURIComponent(wanted)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                setSlugStatus({ checking: false, ...res.data });
+            } catch {
+                setSlugStatus(null);   // never block saving on a failed check
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [formData.slug, isEditing, profile]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -430,7 +492,7 @@ const ProfilePage = () => {
         return wallets;
     };
 
-    const transferIdjCoin = async (amountValue, walletProvider) => {
+    const transferIdjCoin = async (amountValue, walletProvider, onStage = () => {}) => {
         if (!walletProvider) {
             throw new Error('Please install a Solana wallet browser plugin (Jupiter, Phantom, or compatible).');
         }
@@ -443,6 +505,7 @@ const ProfilePage = () => {
         // IDJ Coin is a Token-2022 mint (has metadata extensions), not the classic SPL
         // Token program. Detect which program actually owns the mint so we build the
         // transfer instruction against the right program id.
+        onStage('Looking up IDJ Coin\u2026');
         const mintAccountInfo = await connection.getAccountInfo(IDJ_COIN_MINT);
         if (!mintAccountInfo) {
             throw new Error('Unable to load IDJ Coin mint account.');
@@ -450,8 +513,10 @@ const ProfilePage = () => {
         const tokenProgramId = mintAccountInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
             ? TOKEN_2022_PROGRAM_ID
             : TOKEN_PROGRAM_ID;
-        const mintInfo = await getMint(connection, IDJ_COIN_MINT, 'confirmed', tokenProgramId);
+        // Parse the account we just fetched rather than fetching it again.
+        const mintInfo = unpackMint(IDJ_COIN_MINT, mintAccountInfo, tokenProgramId);
 
+        onStage('Connecting your wallet\u2026');
         try {
             await walletProvider.connect({ onlyIfTrusted: false });
         } catch (_) {
@@ -462,6 +527,7 @@ const ProfilePage = () => {
         }
 
         const senderPublicKey = new PublicKey(walletProvider.publicKey.toString());
+        onStage('Checking your balance\u2026');
         const senderTokenAccount = await connection.getTokenAccountsByOwner(senderPublicKey, {
             mint: IDJ_COIN_MINT,
         });
@@ -500,6 +566,7 @@ const ProfilePage = () => {
         let signature;
         // Prefer signTransaction because some injected wallets reject signAndSendTransaction
         // even after user approval, but still allow signing.
+        onStage('Approve in your wallet\u2026');
         if (typeof walletProvider.signTransaction === 'function') {
             const signedTransaction = await walletProvider.signTransaction(transaction);
 
@@ -525,8 +592,11 @@ const ProfilePage = () => {
             throw new Error('Wallet did not return a transaction signature');
         }
 
-        const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-        if (confirmation.value.err) {
+        // connection.confirmTransaction() subscribes over a WebSocket, which the
+        // HTTP proxy doesn't provide, so poll the signature status instead.
+        onStage('Confirming on Solana\u2026');
+        const confirmation = await waitForConfirmation(connection, signature);
+        if (confirmation?.err) {
             throw new Error('Transaction failed');
         }
 
@@ -553,7 +623,7 @@ const ProfilePage = () => {
             const { signature } = await transferIdjCoin(sendAmount, selectedWallet.provider);
             const token = localStorage.getItem('token');
 
-            await axios.post(`${API_URL}/profile/${profileId}/record-payment`, {
+            await axios.post(`${API_URL}/profile/${apiProfileId}/record-payment`, {
                 amount: parseFloat(sendAmount),
                 signature,
             }, {
@@ -586,21 +656,27 @@ const ProfilePage = () => {
     };
 
     const handleGiftCoin = async () => {
+        // A gift takes several seconds before the wallet even appears, which is
+        // long enough for someone to press again and start a second transfer.
+        if (giftStage) return;
         if (!giftAmount || giftAmount <= 0) {
             setGiftError('Please enter a valid amount');
             return;
         }
 
+        setGiftError(null);
+        setGiftStage('Starting\u2026');
         try {
             const selectedWallet = availableWallets.find((w) => w.key === selectedWalletKey) || availableWallets[0];
             if (!selectedWallet) {
                 setGiftError('Please install a Solana wallet browser plugin (Jupiter, Phantom, or compatible).');
+                setGiftStage(null);
                 return;
             }
-            const { signature, senderPublicKey } = await transferIdjCoin(giftAmount, selectedWallet.provider);
+            const { signature, senderPublicKey } = await transferIdjCoin(giftAmount, selectedWallet.provider, setGiftStage);
             const token = localStorage.getItem('token');
 
-            await axios.post(`${API_URL}/profile/${profileId}/idjc-tip-notify`, {
+            await axios.post(`${API_URL}/profile/${apiProfileId}/idjc-tip-notify`, {
                 amount: parseFloat(giftAmount),
                 signature,
                 sender_wallet: senderPublicKey.toBase58(),
@@ -628,6 +704,8 @@ const ProfilePage = () => {
             } else {
                 setGiftError(`Failed to gift IDJ Coin: ${err.response?.data?.error || err.message}`);
             }
+        } finally {
+            setGiftStage(null);
         }
     };
 
@@ -645,6 +723,8 @@ const ProfilePage = () => {
         }
         const form = new FormData();
         form.append('name', formData.name);
+        // Always sent, so clearing the field genuinely removes the vanity address.
+        form.append('slug', (formData.slug || '').trim());
         form.append('location', formData.location);
         form.append('genre', formData.genre);
         form.append('description', formData.description);
@@ -783,7 +863,7 @@ const ProfilePage = () => {
 
         try {
             if (isFollowing) {
-                await axios.delete(`${API_URL}/profile/${profileId}/follow`, {
+                await axios.delete(`${API_URL}/profile/${apiProfileId}/follow`, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
@@ -791,7 +871,7 @@ const ProfilePage = () => {
                 setIsFollowing(false);
                 setFollowerCount((prev) => prev - 1);
             } else {
-                await axios.post(`${API_URL}/profile/${profileId}/follow`, {}, {
+                await axios.post(`${API_URL}/profile/${apiProfileId}/follow`, {}, {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
@@ -836,6 +916,7 @@ const ProfilePage = () => {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || 'Unknown Artist',
         });
     };
@@ -866,7 +947,7 @@ const ProfilePage = () => {
             }
 
             await axios.patch(
-                `${API_URL}/profile/${profileId}/featured-song`,
+                `${API_URL}/profile/${apiProfileId}/featured-song`,
                 { songId: songId ? Number(songId) : null },
                 {
                     headers: {
@@ -1002,6 +1083,8 @@ const ProfilePage = () => {
         }
     };
 
+    // Whichever address the visitor arrived on, actions key off the numeric id.
+    const apiProfileId = profile?.id ?? profileId;
     const isOwner = user && profile && user.id === profile.user_id;
     const featuredSong = songs.find((song) => Boolean(song.is_featured));
     const nonFeaturedSongs = songs.filter((song) => !song.is_featured);
@@ -1109,6 +1192,7 @@ const ProfilePage = () => {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || profile?.name || 'Unknown Artist',
         })));
     };
@@ -1341,11 +1425,11 @@ const ProfilePage = () => {
                             : `Listen to ${profile?.name} on InternetDJ. Explore reviews, genres, and more.`
                     }
                 />
-                <link rel="canonical" href={`${baseUrl}/profile/${profileId}`} />
+                <link rel="canonical" href={`${baseUrl}/profile/${profileAddress}`} />
                 <meta property="og:title" content={profile?.name || 'Profile'} />
                 <meta property="og:description" content={`Listen to ${profile?.name} on InternetDJ. Explore reviews, genres, and more.`} />
                 <meta property="og:image" content={profile?.picture_url} />
-                <meta property="og:url" content={`${baseUrl}/profile/${profileId}`} />
+                <meta property="og:url" content={`${baseUrl}/profile/${profileAddress}`} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
                 <meta name="twitter:title" content={profile?.name || 'Profile'} />
@@ -1430,6 +1514,39 @@ const ProfilePage = () => {
 
                     {isOwner && isEditing && (
                         <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+                            <div>
+                                <label className="retro-label">Profile Address</label>
+                                <div className="flex items-stretch">
+                                    <span className="retro-mono text-lg text-gray-500 flex items-center px-2 border border-r-0 border-cyan-400/30 bg-black/30 whitespace-nowrap">
+                                        /profile/
+                                    </span>
+                                    <input
+                                        type="text"
+                                        name="slug"
+                                        value={formData.slug}
+                                        onChange={handleInputChange}
+                                        placeholder="your-artist-name"
+                                        maxLength={40}
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        spellCheck="false"
+                                        className="retro-field flex-1"
+                                    />
+                                </div>
+                                <p className="retro-mono text-lg mt-1">
+                                    {slugStatus?.checking ? (
+                                        <span className="text-cyan-300">&gt; checking&hellip;</span>
+                                    ) : slugStatus && slugStatus.available === false ? (
+                                        <span className="text-fuchsia-400">&gt; {slugStatus.reason}</span>
+                                    ) : slugStatus?.available ? (
+                                        <span className="text-cyan-300">&gt; {slugStatus.slug} is available</span>
+                                    ) : (
+                                        <span className="text-gray-500">
+                                            Optional. Lowercase letters, numbers and hyphens. Your /profile/{apiProfileId} link keeps working either way.
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
                             <div>
                                 <label className="retro-label">Name</label>
                                 <input
@@ -1631,7 +1748,7 @@ const ProfilePage = () => {
 
                 {artistGenres.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 mb-8">
-                        <span className="retro-eyebrow mr-1">Files Under</span>
+                        <span className="retro-eyebrow mr-1">Filed Under</span>
                         {artistGenres.map((genre) => (
                             <Link
                                 key={genre.label}
@@ -1989,7 +2106,7 @@ const ProfilePage = () => {
                                         return (
                                             <div key={`follower-${member.profile_id}`} className="flex items-center justify-between gap-2 p-2 border-l-2 border-transparent hover:border-fuchsia-500 hover:bg-cyan-400/10 transition-colors">
                                                 <Link
-                                                    to={`/profile/${member.profile_id}`}
+                                                    to={profilePath(member)}
                                                     className="flex items-center gap-3 min-w-0"
                                                 >
                                                     <img
@@ -2035,7 +2152,7 @@ const ProfilePage = () => {
                                         return (
                                             <div key={`following-${member.profile_id}`} className="flex items-center justify-between gap-2 p-2 border-l-2 border-transparent hover:border-fuchsia-500 hover:bg-cyan-400/10 transition-colors">
                                                 <Link
-                                                    to={`/profile/${member.profile_id}`}
+                                                    to={profilePath(member)}
                                                     className="flex items-center gap-3 min-w-0"
                                                 >
                                                     <img
@@ -2122,7 +2239,7 @@ const ProfilePage = () => {
                                                     <Link to={`/song/${song.id}`} className="retro-mono text-lg text-gray-100 hover:text-cyan-200 block truncate">
                                                         {song.title}
                                                     </Link>
-                                                    <Link to={`/profile/${song.profile_id}`} className="retro-mono text-base retro-link block truncate">
+                                                    <Link to={profilePath(song)} className="retro-mono text-base retro-link block truncate">
                                                         by {song.profile_name}
                                                     </Link>
                                                 </div>
@@ -2163,7 +2280,7 @@ const ProfilePage = () => {
                                                 {review.song_title}
                                             </Link>
                                             <Link
-                                                to={`/profile/${review.song_profile_id}`}
+                                                to={profilePath({ profile_slug: review.song_profile_slug, profile_id: review.song_profile_id })}
                                                 className="retro-mono text-base retro-link"
                                             >
                                                 by {review.song_artist_name}
@@ -2376,14 +2493,27 @@ const ProfilePage = () => {
                                 className="retro-field mt-1"
                                 min="0"
                                 step="0.000000001"
+                                disabled={Boolean(giftStage)}
                             />
                         </div>
                         <div className="flex space-x-4">
                             <button
                                 onClick={handleGiftCoin}
-                                className="py-2 px-4 bg-purple-500 text-white font-semibold rounded-md shadow-sm hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                                disabled={Boolean(giftStage)}
+                                aria-busy={Boolean(giftStage)}
+                                className="retro-btn retro-btn--hot py-2 px-4 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                Send gift
+                                {giftStage ? (
+                                    <>
+                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4z" />
+                                        </svg>
+                                        {giftStage}
+                                    </>
+                                ) : (
+                                    'Send gift'
+                                )}
                             </button>
                             <button
                                 onClick={() => {
@@ -2392,7 +2522,9 @@ const ProfilePage = () => {
                                     setGiftError(null);
                                     setGiftSuccess(null);
                                 }}
-                                className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                disabled={Boolean(giftStage)}
+                                title={giftStage ? 'A gift is in progress' : undefined}
+                                className="retro-btn py-2 px-4 text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 Cancel
                             </button>

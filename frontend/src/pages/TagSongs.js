@@ -7,6 +7,7 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
 import { getDefaultAvatar } from '../utils/defaultAvatar';
+import profilePath from '../utils/profilePath';
 
 const SORTS = [
     { id: 'random', label: 'Shuffle' },
@@ -157,6 +158,7 @@ function TagSongs() {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || 'Unknown Artist',
         });
     };
@@ -172,6 +174,7 @@ function TagSongs() {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || 'Unknown Artist',
         })));
     };
@@ -365,7 +368,7 @@ function TagSongs() {
                                                 {song.title}
                                             </Link>
                                             <Link
-                                                to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
+                                                to={song.profile_id ? profilePath(song) : '#'}
                                                 className="retro-mono text-lg retro-link block truncate"
                                             >
                                                 {song.profile_name}
@@ -429,7 +432,7 @@ function TagSongs() {
                                                                 {song.title}
                                                             </Link>
                                                             <Link
-                                                                to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
+                                                                to={song.profile_id ? profilePath(song) : '#'}
                                                                 className="retro-mono text-lg retro-link block truncate"
                                                             >
                                                                 {song.profile_name}
@@ -472,7 +475,7 @@ function TagSongs() {
                                     {overview.topArtists.map((artist, i) => (
                                         <li key={artist.profile_id}>
                                             <Link
-                                                to={`/profile/${artist.profile_id}`}
+                                                to={profilePath(artist)}
                                                 className="flex items-center gap-3 py-1.5 px-2 hover:bg-cyan-400/10 border-l-2 border-transparent hover:border-fuchsia-500 transition-colors group"
                                             >
                                                 <span className="retro-pixel text-[0.5rem] text-fuchsia-400 w-4 shrink-0">

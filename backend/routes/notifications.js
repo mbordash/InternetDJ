@@ -79,6 +79,7 @@ router.get('/', authenticate, async (req, res) => {
                     n.created_at,
                     n.metadata,
                     p.id AS actor_profile_id,
+                    p.slug AS actor_profile_slug,
                     p.name AS actor_name,
                     p.picture_url AS actor_picture
                 FROM notifications n
@@ -100,6 +101,7 @@ router.get('/', authenticate, async (req, res) => {
             created_at: row.created_at,
             metadata: row.metadata || null,
             actor_profile_id: row.actor_profile_id != null ? Number(row.actor_profile_id) : null,
+            actor_profile_slug: row.actor_profile_slug || null,
             actor_name: row.actor_name || 'Unknown',
             actor_picture: row.actor_picture || null,
         }));

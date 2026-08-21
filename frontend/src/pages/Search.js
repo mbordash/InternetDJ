@@ -5,6 +5,7 @@ import { SpeakerWaveIcon, PlayIcon, PauseIcon, HeartIcon as HeartIconSolid } fro
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
+import profilePath from '../utils/profilePath';
 
 function Search() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -77,6 +78,7 @@ function Search() {
             mp3_url: song.mp3_url,
             image_url: song.image_url,
             profile_id: song.profile_id,
+            profile_slug: song.profile_slug || null,
             profile_name: song.profile_name || 'Unknown Artist',
         });
     };
@@ -177,7 +179,7 @@ function Search() {
                                                         <Link
                                                             to={
                                                                 song.profile_id
-                                                                    ? `/profile/${song.profile_id}`
+                                                                    ? profilePath(song)
                                                                     : '#'
                                                             }
                                                             className={
@@ -239,7 +241,7 @@ function Search() {
                                                 loading="lazy"
                                             />
                                             <Link
-                                                to={`/profile/${profile.id}`}
+                                                to={profilePath(profile)}
                                                 className="retro-link"
                                             >
                                                 {profile.name}

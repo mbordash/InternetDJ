@@ -7,6 +7,7 @@ import * as Tone from 'tone';
 import ReadOnlyPianoRoll from '../components/ReadOnlyPianoRoll';
 import synthConfigs from '../config/synthConfigs';
 import API_URL from '../utils/api';
+import profilePath from '../utils/profilePath';
 
 const SampleBlock = ({ sample, zoom, duration, waveformColor }) => {
     const waveformRef = useRef(null);
@@ -699,7 +700,7 @@ const PublicMultiTrackSampler = () => {
                 <p className="text-sm text-gray-300 mb-4">
                     Creator:{' '}
                     <Link
-                        to={`/profile/${project.user_id}`}
+                        to={profilePath(project)}
                         className="text-primary-brand hover:underline"
                         aria-label={`View ${project.creator}'s profile`}
                     >

@@ -487,6 +487,7 @@ router.get('/me', authenticate, async (req, res) => {
                     u.email_profile_activity_enabled,
                     u.email_artist_activity_enabled,
                     p.id AS profile_id,
+                    p.slug AS profile_slug,
                     p.picture_url AS picture
                 FROM users u
                          LEFT JOIN profiles p ON p.user_id = u.id
@@ -510,6 +511,7 @@ router.get('/me', authenticate, async (req, res) => {
             email_profile_activity_enabled: row.email_profile_activity_enabled !== 0,
             email_artist_activity_enabled: row.email_artist_activity_enabled !== 0,
             profile_id: row.profile_id ? Number(row.profile_id) : null,
+            profile_slug: row.profile_slug || null,
             picture: row.picture || null,
         };
 
