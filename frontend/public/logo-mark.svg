@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe08a"/>
+      <stop offset="38%" stop-color="#ff9d4d"/>
+      <stop offset="72%" stop-color="#ff2f8e"/>
+      <stop offset="100%" stop-color="#b5179e"/>
+    </linearGradient>
+    <mask id="bands">
+      <rect x="0" y="0" width="120" height="62" fill="#fff"/>
+      <rect x="0" y="66" width="120" height="8" fill="#fff"/>
+      <rect x="0" y="78" width="120" height="7" fill="#fff"/>
+      <rect x="0" y="89" width="120" height="5" fill="#fff"/>
+      <rect x="0" y="98" width="120" height="4" fill="#fff"/>
+      <rect x="0" y="106" width="120" height="3" fill="#fff"/>
+    </mask>
+  </defs>
+  <circle cx="60" cy="60" r="58" fill="#04010c"/>
+  <circle cx="60" cy="60" r="52" fill="#0a0418"/>
+  <g mask="url(#bands)"><circle cx="60" cy="60" r="46" fill="url(#sun)"/></g>
+  <circle cx="60" cy="60" r="39" fill="none" stroke="rgba(4,1,12,0.55)" stroke-width="1.2"/>
+  <circle cx="60" cy="60" r="33" fill="none" stroke="rgba(4,1,12,0.55)" stroke-width="1.2"/>
+  <circle cx="60" cy="60" r="26" fill="none" stroke="rgba(4,1,12,0.55)" stroke-width="1.2"/>
+  <line x1="16" y1="60" x2="104" y2="60" stroke="#00f0ff" stroke-width="1.6" opacity="0.9"/>
+  <circle cx="60" cy="60" r="9" fill="#04010c"/>
+  <circle cx="60" cy="60" r="9" fill="none" stroke="#00f0ff" stroke-width="2"/>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="#00f0ff" stroke-width="2.5"/>
+</svg>

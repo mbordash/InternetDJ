@@ -9,7 +9,7 @@ function PrivacyPolicy() {
     const baseUrl = SITE_URL;
 
     return (
-        <div className="text-gray-100 pt-2 min-h-screen">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
                 <title>Privacy Policy | InternetDJ</title>
                 <meta name="description" content="InternetDJ Privacy Policy - how we collect, use, and protect your information." />
@@ -32,8 +32,8 @@ function PrivacyPolicy() {
                     </p>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">1. Information We Collect</h2>
-                        <ul className="list-disc list-inside text-gray-300 space-y-2">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">1. Information We Collect</h2>
+                        <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li><strong>Account information:</strong> such as your username, email address, and password (stored in hashed form).</li>
                             <li><strong>Content you create:</strong> music, audio, images, project files, comments, reviews, and forum posts you upload or publish.</li>
                             <li><strong>Profile information:</strong> display name, bio, avatar, and other details you choose to add.</li>
@@ -43,8 +43,8 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">2. How We Use Information</h2>
-                        <ul className="list-disc list-inside text-gray-300 space-y-2">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">2. How We Use Information</h2>
+                        <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li>To provide, operate, and maintain the Service.</li>
                             <li>To authenticate you and keep your account secure.</li>
                             <li>To display your public profile, music, and contributions to other users.</li>
@@ -54,8 +54,8 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">3. Your Content & Ownership</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">3. Your Content & Ownership</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             You retain ownership of the music and content you create. We do not sell your
                             content, and we do not use your work to train AI models without your consent.
                             Content you mark as public may be displayed to and shared by other users.
@@ -63,11 +63,11 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">4. How We Share Information</h2>
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">4. How We Share Information</h2>
                         <p className="text-gray-300 mb-3">
                             We do not sell your personal information. We may share information only:
                         </p>
-                        <ul className="list-disc list-inside text-gray-300 space-y-2">
+                        <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li>With service providers who help us operate the Service (e.g., hosting, storage, email), under appropriate confidentiality obligations.</li>
                             <li>When you choose to make content public or share it via social platforms.</li>
                             <li>If required by law, or to protect the rights, safety, and security of InternetDJ and its users.</li>
@@ -75,8 +75,8 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">5. Cookies</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">5. Cookies</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             We use cookies and similar technologies to keep you logged in and to understand
                             usage. You can control cookies through your browser settings, though some features
                             may not function properly if cookies are disabled.
@@ -84,8 +84,8 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">6. Data Security</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">6. Data Security</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             We use reasonable technical and organizational measures to protect your information,
                             including hashing passwords. However, no method of transmission or storage is
                             completely secure, and we cannot guarantee absolute security.
@@ -93,8 +93,8 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">7. Your Rights & Choices</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">7. Your Rights & Choices</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             You may access and update your profile information at any time in your account
                             settings. You may request deletion of your account by contacting us. Depending on
                             your location, you may have additional rights regarding your personal data.
@@ -102,24 +102,24 @@ function PrivacyPolicy() {
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">8. Children's Privacy</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">8. Children's Privacy</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             The Service is not directed to children under 13, and we do not knowingly collect
                             personal information from children under 13.
                         </p>
                     </section>
 
                     <section className="mb-8">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">9. Changes to This Policy</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">9. Changes to This Policy</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             We may update this Privacy Policy from time to time. We will revise the "Last
                             updated" date above, and significant changes may be communicated through the Service.
                         </p>
                     </section>
 
                     <section className="mb-2">
-                        <h2 className="text-xl font-bold mb-3 tracking-tight">10. Contact Us</h2>
-                        <p className="text-gray-300">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-3">10. Contact Us</h2>
+                        <p className="retro-mono text-xl text-gray-300">
                             If you have questions about this Privacy Policy, contact us at{' '}
                             <a href="mailto:internetdjco@gmail.com" className="text-primary-brand-400 hover:underline">internetdjco@gmail.com</a>.
                         </p>

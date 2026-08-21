@@ -1,4 +1,6 @@
 @import 'quill/dist/quill.snow.css';
+/* Retro component layer — must precede @tailwind utilities so utilities win. */
+@import './styles/retro.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -58,12 +60,16 @@ footer {
 }
 
 body {
-    background: radial-gradient(circle at top, #1b1b1b 0%, #121212 45%, #090909 100%);
+    background:
+        radial-gradient(90rem 50rem at 50% -10%, rgba(157, 78, 221, 0.30), transparent 60%),
+        radial-gradient(60rem 40rem at 10% 15%, rgba(255, 47, 142, 0.16), transparent 65%),
+        radial-gradient(60rem 40rem at 90% 30%, rgba(0, 240, 255, 0.14), transparent 65%),
+        linear-gradient(180deg, #0a0418 0%, #04010c 100%);
     color: #f3f4f6;
 }
 
 .app-shell {
-    background: linear-gradient(180deg, rgba(20, 20, 20, 0.94) 0%, rgba(9, 9, 9, 0.98) 50%, #090909 100%);
+    background: linear-gradient(180deg, rgba(10, 4, 24, 0.94) 0%, rgba(4, 1, 12, 0.98) 55%, #04010c 100%);
 }
 
 .spotify-surface {

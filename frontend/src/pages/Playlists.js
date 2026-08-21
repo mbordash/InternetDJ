@@ -63,29 +63,29 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
         >
             <div
                 ref={modalRef}
-                className="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+                className="retro-panel retro-cut p-6 max-w-md w-full mx-4"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-labelledby="modal-title"
                 aria-modal="true"
             >
                 <div className="flex justify-between items-center mb-4">
-                    <h3 id="modal-title" className="text-xl font-bold text-white">
+                    <h3 id="modal-title" className="retro-display text-base retro-glow-cyan">
                         {title}
                     </h3>
                     <button
                         onClick={onClose}
-                        className="p-1 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        className="retro-icon-btn p-1"
                         aria-label="Close modal"
                     >
                         <XMarkIcon className="w-5 h-5 text-white" />
                     </button>
                 </div>
-                <p className="text-gray-300 mb-6">{message}</p>
+                <p className="retro-mono text-xl text-gray-300 mb-6">{message}</p>
                 <div className="flex justify-end space-x-4">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        className="retro-btn px-4 py-2 text-xs"
                         aria-label="Cancel"
                     >
                         Cancel
@@ -287,23 +287,37 @@ const Playlists = () => {
     };
 
     if (authLoading) {
-        return <div className="container mx-auto px-4 py-8 text-white">Loading...</div>;
+        return (
+            <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen flex items-center justify-center">
+                <p className="retro-mono text-2xl text-cyan-200">&gt; loading&hellip;</p>
+            </div>
+        );
     }
 
     if (!user) {
         return (
-            <div className="container mx-auto px-4 py-8 text-white">
-                <p>Please <Link to="/login" className="text-primary-brand hover:underline">log in</Link> to manage your playlists.</p>
+            <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen flex items-center justify-center">
+                <div className="retro-panel retro-cut px-8 py-10 text-center">
+                    <div className="retro-eyebrow mb-3">// Locked //</div>
+                    <p className="retro-mono text-2xl text-gray-300">
+                        &gt; Please <Link to="/login" className="retro-link">log in</Link> to manage your playlists.
+                    </p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 text-white min-h-screen">
-            <h1 className="text-3xl font-bold mb-6">Your Playlists</h1>
-            {error && <p className="text-red-400 mb-4">{error}</p>}
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
+            <div className="container mx-auto px-4 py-8">
+            <header className="mb-6">
+                <div className="retro-eyebrow mb-3">// Your Crates //</div>
+                <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">Playlists</h1>
+                <div className="retro-rule mt-4" />
+            </header>
+            {error && <p className="retro-mono text-xl text-fuchsia-400 mb-4">{error}</p>}
             {loading ? (
-                <p>Loading playlists...</p>
+                <p className="retro-mono text-xl text-cyan-200">&gt; loading playlists&hellip;</p>
             ) : (
                 <>
                     <form onSubmit={handleCreatePlaylist} className="mb-8 flex space-x-2">
@@ -312,12 +326,12 @@ const Playlists = () => {
                             value={newPlaylistName}
                             onChange={(e) => setNewPlaylistName(e.target.value)}
                             placeholder="New playlist name"
-                            className="flex-1 px-3 py-2 bg-gray-800 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                            className="retro-field flex-1"
                             aria-label="New playlist name"
                         />
                         <button
                             type="submit"
-                            className="px-4 py-2 bg-primary-brand-500 text-white rounded-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand flex items-center"
+                            className="retro-btn retro-btn--hot px-4 py-2 text-xs"
                             aria-label="Create playlist"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
@@ -325,11 +339,11 @@ const Playlists = () => {
                         </button>
                     </form>
                     {playlists.length === 0 ? (
-                        <p>No playlists found. Create one above.</p>
+                        <p className="retro-mono text-xl text-gray-400">&gt; no playlists yet. create one above.</p>
                     ) : (
                         <div className="space-y-6">
                             {playlists.map((playlist) => (
-                                <div key={playlist.id} className="bg-gray-800 p-6 rounded-lg shadow-md">
+                                <div key={playlist.id} className="retro-panel retro-cut p-6">
                                     <div className="flex justify-between items-center mb-4">
                                         <div className="flex items-center space-x-4">
                                             <button
@@ -343,12 +357,12 @@ const Playlists = () => {
                                                     <ChevronDownIcon className="w-6 h-6 text-gray-400" />
                                                 )}
                                             </button>
-                                            <h2 className="text-xl font-semibold">{playlist.name}</h2>
+                                            <h2 className="retro-display text-base retro-glow-cyan">{playlist.name}</h2>
                                         </div>
                                         <div className="flex space-x-4">
                                             <button
                                                 onClick={() => handlePlayPlaylist(playlist.id)}
-                                                className="p-2 bg-primary-brand-500 text-white rounded-md hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                                                className="retro-action p-2"
                                                 aria-label={`Play playlist ${playlist.name}`}
                                             >
                                                 <PlayIcon className="w-5 h-5" />
@@ -373,7 +387,7 @@ const Playlists = () => {
                                                                 <div>
                                                                     <Link
                                                                         to={`/song/${song.id}`}
-                                                                        className="text-primary-brand hover:underline"
+                                                                        className="retro-link retro-mono text-xl"
                                                                     >
                                                                         {song.title}
                                                                     </Link>
@@ -390,10 +404,10 @@ const Playlists = () => {
                                                         ))}
                                                     </ul>
                                                 ) : (
-                                                    <p className="text-gray-400">No songs in this playlist.</p>
+                                                    <p className="retro-mono text-xl text-gray-400">No songs in this playlist.</p>
                                                 )
                                             ) : (
-                                                <p className="text-gray-400">Loading songs...</p>
+                                                <p className="retro-mono text-xl text-gray-400">Loading songs...</p>
                                             )}
                                         </>
                                     )}
@@ -410,6 +424,7 @@ const Playlists = () => {
                 title={modalConfig.title}
                 message={modalConfig.message}
             />
+            </div>
         </div>
     );
 };

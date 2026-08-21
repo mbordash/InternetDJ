@@ -277,7 +277,7 @@ function Post() {
                                 />
                             ) : (
                                 <div
-                                    className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-400 text-xs"
+                                    className="w-8 h-8 border border-cyan-400/40 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.35rem] text-cyan-300"
                                     style={{ display: comment.user_picture ? 'none' : 'flex' }}
                                 >
                                     ?
@@ -290,7 +290,7 @@ function Post() {
                                 >
                                     {comment.user_name}
                                 </Link>
-                                <div className="text-sm text-gray-300">
+                                <div className="retro-mono text-lg text-gray-400">
                                     {formatDate(comment.created_at)}
                                     {comment.edited_at && (
                                         <span> (Edited {formatDate(comment.edited_at)})</span>
@@ -315,14 +315,14 @@ function Post() {
                         <div className="flex space-x-2 mt-2">
                             <button
                                 onClick={() => handleReply(comment.id)}
-                                className="text-primary-brand-300 hover:text-primary-brand-200 text-sm"
+                                className="retro-link retro-mono text-lg"
                             >
                                 Reply
                             </button>
                             {user && comment.user_id === user.id && canEditComment(comment) && (
                                 <button
                                     onClick={() => handleEditComment(comment)}
-                                    className="text-primary-brand-300 hover:text-primary-brand-200 text-sm"
+                                    className="retro-link retro-mono text-lg"
                                 >
                                     Edit
                                 </button>
@@ -349,7 +349,7 @@ function Post() {
     if (error && !post) {
         return (
             <div className="container mx-auto px-4 py-8 text-center text-gray-100">
-                <p className="text-red-400 text-lg">{error}</p>
+                <p className="retro-mono text-2xl text-fuchsia-400">{error}</p>
             </div>
         );
     }
@@ -380,7 +380,7 @@ function Post() {
     };
 
     return (
-        <div className="text-gray-100 pt-2">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
             <Helmet>
                 <title>InternetDJ Discussion Forum</title>
                 <meta
@@ -398,17 +398,17 @@ function Post() {
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8">
-                <Link to="/forum" className="text-primary-brand-300 hover:underline mb-4 inline-block">
+                <Link to="/forum" className="retro-link mb-4 inline-block">
                     ← Back to Forum
                 </Link>
                 <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-3xl font-bold">{post.title}</h1>
+                    <h1 className="retro-display retro-chrome text-2xl sm:text-3xl">{post.title}</h1>
                     {user && post.user_id === user.id && (
                         <div className="flex space-x-2">
                             {canEditPost(post) && (
                                 <button
                                     onClick={() => navigate('/forum', { state: { editPostId: post.id } })}
-                                    className="text-primary-brand-300 hover:text-primary-brand-200"
+                                    className="retro-link"
                                     title="Edit post"
                                 >
                                     <PencilIcon className="w-6 h-6" />
@@ -424,7 +424,7 @@ function Post() {
                         </div>
                     )}
                 </div>
-                <div className="mb-8 border border-white/10 rounded-md p-4 bg-white/5">
+                <div className="retro-card retro-cut mb-8 p-4">
                     <div className="flex items-center space-x-2 mb-2">
                         {post.user_picture ? (
                             <img
@@ -439,7 +439,7 @@ function Post() {
                             />
                         ) : (
                             <div
-                                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-gray-400 text-xs"
+                                className="w-10 h-10 border border-cyan-400/40 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300"
                                 style={{ display: post.user_picture ? 'none' : 'flex' }}
                             >
                                 ?
@@ -452,7 +452,7 @@ function Post() {
                             >
                                 {post.user_name}
                             </Link>
-                            <div className="text-sm text-gray-300">
+                            <div className="retro-mono text-lg text-gray-400">
                                 {formatDate(post.created_at)}
                                 {post.edited_at && (
                                     <span> (Edited {formatDate(post.edited_at)})</span>
@@ -478,7 +478,7 @@ function Post() {
 
                 {/* Comments Section */}
                 <section className="mb-12">
-                    <h2 className="text-2xl font-bold mb-4">Comments</h2>
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Comments</h2>
                     {commentTree.length === 0 ? (
                         <p>No comments yet.</p>
                     ) : (
@@ -488,7 +488,7 @@ function Post() {
 
                 {/* Add/Edit Comment Form */}
                 <section>
-                    <h2 className="text-2xl font-bold mb-4">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">
                         {editingComment ? 'Edit Comment' : newComment.parent_comment_id ? 'Reply to Comment' : 'Add a Comment'}
                     </h2>
                     <form onSubmit={handleAddOrUpdateComment} className="space-y-4">
@@ -499,12 +499,12 @@ function Post() {
                                 onChange={(content) => setNewComment({ ...newComment, content })}
                                 modules={quillModules}
                                 placeholder="Your comment..."
-                                className="bg-white/5 text-white border border-white/10 rounded-md"
+                                className="retro-field"
                             />
                         </div>
                         {!editingComment && (
                             <div>
-                                <label htmlFor="comment-image-upload" className="text-gray-300 mr-2">
+                                <label htmlFor="comment-image-upload" className="retro-mono text-xl text-gray-300 mr-2">
                                     Image
                                 </label>
                                 <input
@@ -512,7 +512,7 @@ function Post() {
                                     type="file"
                                     accept="image/jpeg,image/png,image/gif"
                                     onChange={handleImageChange}
-                                    className="w-full px-3 py-2 border border-white/10 rounded-md bg-white/5 text-gray-200"
+                                    className="retro-field"
                                 />
                                 {imagePreview && (
                                     <div className="mt-2">
@@ -525,8 +525,8 @@ function Post() {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className={`bg-primary-brand-500 text-white px-4 py-2 rounded-md transition-colors ${
-                                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-brand-700'
+                                className={`retro-btn retro-btn--hot px-4 py-2 text-xs ${
+                                    isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
                                 }`}
                             >
                                 {editingComment ? 'Update Comment' : 'Post Comment'}
@@ -538,7 +538,7 @@ function Post() {
                                         setNewComment({ ...newComment, content: '', parent_comment_id: null });
                                         setEditingComment(null);
                                     }}
-                                    className="bg-white/10 text-white px-4 py-2 rounded-md hover:bg-white/15 transition-colors"
+                                    className="retro-btn px-4 py-2 text-xs"
                                 >
                                     Cancel
                                 </button>

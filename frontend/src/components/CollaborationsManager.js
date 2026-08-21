@@ -10,7 +10,7 @@ const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, title, message }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+            <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                 <h3 className="text-lg font-bold mb-4 text-white">{title}</h3>
                 <p className="text-gray-300 mb-6">{message}</p>
                 <div className="flex justify-end space-x-4">
@@ -37,7 +37,7 @@ const ConfirmInviteModal = ({ isOpen, onClose, onConfirm, invite }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+            <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                 <h3 className="text-lg font-bold mb-4 text-white">Collaboration Invite</h3>
                 <p className="text-gray-300 mb-6">
                     You’ve been invited to join <strong>{invite.collaboration_title}</strong>.
@@ -71,10 +71,10 @@ const RecordModal = ({ isOpen, onClose, tracks, onStartRecording, onStopRecordin
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+            <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-white">Record Vocal Track</h3>
-                    <button onClick={onClose} className="text-primary-brand-300 hover:text-primary-brand-200">
+                    <button onClick={onClose} className="retro-link">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
@@ -1030,13 +1030,13 @@ const CollaborationsManager = () => {
     }
 
     return (
-            <div className="container mx-auto px-4 py-8 max-w-4xl text-gray-100 pt-2 min-h-screen">
-            <h1 className="text-3xl font-bold mb-6 text-white">Collaborations Manager</h1>
+            <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
+            <h1 className="retro-display retro-chrome text-3xl mb-6">Collaborations Manager</h1>
             {error && <p className="text-red-400 mb-4">{error}</p>}
 
             {/* Pending Invites */}
             {pendingInvites.length > 0 && (
-                <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8">
+                <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8">
                     <h2 className="text-2xl font-bold mb-4 text-white">Pending Invites</h2>
                     <div className="space-y-4">
                         {pendingInvites.map(invite => (
@@ -1048,19 +1048,19 @@ const CollaborationsManager = () => {
                                     <h3 className="text-lg font-semibold text-white">
                                         {invite.collaboration_title}
                                     </h3>
-                                    <p className="text-sm text-gray-300">
+                                    <p className="retro-mono text-lg text-gray-400">
                                         Invited to: {invite.email}
                                     </p>
-                                    <p className="text-sm text-gray-300">
+                                    <p className="retro-mono text-lg text-gray-400">
                                         Invited on: {new Date(invite.invited_at).toLocaleString()}
                                     </p>
-                                    <p className="text-sm text-gray-300">
+                                    <p className="retro-mono text-lg text-gray-400">
                                         Upload Permissions: {invite.can_upload ? 'Yes' : 'No'}
                                     </p>
                                 </div>
                                 <button
                                     onClick={() => openInviteModal(invite)}
-                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                                    className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                 >
                                     Respond
                                 </button>
@@ -1075,7 +1075,7 @@ const CollaborationsManager = () => {
                 <div className="mb-8">
                     <button
                         onClick={() => setShowCreateForm(true)}
-                        className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                        className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                     >
                         Create New Collaboration
                     </button>
@@ -1084,36 +1084,36 @@ const CollaborationsManager = () => {
 
             {/* Create Collaboration Form */}
             {showCreateForm && (
-                <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100">
+                <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-2xl font-bold text-white">Create Collaboration</h2>
                         <button
                             onClick={() => setShowCreateForm(false)}
-                            className="text-primary-brand-300 hover:text-primary-brand-200"
+                            className="retro-link"
                         >
                             <XMarkIcon className="w-6 h-6" />
                         </button>
                     </div>
                     <form onSubmit={handleCreateSubmit} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-200">Title</label>
+                            <label className="retro-label">Title</label>
                             <input
                                 type="text"
                                 name="title"
                                 value={createForm.title}
                                 onChange={handleCreateInputChange}
                                 required
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-200">Description</label>
+                            <label className="retro-label">Description</label>
                             <textarea
                                 name="description"
                                 value={createForm.description}
                                 onChange={handleCreateInputChange}
                                 rows="4"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div>
@@ -1151,10 +1151,10 @@ const CollaborationsManager = () => {
             )}
 
             {/* Collaborations List */}
-            <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md">
+            <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md">
                 <h2 className="text-2xl font-bold mb-4 text-white">Your Collaborations</h2>
                 {collaborations.length === 0 ? (
-                    <p className="text-gray-300">No collaborations yet.</p>
+                    <p className="retro-mono text-xl text-gray-300">No collaborations yet.</p>
                 ) : (
                     <div className="space-y-6">
                         {collaborations.map(collab => (
@@ -1169,8 +1169,8 @@ const CollaborationsManager = () => {
                                     >
                                         {collab.title}
                                     </h3>
-                                    <p className="text-sm text-gray-300">{collab.description}</p>
-                                    <p className="text-sm text-gray-300">
+                                    <p className="retro-mono text-lg text-gray-400">{collab.description}</p>
+                                    <p className="retro-mono text-lg text-gray-400">
                                         {collab.is_public ? 'Public' : 'Private'} |{' '}
                                         {collab.allow_uploads ? 'Uploads Allowed' : 'Uploads Restricted'}
                                     </p>
@@ -1192,12 +1192,12 @@ const CollaborationsManager = () => {
 
             {/* Collaboration Details */}
             {selectedCollaboration && (
-                <div className="spotify-surface border border-white/10 p-6 rounded-xl shadow-md mt-8 text-gray-100">
+                <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mt-8 text-gray-100">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-2xl font-bold text-white">{selectedCollaboration.title}</h2>
                         <button
                             onClick={() => setSelectedCollaboration(null)}
-                            className="text-primary-brand-300 hover:text-primary-brand-200"
+                            className="retro-link"
                         >
                             <XMarkIcon className="w-6 h-6" />
                         </button>
@@ -1206,13 +1206,13 @@ const CollaborationsManager = () => {
                     <div className="flex space-x-4 mb-4">
                         <button
                             onClick={() => setShowTrackForm(true)}
-                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                            className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                         >
                             Upload Track
                         </button>
                         <button
                             onClick={() => setShowRecordModal(true)}
-                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                            className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                         >
                             Record Vocal Track
                         </button>
@@ -1220,13 +1220,13 @@ const CollaborationsManager = () => {
                             <>
                                 <button
                                     onClick={() => setShowInviteForm(true)}
-                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                                    className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                 >
                                     Invite Collaborator
                                 </button>
                                 <button
                                     onClick={() => setShowEditForm(true)}
-                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                                    className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                 >
                                     Edit Collaboration
                                 </button>
@@ -1239,7 +1239,7 @@ const CollaborationsManager = () => {
                         <div className="mt-6">
                             <h3 className="text-xl font-bold mb-4 text-white">Invitees</h3>
                             {invitees.length === 0 ? (
-                                <p className="text-gray-300">No invitees yet.</p>
+                                <p className="retro-mono text-xl text-gray-300">No invitees yet.</p>
                             ) : (
                                 <div className="space-y-4">
                                     {invitees.map(invitee => (
@@ -1249,19 +1249,19 @@ const CollaborationsManager = () => {
                                         >
                                             <div>
                                                 <p className="font-semibold text-white">{invitee.email}</p>
-                                                <p className="text-sm text-gray-300">
+                                                <p className="retro-mono text-lg text-gray-400">
                                                     Status: {getStatusDisplay(invitee.status)}
                                                 </p>
-                                                <p className="text-sm text-gray-300">
+                                                <p className="retro-mono text-lg text-gray-400">
                                                     Invited: {new Date(invitee.invited_at).toLocaleString()}
                                                 </p>
                                                 {invitee.accepted_at && (
-                                                    <p className="text-sm text-gray-300">
+                                                    <p className="retro-mono text-lg text-gray-400">
                                                         Accepted: {new Date(invitee.accepted_at).toLocaleString()}
                                                     </p>
                                                 )}
                                                 {invitee.profile_name && invitee.status === 'accepted' && (
-                                                    <p className="text-sm text-gray-300">
+                                                    <p className="retro-mono text-lg text-gray-400">
                                                         Collaborator: {invitee.profile_name}
                                                     </p>
                                                 )}
@@ -1315,7 +1315,7 @@ const CollaborationsManager = () => {
                                             <div className="flex justify-between items-center relative group">
                                                 <div className="flex-1">
                                                     <p className="font-semibold text-white">{mainTrack.title}</p>
-                                                    <p className="text-sm text-gray-300">
+                                                    <p className="retro-mono text-lg text-gray-400">
                                                         Uploaded by {mainTrack.profile_name} {mainTrack.is_master && '(Master)'}
                                                     </p>
                                                     <audio
@@ -1408,7 +1408,7 @@ const CollaborationsManager = () => {
                                 })}
                         </div>
                     ) : (
-                        <p className="text-gray-300">No tracks uploaded yet.</p>
+                        <p className="retro-mono text-xl text-gray-300">No tracks uploaded yet.</p>
                     )}
                 </div>
             )}
@@ -1416,12 +1416,12 @@ const CollaborationsManager = () => {
             {/* Edit Collaboration Form */}
             {showEditForm && selectedCollaboration && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+                    <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">Edit Collaboration</h2>
                             <button
                                 onClick={() => setShowEditForm(false)}
-                                className="text-primary-brand-300 hover:text-primary-brand-200"
+                                className="retro-link"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -1429,24 +1429,24 @@ const CollaborationsManager = () => {
                         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
                         <form onSubmit={handleEditSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Title</label>
+                                <label className="retro-label">Title</label>
                                 <input
                                     type="text"
                                     name="title"
                                     value={editForm.title}
                                     onChange={handleEditInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Description</label>
+                                <label className="retro-label">Description</label>
                                 <textarea
                                     name="description"
                                     value={editForm.description}
                                     onChange={handleEditInputChange}
                                     rows="4"
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
@@ -1487,12 +1487,12 @@ const CollaborationsManager = () => {
             {/* Track Upload Form */}
             {showTrackForm && selectedCollaboration && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+                    <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">Upload Track</h2>
                             <button
                                 onClick={() => setShowTrackForm(false)}
-                                className="text-primary-brand-300 hover:text-primary-brand-200"
+                                className="retro-link"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -1500,18 +1500,18 @@ const CollaborationsManager = () => {
                         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
                         <form onSubmit={handleTrackSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Track Title</label>
+                                <label className="retro-label">Track Title</label>
                                 <input
                                     type="text"
                                     name="title"
                                     value={trackForm.title}
                                     onChange={handleTrackInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">MP3 File</label>
+                                <label className="retro-label">MP3 File</label>
                                 <input
                                     type="file"
                                     name="mp3"
@@ -1560,12 +1560,12 @@ const CollaborationsManager = () => {
             {/* Invite Collaborator Form */}
             {showInviteForm && selectedCollaboration && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-md w-full text-gray-100">
+                    <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">Invite Collaborator</h2>
                             <button
                                 onClick={() => setShowInviteForm(false)}
-                                className="text-primary-brand-300 hover:text-primary-brand-200"
+                                className="retro-link"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -1573,14 +1573,14 @@ const CollaborationsManager = () => {
                         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
                         <form onSubmit={handleInviteSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-200">Email</label>
+                                <label className="retro-label">Email</label>
                                 <input
                                     type="email"
                                     name="email"
                                     value={inviteForm.email}
                                     onChange={handleInviteInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>

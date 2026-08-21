@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -130,8 +130,8 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, timeScal
     return (
         <div
             ref={drag}
-            className={`absolute h-12 flex items-center p-1 bg-white/5 border rounded-md shadow-sm hover:bg-white/10 ${
-                isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/60' : 'border-white/10'
+            className={`absolute h-12 flex items-center p-1 bg-cyan-400/5 border rounded-md shadow-sm hover:bg-cyan-400/10 ${
+                isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/60' : 'border-cyan-400/25'
             } ${
                 isDragging ? 'opacity-50' : 'opacity-100'
             } ${isLoadingDurations ? 'cursor-not-allowed' : 'cursor-move'}`}
@@ -144,7 +144,7 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, timeScal
             title="Double-click to edit fades and trim"
         >
             {isLoadingDurations ? (
-                <div className="flex-1 h-10 bg-white/10 animate-pulse" />
+                <div className="flex-1 h-10 bg-cyan-400/10 animate-pulse" />
             ) : (
                 <div ref={waveformRef} className={`flex-1 h-10 ${waveformColor}`} />
             )}
@@ -188,7 +188,7 @@ const SampleDeleteDropZone = ({ onDelete, isLoadingDurations }) => {
             className={`flex items-center justify-center w-72 h-10 border-2 border-dashed rounded-md text-sm font-medium transition-colors ${
                 isOver && !isLoadingDurations
                     ? 'border-red-500 bg-red-500/20 text-red-300'
-                    : 'border-white/20 bg-white/5 text-gray-300'
+                    : 'border-cyan-400/35 bg-cyan-400/5 text-gray-300'
             } ${isLoadingDurations ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
         >
             Drop Sample Here to Delete from Track
@@ -261,7 +261,7 @@ const DraggableSample = ({ sample, name, sampleId }) => {
     return (
         <div
             ref={drag}
-            className={`flex items-center space-x-2 p-2 bg-white/5 border border-white/10 rounded-md cursor-move ${
+            className={`flex items-center space-x-2 p-2 bg-cyan-400/5 border border-cyan-400/25 rounded-md cursor-move ${
                 isDragging ? 'opacity-50' : 'opacity-100'
             }`}
         >
@@ -346,7 +346,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                 drop(node);
             }}
             id={`timeline-${trackId}`}
-            className={`relative h-12 border border-white/10 bg-white/5 ${isOver ? 'bg-white/10' : ''}`}
+            className={`relative h-12 border border-cyan-400/25 bg-cyan-400/5 ${isOver ? 'bg-cyan-400/10' : ''}`}
             style={{ width: `${timelineDuration * zoom}px` }}
         >
             {Array.from({ length: numMinorMarkers }, (_, i) => {
@@ -361,7 +361,7 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                         key={`grid-${i}`}
                         className={`absolute top-0 z-0 border-l ${
                             isBarMarker
-                                ? 'border-gray-400 border-opacity-80 h-full'
+                                ? 'border-cyan-400/40 border-opacity-80 h-full'
                                 : isBeatMarker
                                     ? 'border-gray-300 border-opacity-60 h-1/2'
                                     : 'border-gray-200 border-opacity-30 h-1/4'
@@ -426,11 +426,11 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
         onClose();
     };
 
-    const numberInputClass = "w-full px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500";
+    const numberInputClass = "w-full px-3 py-2 bg-[#1d0a38] text-white border border-cyan-400/30 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500";
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-gray-800 text-gray-200 rounded-lg shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#140628] text-gray-200 rounded-lg shadow-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-lg font-semibold mb-1">Clip Settings</h2>
                 <p className="text-sm text-gray-400 mb-4">
                     {clip.name}{fullDuration ? ` — ${fullDuration.toFixed(2)}s` : ''}
@@ -460,11 +460,11 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
                 </div>
                 <div className="flex justify-end space-x-3">
                     <button onClick={onClose}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold">
+                            className="retro-btn px-4 py-2 text-xs">
                         Cancel
                     </button>
                     <button onClick={handleSave}
-                            className="px-4 py-2 bg-primary-brand-500 text-white rounded-md hover:bg-primary-brand-700 text-sm font-semibold">
+                            className="retro-btn retro-btn--hot px-4 py-2 text-xs">
                         Save
                     </button>
                 </div>
@@ -480,8 +480,51 @@ const MultiTrackSampler = () => {
     const [project, setProject] = useState(null);
     const [editTitle, setEditTitle] = useState('');
     const [tracks, setTracks] = useState([]);
+
     const [projectSamples, setProjectSamples] = useState([]);
     const [librarySamples, setLibrarySamples] = useState([]);
+    // Sample-library browsing. Every tile mounts its own WaveSurfer and fetches
+    // its mp3, so the visible count is a real cost, not just a scrolling
+    // nuisance — hence the render cap as well as the filter.
+    const [sampleSearch, setSampleSearch] = useState('');
+    const [sampleSort, setSampleSort] = useState('newest');
+    const [showAllSamples, setShowAllSamples] = useState(false);
+    const SAMPLE_PAGE_SIZE = 24;
+
+    const visibleLibrarySamples = useMemo(() => {
+        const q = sampleSearch.trim().toLowerCase();
+        const matched = q
+            ? librarySamples.filter((sample) => (sample.name || '').toLowerCase().includes(q))
+            : librarySamples;
+
+        const sorted = [...matched].sort((a, b) => {
+            if (sampleSort === 'name') {
+                return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+            }
+            const at = new Date(a.created_at || 0).getTime();
+            const bt = new Date(b.created_at || 0).getTime();
+            return sampleSort === 'oldest' ? at - bt : bt - at;
+        });
+
+        return sorted;
+    }, [librarySamples, sampleSearch, sampleSort]);
+
+    // A search is an explicit request to see matches, so it bypasses the cap.
+    const isSampleSearching = sampleSearch.trim().length > 0;
+    const sampleRenderLimit = showAllSamples || isSampleSearching
+        ? visibleLibrarySamples.length
+        : SAMPLE_PAGE_SIZE;
+    const renderedLibrarySamples = visibleLibrarySamples.slice(0, sampleRenderLimit);
+    const hiddenSampleCount = visibleLibrarySamples.length - renderedLibrarySamples.length;
+
+    const formatSampleDuration = (seconds) => {
+        const value = Number(seconds);
+        if (!Number.isFinite(value) || value <= 0) return null;
+        if (value < 10) return `${value.toFixed(1)}s`;
+        const mins = Math.floor(value / 60);
+        const secs = Math.round(value % 60);
+        return mins > 0 ? `${mins}:${String(secs).padStart(2, '0')}` : `${secs}s`;
+    };
     const [newTrackName, setNewTrackName] = useState('');
     const [newTrackType, setNewTrackType] = useState('sample');
     const [error, setError] = useState(null);
@@ -2558,7 +2601,7 @@ const MultiTrackSampler = () => {
         return (
             <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
                 <p className="text-red-500 text-lg">{error}</p>
-                <Link to="/projects" className="mt-4 inline-block py-2 px-4 bg-primary-brand text-white font-semibold rounded-md hover:bg-primary-brand-500">
+                <Link to="/projects" className="retro-btn retro-btn--hot mt-4 inline-block py-2 px-4 text-xs">
                     Back to Projects
                 </Link>
             </div>
@@ -2587,44 +2630,44 @@ const MultiTrackSampler = () => {
                         onChange={(e) => setEditTitle(e.target.value)}
                         onBlur={handleSaveTitle}
                         onKeyPress={(e) => e.key === 'Enter' && handleSaveTitle()}
-                        className="text-3xl font-bold w-full px-2 py-1 border border-white/10 bg-white/5 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500"
+                        className="retro-display text-lg w-full px-2 py-1 border border-cyan-400/25 bg-cyan-400/5 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500"
                         placeholder="Enter project title"
                     />
                 </div>
-                {error && <p className="text-red-500 mb-4">{error}</p>}
-                <div className="mb-8 flex items-center space-x-4 bg-gray-800 p-4 rounded-lg shadow-[0_4px_10px_rgba(0,0,0,0.3)]">
+                {error && <p className="retro-mono text-xl text-fuchsia-400 mb-4">{error}</p>}
+                <div className="retro-panel retro-cut mb-8 flex flex-wrap items-center gap-3 p-4">
                     <button
                         onClick={handlePlayAllClick}
                         disabled={isLoadingDurations}
-                        className={`min-w-[100px] px-4 py-2 bg-gray-800 text-primary-brand font-semibold rounded-lg border border-primary-brand hover:bg-blue-900 hover:text-white hover:shadow-[0_0_10px_rgba(59,130,246,0.5)] focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-center`}
+                        className={`retro-btn min-w-[100px] px-4 py-2 text-[0.6rem]`}
                     >
                         {isLoadingDurations ? 'Loading...' : isPlaying ? 'Pause' : playheadPosition > 0 ? 'Resume' : 'Play All'}
                     </button>
                     <button
                         onClick={handleStop}
                         disabled={isLoadingDurations}
-                        className={`px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white font-semibold rounded-lg hover:from-red-700 hover:to-pink-700 hover:scale-105 hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] focus:outline-none focus:ring-4 focus:ring-red-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`retro-btn px-4 py-2 text-[0.6rem] !border-red-400 !text-red-300`}
                     >
                         Stop
                     </button>
                     <button
                         onClick={undo}
                         disabled={historyIndex < 0 || isLoadingDurations}
-                        className={`px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-500 text-white font-semibold rounded-lg hover:from-gray-700 hover:to-gray-600 hover:scale-105 hover:shadow-[0_0_10px_rgba(107,114,128,0.5)] focus:outline-none focus:ring-4 focus:ring-gray-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`retro-btn px-4 py-2 text-[0.6rem]`}
                     >
                         Undo
                     </button>
                     <button
                         onClick={redo}
                         disabled={historyIndex >= history.length - 1 || isLoadingDurations}
-                        className={`px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-500 text-white font-semibold rounded-lg hover:from-gray-700 hover:to-gray-600 hover:scale-105 hover:shadow-[0_0_10px_rgba(107,114,128,0.5)] focus:outline-none focus:ring-4 focus:ring-gray-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`retro-btn px-4 py-2 text-[0.6rem]`}
                     >
                         Redo
                     </button>
                     <button
                         onClick={handleExport}
                         disabled={isLoadingDurations}
-                        className={`px-4 py-2 bg-gradient-to-r from-teal-500 to-green-500 text-white font-semibold rounded-lg hover:from-teal-600 hover:to-green-600 hover:scale-105 hover:shadow-[0_0_10px_rgba(20,184,166,0.5)] focus:outline-none focus:ring-4 focus:ring-teal-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`retro-btn retro-btn--hot px-4 py-2 text-[0.6rem]`}
                     >
                         Export MP3
                     </button>
@@ -2632,7 +2675,7 @@ const MultiTrackSampler = () => {
                         type="number"
                         value={bpm}
                         onChange={(e) => handleBpmChange(Number(e.target.value))}
-                        className="w-20 px-2 py-1 bg-gray-700 text-white border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+                        className="w-20 px-2 py-1 bg-[#1d0a38] text-white border border-cyan-400/30 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
                         placeholder="BPM"
                         min="60"
                         max="240"
@@ -2642,7 +2685,7 @@ const MultiTrackSampler = () => {
                         onClick={() => setMetronomeOn(prev => { metronomeRef.current = !prev; return !prev; })}
                         disabled={isLoadingDurations}
                         title="Metronome click during playback"
-                        className={`px-3 py-2 font-semibold rounded-lg border transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${metronomeOn ? 'bg-purple-600 text-white border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'}`}
+                        className={`retro-btn px-3 py-2 text-[0.6rem] disabled:opacity-50 disabled:cursor-not-allowed ${metronomeOn ? 'retro-btn--hot' : ''}`}
                     >
                         Click
                     </button>
@@ -2650,7 +2693,7 @@ const MultiTrackSampler = () => {
                         <button
                             onClick={handleZoomOut}
                             disabled={isLoadingDurations}
-                            className={`px-2 py-1 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                            className={`px-2 py-1 bg-[#1d0a38] text-gray-200 rounded-lg hover:bg-[#2a1152] hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             –
                         </button>
@@ -2658,7 +2701,7 @@ const MultiTrackSampler = () => {
                         <button
                             onClick={handleZoomIn}
                             disabled={isLoadingDurations}
-                            className={`px-2 py-1 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                            className={`px-2 py-1 bg-[#1d0a38] text-gray-200 rounded-lg hover:bg-[#2a1152] hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             +
                         </button>
@@ -2670,7 +2713,7 @@ const MultiTrackSampler = () => {
                             onChange={() => setIsSnapping(prev => !prev)}
                             disabled={isLoadingDurations}
                             id="snap-toggle"
-                            className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 bg-gray-700 rounded disabled:opacity-50"
+                            className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-cyan-400/30 bg-[#1d0a38] rounded disabled:opacity-50"
                         />
                         <label htmlFor="snap-toggle" className="text-sm text-gray-300">Snap to Grid (1/16)</label>
                     </div>
@@ -2680,7 +2723,7 @@ const MultiTrackSampler = () => {
                 </div>
                 <div className="flex mb-6">
                     {/* Track Settings Column (Static) */}
-                    <div className="w-[256px] flex-shrink-0 sticky top-20 z-10 bg-[#0f0f0f] border-r border-white/10">
+                    <div className="w-[256px] flex-shrink-0 sticky top-20 z-10 bg-[#0f0f0f] border-r border-cyan-400/25">
                         <div className="h-12"></div> {/* Empty div to align with top timeline */}
                         <div className="space-y-1">
                             {tracks.map((track) => {
@@ -2688,7 +2731,7 @@ const MultiTrackSampler = () => {
                                 return (
                                     <div
                                         key={track.id}
-                                        className="flex flex-col items-start space-y-0.5 p-2 rounded-lg bg-gray-700 bg-opacity-50 backdrop-blur-md"
+                                        className="flex flex-col items-start space-y-0.5 p-2 rounded-lg bg-[#1d0a38] bg-opacity-50 backdrop-blur-md"
                                         style={{ height: `${trackHeight}px` }}
                                     >
                                         <div className="flex items-center space-x-2 w-full">
@@ -2696,7 +2739,7 @@ const MultiTrackSampler = () => {
                                                 type="text"
                                                 value={track.name}
                                                 onChange={(e) => handleRenameTrack(track.id, e.target.value)}
-                                                className="w-24 px-2 py-1 bg-gray-800 text-gray-200 border border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                                                className="w-24 px-2 py-1 bg-[#140628] text-gray-200 border border-cyan-400/30 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
                                                 disabled={isLoadingDurations}
                                             />
                                             <button
@@ -2707,7 +2750,7 @@ const MultiTrackSampler = () => {
                                                 className={`w-6 h-6 text-xs font-bold rounded focus:outline-none focus:ring-2 focus:ring-red-300 transition-colors ${
                                                     track.is_muted
                                                         ? 'bg-red-500 text-white'
-                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-600'
+                                                        : 'bg-[#140628] text-gray-400 hover:bg-[#2a1152]'
                                                 }`}
                                                 title={track.is_muted ? 'Unmute' : 'Mute'}
                                                 aria-label={track.is_muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
@@ -2722,7 +2765,7 @@ const MultiTrackSampler = () => {
                                                 className={`w-6 h-6 text-xs font-bold rounded focus:outline-none focus:ring-2 focus:ring-yellow-300 transition-colors ${
                                                     soloTracks[track.id]
                                                         ? 'bg-yellow-500 text-black'
-                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-600'
+                                                        : 'bg-[#140628] text-gray-400 hover:bg-[#2a1152]'
                                                 }`}
                                                 title={soloTracks[track.id] ? 'Unsolo' : 'Solo'}
                                                 aria-label={soloTracks[track.id] ? `Unsolo ${track.name}` : `Solo ${track.name}`}
@@ -2735,7 +2778,7 @@ const MultiTrackSampler = () => {
                                                     console.log('Opening track settings for track:', track.id);
                                                     setSelectedTrack(track);
                                                 }}
-                                                className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="bg-[#1d0a38] text-gray-200 hover:bg-[#2a1152] rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 disabled={isLoadingDurations}
                                                 title="Track Settings"
                                             >
@@ -2748,7 +2791,7 @@ const MultiTrackSampler = () => {
                                                     console.log('Opening effects modal for track:', currentTrack.id, 'effects_settings:', currentTrack.effects_settings); // Debug log
                                                     setSelectedTrackForEffects(currentTrack);
                                                 }}
-                                                className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="bg-[#1d0a38] text-gray-200 hover:bg-[#2a1152] rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 disabled={isLoadingDurations}
                                                 title="Effects Settings"
                                             >
@@ -2760,7 +2803,7 @@ const MultiTrackSampler = () => {
                                                         e.stopPropagation();
                                                         setSelectedTrackForGenerate(tracks.find(t => t.id === track.id));
                                                     }}
-                                                    className="bg-gray-700 text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="bg-[#1d0a38] text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     disabled={isLoadingDurations}
                                                     title="Generate MIDI (AI)"
                                                     aria-label={`Generate MIDI for ${track.name}`}
@@ -2774,7 +2817,7 @@ const MultiTrackSampler = () => {
                                                         e.stopPropagation();
                                                         setSelectedTrackForStem(tracks.find(t => t.id === track.id));
                                                     }}
-                                                    className="bg-gray-700 text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="bg-[#1d0a38] text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     disabled={isLoadingDurations}
                                                     title="Generate Sample (AI)"
                                                     aria-label={`Generate AI sample for ${track.name}`}
@@ -2790,7 +2833,7 @@ const MultiTrackSampler = () => {
                                                         e.stopPropagation();
                                                         toggleTrackMinimize(track.id);
                                                     }}
-                                                    className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="retro-action px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                                     disabled={isLoadingDurations}
                                                     title={minimizedTracks[track.id] ? 'Expand Piano Roll' : 'Minimize Piano Roll'}
                                                 >
@@ -2801,7 +2844,7 @@ const MultiTrackSampler = () => {
                                                         e.stopPropagation();
                                                         handleRepeatMidiPattern(track.id);
                                                     }}
-                                                    className="bg-gray-700 text-gray-200 hover:bg-gray-600 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="retro-action px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                                     disabled={isLoadingDurations || !(Array.isArray(track.midi_notes) && track.midi_notes.length > 0)}
                                                     title="Repeat pattern: copy all notes after the last bar"
                                                     aria-label={`Repeat pattern on ${track.name}`}
@@ -2820,7 +2863,7 @@ const MultiTrackSampler = () => {
                         <div className="min-w-[3200px]">
                             <div
                                 ref={topTimelineRef}
-                                className="h-12 bg-gray-800 relative border border-gray-600"
+                                className="h-12 bg-[#140628] relative border border-cyan-400/30"
                                 style={{ width: `${timelineDuration * zoom}px` }}
                                 onClick={handleTopTimelineClick}
                             >
@@ -2838,7 +2881,7 @@ const MultiTrackSampler = () => {
                                                 </div>
                                             )}
                                             <div
-                                                className={`absolute border-l ${isBarStart ? 'top-0 bottom-0 border-gray-400' : 'bottom-0 h-1/3 border-gray-600'}`}
+                                                className={`absolute border-l ${isBarStart ? 'top-0 bottom-0 border-cyan-400/40' : 'bottom-0 h-1/3 border-cyan-400/30'}`}
                                                 style={{ left: `${pixelPosition}px` }}
                                             />
                                         </React.Fragment>
@@ -2914,13 +2957,13 @@ const MultiTrackSampler = () => {
                                 value={newTrackName}
                                 onChange={(e) => setNewTrackName(e.target.value)}
                                 placeholder="Track name"
-                                className="w-64 px-3 py-2 border border-white/10 bg-white/5 text-white rounded-md shadow-sm focus:outline-none focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
+                                className="w-64 px-3 py-2 border border-cyan-400/25 bg-cyan-400/5 text-white rounded-md shadow-sm focus:outline-none focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 disabled={isLoadingDurations}
                             />
                             <select
                                 value={newTrackType}
                                 onChange={(e) => setNewTrackType(e.target.value)}
-                                className="px-3 py-2 border border-white/10 bg-white/5 text-white rounded-md shadow-sm focus:outline-none focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
+                                className="px-3 py-2 border border-cyan-400/25 bg-cyan-400/5 text-white rounded-md shadow-sm focus:outline-none focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                 disabled={isLoadingDurations}
                             >
                                 <option value="sample">Sample</option>
@@ -2928,7 +2971,7 @@ const MultiTrackSampler = () => {
                             </select>
                             <button
                                 type="submit"
-                                className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                                 disabled={isLoadingDurations}
                             >
                                 +
@@ -2941,37 +2984,106 @@ const MultiTrackSampler = () => {
                                 onChange={handleTogglePublic}
                                 disabled={isLoadingDurations}
                                 id="public-toggle"
-                                className="h-4 w-4 text-primary-brand-400 focus:ring-primary-brand-500 border-white/20 bg-white/10 rounded disabled:opacity-50"
+                                className="h-4 w-4 text-primary-brand-400 focus:ring-primary-brand-500 border-cyan-400/35 bg-cyan-400/10 rounded disabled:opacity-50"
                             />
                             <label htmlFor="public-toggle" className="text-sm text-gray-200">Allow public to view</label>
                         </div>
                         <SampleDeleteDropZone onDelete={handleDeleteSample} isLoadingDurations={isLoadingDurations} />
                     </div>
-                    <h2 className="text-xl font-semibold mb-4">Sample Library</h2>
-                    <div className="grid grid-cols-3 gap-4 mb-4">
-                        {librarySamples.map((sample) => (
-                            <div key={sample.id} className="flex items-center space-x-2">
-                                <DraggableSample
-                                    sample={sample}
-                                    name={sample.name}
-                                    sampleId={sample.id}
-                                />
-                                <button
-                                    onClick={() => handleDeleteLibrarySample(sample.id)}
-                                    className="text-red-500 hover:text-red-700 focus:outline-none"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        ))}
+                    <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+                        <h2 className="retro-display text-base retro-glow-cyan">Sample Library</h2>
+                        <span className="retro-mono text-lg text-cyan-300">
+                            {isSampleSearching
+                                ? `${visibleLibrarySamples.length} of ${librarySamples.length} matching`
+                                : `${librarySamples.length} sample${librarySamples.length === 1 ? '' : 's'}`}
+                        </span>
                     </div>
+
+                    <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <div className="flex items-stretch flex-1 min-w-[200px]">
+                            <label htmlFor="sample-search" className="sr-only">Search samples by name</label>
+                            <input
+                                id="sample-search"
+                                type="search"
+                                value={sampleSearch}
+                                onChange={(e) => setSampleSearch(e.target.value)}
+                                placeholder="search samples..."
+                                className="retro-field flex-1"
+                            />
+                            {isSampleSearching && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSampleSearch('')}
+                                    className="retro-btn px-3 text-[0.6rem] shrink-0"
+                                    aria-label="Clear sample search"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="sample-sort" className="retro-label mb-0">Sort</label>
+                            <select
+                                id="sample-sort"
+                                value={sampleSort}
+                                onChange={(e) => setSampleSort(e.target.value)}
+                                className="retro-field w-auto"
+                            >
+                                <option value="newest">Newest first</option>
+                                <option value="oldest">Oldest first</option>
+                                <option value="name">Name A&ndash;Z</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {visibleLibrarySamples.length === 0 ? (
+                        <p className="retro-mono text-xl text-gray-400 mb-4">
+                            {librarySamples.length === 0
+                                ? '> your sample library is empty. upload something below.'
+                                : `> nothing matches "${sampleSearch.trim()}".`}
+                        </p>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                            {renderedLibrarySamples.map((sample) => (
+                                <div key={sample.id} className="flex items-center space-x-2">
+                                    <DraggableSample
+                                        sample={sample}
+                                        name={sample.name}
+                                        sampleId={sample.id}
+                                    />
+                                    {formatSampleDuration(sample.duration) && (
+                                        <span className="retro-mono text-base text-cyan-300/80 shrink-0 tabular-nums">
+                                            {formatSampleDuration(sample.duration)}
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={() => handleDeleteLibrarySample(sample.id)}
+                                        className="retro-icon-btn px-1 shrink-0"
+                                        aria-label={`Delete ${sample.name} from library`}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {hiddenSampleCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowAllSamples(true)}
+                            className="retro-btn px-4 py-2 text-[0.6rem] mb-4"
+                        >
+                            Show {hiddenSampleCount} more
+                        </button>
+                    )}
                     <input
                         type="file"
                         accept="audio/mp3,audio/mpeg,audio/wav,audio/x-wav,.wav"
                         multiple
                         onChange={handleFileUpload}
                         ref={fileInputRef}
-                        className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
+                        className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cyan-400/10 file:text-white hover:file:bg-cyan-400/15"
                     />
                 </div>
                 {selectedTrack && (

@@ -100,22 +100,22 @@ function Search() {
     if (error) {
         return (
             <div className="container mx-auto px-4 py-8 text-center text-gray-100">
-                <p className="text-red-400 text-lg">{error}</p>
+                <p className="retro-mono text-2xl text-fuchsia-400">{error}</p>
             </div>
         );
     }
 
     return (
-        <div className="text-gray-100 pt-2">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
             <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-8 text-white">
+                <h1 className="retro-display retro-chrome text-3xl sm:text-4xl mb-8">
                     Search Results for "{query || 'No query'}"
                 </h1>
 
                 <section className="mb-12">
-                    <h2 className="text-2xl font-bold mb-4 text-white">Songs</h2>
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Songs</h2>
                     {songs.length === 0 ? (
-                        <p className="text-gray-300">No songs found.</p>
+                        <p className="retro-mono text-xl text-gray-300">No songs found.</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full">
@@ -160,7 +160,7 @@ function Search() {
                                                     />
                                                 ) : (
                                                     <div
-                                                        className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs"
+                                                        className="w-12 h-12 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300"
                                                         style={{ display: song.image_url ? 'none' : 'flex' }}
                                                     >
                                                         ?
@@ -169,11 +169,11 @@ function Search() {
                                                 <div>
                                                     <Link
                                                         to={`/song/${song.id}`}
-                                                        className="text-white hover:text-primary-brand-300 hover:underline"
+                                                        className="retro-link"
                                                     >
                                                         {song.title}
                                                     </Link>
-                                                    <div className="text-sm text-gray-300">
+                                                    <div className="retro-mono text-lg text-gray-400">
                                                         <Link
                                                             to={
                                                                 song.profile_id
@@ -182,7 +182,7 @@ function Search() {
                                                             }
                                                             className={
                                                                 song.profile_id
-                                                                        ? 'text-gray-100 hover:text-primary-brand-300 hover:underline'
+                                                                        ? 'retro-link'
                                                                     : 'text-gray-500 cursor-not-allowed'
                                                             }
                                                         >
@@ -192,7 +192,7 @@ function Search() {
                                                 </div>
                                             </div>
                                         </td>
-                                                            <td className="px-4 py-2 text-gray-300">{song.genre || 'Unknown'}</td>
+                                                            <td className="retro-mono text-lg text-gray-300 px-4 py-2">{song.genre || 'Unknown'}</td>
                                         <td className="px-4 py-2">
                         <span className="inline-flex items-center">
                           {Number(song.plays) || 0}
@@ -216,9 +216,9 @@ function Search() {
                 </section>
 
                 <section>
-                    <h2 className="text-2xl font-bold mb-4 text-white">Profiles</h2>
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Profiles</h2>
                     {profiles.length === 0 ? (
-                        <p className="text-gray-300">No profiles found.</p>
+                        <p className="retro-mono text-xl text-gray-300">No profiles found.</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full">
@@ -240,13 +240,13 @@ function Search() {
                                             />
                                             <Link
                                                 to={`/profile/${profile.id}`}
-                                                className="text-white hover:text-primary-brand-300 hover:underline"
+                                                className="retro-link"
                                             >
                                                 {profile.name}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-2 text-gray-300">{profile.genre || 'Unknown'}</td>
-                                        <td className="px-4 py-2 text-gray-300">{formatDate(profile.created_at)}</td>
+                                        <td className="retro-mono text-lg text-gray-300 px-4 py-2">{profile.genre || 'Unknown'}</td>
+                                        <td className="retro-mono text-lg text-gray-300 px-4 py-2">{formatDate(profile.created_at)}</td>
                                         <td className="px-4 py-2">
                         <span className="inline-flex items-center">
                           {Number(profile.total_plays) || 0}

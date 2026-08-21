@@ -1,26 +1,46 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+import React, { useEffect, useState, useContext, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { SpeakerWaveIcon, PlayIcon, PauseIcon, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
-import sanitizeHtml from "sanitize-html";
-import {Helmet} from "react-helmet-async";
+import { Helmet } from "react-helmet-async";
+import { getDefaultAvatar } from '../utils/defaultAvatar';
+
+const SORTS = [
+    { id: 'random', label: 'Shuffle' },
+    { id: 'listens', label: 'Most Played' },
+    { id: 'likes', label: 'Most Liked' },
+    { id: 'alpha', label: 'A–Z' },
+    { id: 'deep', label: 'Deep Cuts' },
+];
+
+// How long the pointer must rest on a sleeve before the preview starts, and how
+// long it plays. Long enough that skimming the page never triggers audio.
+const PREVIEW_DELAY_MS = 600;
+const PREVIEW_LENGTH_MS = 20000;
 
 function TagSongs() {
     const { tag } = useParams();
-    const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
+    const { playSong, playPlaylist, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
     const [songs, setSongs] = useState([]);
+    const [overview, setOverview] = useState(null);
     const [sort, setSort] = useState('random');
+    const [view, setView] = useState('list');
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [previewingId, setPreviewingId] = useState(null);
     const observerRef = useRef();
+    const previewAudioRef = useRef(null);
+    const previewTimersRef = useRef({ start: null, stop: null });
     const limit = 20;
 
     const baseUrl = SITE_URL;
+    const decodedTag = decodeURIComponent(tag);
+    const title = overview?.label || decodedTag;
 
     const fetchSongs = async (newSort = sort, reset = false) => {
         setLoading(true);
@@ -63,24 +83,63 @@ function TagSongs() {
         if (node) observerRef.current.observe(node);
     };
 
+    // ---------- Listening post ------------------------------------------------
+    const stopPreview = useCallback(() => {
+        clearTimeout(previewTimersRef.current.start);
+        clearTimeout(previewTimersRef.current.stop);
+        const audio = previewAudioRef.current;
+        if (audio) {
+            audio.pause();
+            audio.src = '';
+        }
+        setPreviewingId(null);
+    }, []);
+
+    const startPreview = (song) => {
+        // Never talk over the main deck, and never preview without a source.
+        if (isPlaying || !song.mp3_url) return;
+        clearTimeout(previewTimersRef.current.start);
+        previewTimersRef.current.start = setTimeout(() => {
+            if (!previewAudioRef.current) {
+                previewAudioRef.current = new Audio();
+                previewAudioRef.current.volume = 0.55;
+            }
+            const audio = previewAudioRef.current;
+            audio.src = song.mp3_url;
+            audio.currentTime = 0;
+            audio.play()
+                .then(() => {
+                    setPreviewingId(song.id);
+                    previewTimersRef.current.stop = setTimeout(stopPreview, PREVIEW_LENGTH_MS);
+                })
+                .catch(() => setPreviewingId(null));  // autoplay blocked; not an error worth surfacing
+        }, PREVIEW_DELAY_MS);
+    };
+
+    useEffect(() => () => stopPreview(), [stopPreview]);
+    useEffect(() => { if (isPlaying) stopPreview(); }, [isPlaying, stopPreview]);
+
     useEffect(() => {
+        setOverview(null);
+        axios.get(`${API_URL}/music/tag/${encodeURIComponent(tag)}/overview`)
+            .then(res => setOverview(res.data))
+            .catch(() => setOverview(null));  // the page works without it
         fetchSongs('random', true);
         return () => {
             if (observerRef.current) observerRef.current.disconnect();
         };
+        // Intentionally keyed on `tag` alone: this is the "new genre, start over" reset.
     }, [tag]);
 
     const handleSongPlay = async (song) => {
+        stopPreview();
         const playedKey = `played_${song.id}`;
         if (!sessionStorage.getItem(playedKey)) {
             try {
                 const token = localStorage.getItem('token');
                 await axios.post(`${API_URL}/music/play/${song.id}`, {}, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
+                    headers: { Authorization: `Bearer ${token}` },
                 });
-                console.log(`Play recorded for song ID: ${song.id}`);
                 sessionStorage.setItem(playedKey, 'true');
                 setSongs((prevSongs) =>
                     prevSongs.map((s) =>
@@ -90,11 +149,6 @@ function TagSongs() {
             } catch (err) {
                 console.error('Error recording play:', err);
             }
-        }
-
-        if (!song.mp3_url) {
-            console.warn(`No mp3_url for song ID ${song.id}. Attempting to fetch or use fallback.`);
-            song.mp3_url = song.mp3_url || '';
         }
 
         playSong({
@@ -107,130 +161,346 @@ function TagSongs() {
         });
     };
 
+    // Queue everything loaded and hand it to the footer deck.
+    const playCrate = () => {
+        const playable = songs.filter(song => song.mp3_url);
+        if (playable.length === 0) return;
+        stopPreview();
+        playPlaylist(playable.map(song => ({
+            id: song.id,
+            title: song.title,
+            mp3_url: song.mp3_url,
+            image_url: song.image_url,
+            profile_id: song.profile_id,
+            profile_name: song.profile_name || 'Unknown Artist',
+        })));
+    };
+
+    const formatCount = (value) => Number(value || 0).toLocaleString();
+
+    const PlayOverlay = ({ song, iconSize = 'w-4 h-4' }) => {
+        const isLive = currentSong?.id === song.id;
+        if (!song.mp3_url) return null;
+        return (
+            <button
+                onClick={() => (isLive ? togglePlayPause() : handleSongPlay(song))}
+                className="retro-play-overlay z-20"
+                aria-label={isLive && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
+            >
+                {isLive && isPlaying ? <PauseIcon className={iconSize} /> : <PlayIcon className={iconSize} />}
+            </button>
+        );
+    };
+
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
-                <p className="text-red-400 text-lg">{error}</p>
+            <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen flex items-center justify-center">
+                <div className="retro-panel retro-cut px-8 py-10 text-center">
+                    <div className="retro-eyebrow mb-3">!! Signal Lost !!</div>
+                    <p className="retro-mono text-2xl text-fuchsia-300">{error}</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="text-gray-100 pt-2"><Helmet>
-            <title>Browse {decodeURIComponent(tag)} Music</title>
-            <meta
-                name="description"
-                content={`Browse ${decodeURIComponent(tag)} Music on InternetDJ`}
-            />
-            <link rel="canonical" href={`${baseUrl}/tag/${decodeURIComponent(tag)}`} />
-            <meta property="og:title" content={`Browse ${decodeURIComponent(tag)} Music`} />
-            <meta property="og:description" content={`Browse ${decodeURIComponent(tag)} Music on InternetDJ`} />
-            <meta property="og:url" content={`${baseUrl}/tag/${decodeURIComponent(tag)}`} />
-            <meta property="og:site_name" content="InternetDJ" />
-            <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" content={`Browse ${decodeURIComponent(tag)} Music`} />
-            <meta name="twitter:description" content={`Browse ${decodeURIComponent(tag)} Music on InternetDJ`} />
-            <meta name="twitter:site" content="@internetdjco" />
-        </Helmet>
-            <div className="container mx-auto px-4 py-8">
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-white capitalize">
-                        Songs in {decodeURIComponent(tag)}
-                    </h1>
-                    <div className="flex flex-wrap gap-3 mt-6">
-                        <button onClick={() => handleSortChange('random')} className={`px-4 py-2 rounded-full transition-colors ${sort === 'random' ? 'spotify-pill' : 'bg-white/10 text-gray-200 hover:bg-white/15'}`}>Random</button>
-                        <button onClick={() => handleSortChange('alpha')} className={`px-4 py-2 rounded-full transition-colors ${sort === 'alpha' ? 'spotify-pill' : 'bg-white/10 text-gray-200 hover:bg-white/15'}`}>Alphabetical</button>
-                        <button onClick={() => handleSortChange('listens')} className={`px-4 py-2 rounded-full transition-colors ${sort === 'listens' ? 'spotify-pill' : 'bg-white/10 text-gray-200 hover:bg-white/15'}`}>Most Listens</button>
-                        <button onClick={() => handleSortChange('likes')} className={`px-4 py-2 rounded-full transition-colors ${sort === 'likes' ? 'spotify-pill' : 'bg-white/10 text-gray-200 hover:bg-white/15'}`}>Most Liked</button>
-                    </div>
-                </div>
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
+            <Helmet>
+                <title>Browse {title} Music</title>
+                <meta name="description" content={`Browse ${title} Music on InternetDJ`} />
+                <link rel="canonical" href={`${baseUrl}/tag/${decodedTag}`} />
+                <meta property="og:title" content={`Browse ${title} Music`} />
+                <meta property="og:description" content={`Browse ${title} Music on InternetDJ`} />
+                <meta property="og:url" content={`${baseUrl}/tag/${decodedTag}`} />
+                <meta property="og:site_name" content="InternetDJ" />
+                <meta name="twitter:card" content="summary_large_image" />
+                <meta name="twitter:title" content={`Browse ${title} Music`} />
+                <meta name="twitter:description" content={`Browse ${title} Music on InternetDJ`} />
+                <meta name="twitter:site" content="@internetdjco" />
+            </Helmet>
 
-                {!loading && songs.length === 0 && (
-                    <div className="text-gray-300">
-                        <p>No songs found for the tag "{decodeURIComponent(tag)}".</p>
-                        <p>Try a different tag or check if songs are tagged correctly in the database.</p>
-                        <Link to="/browse" className="text-primary-brand-300 hover:text-primary-brand-200 hover:underline">
-                            Back to Browse
-                        </Link>
-                    </div>
-                )}
-                {songs.length > 0 && (
-                    <div className="md:overflow-x-auto">
-                        {/* Table for Desktop */}
-                        <table className="min-w-full hidden md:table table-fixed">
-                            <thead>
-                            <tr className="bg-white/5">
-                                <th className="px-4 py-2 text-left text-gray-300 w-[60%]">Song</th>
-                                <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Plays</th>
-                                <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Likes</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {songs.map((song, index) => (
-                                <tr key={song.id} ref={index === songs.length - 1 ? lastSongElementRef : null} className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'} hover:bg-white/10 transition-colors`}>
-                                    <td className="px-4 py-2 flex items-center space-x-2">
-                                        <div className="relative flex-shrink-0 w-12 h-12">
-                                            {song.image_url ? (
-                                                <Link to={`/song/${song.id}`} tabIndex={0}>
-                                                    <img src={song.image_url} alt={song.title} className="w-12 h-12 rounded-md object-cover" onError={(e) => { console.error(`Failed to load song image for song ${song.id}:`, song.image_url); e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} loading="lazy" />
-                                                </Link>
-                                            ) : (
-                                                <div className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs" style={{ display: song.image_url ? 'none' : 'flex' }}>?</div>
-                                            )}
-                                            {song.mp3_url && (
-                                                <button onClick={() => { if (currentSong?.id === song.id) { togglePlayPause(); } else { handleSongPlay(song); } }} className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md" aria-label={currentSong?.id === song.id && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}>
-                                                    {currentSong?.id === song.id && isPlaying ? (<PauseIcon className="w-4 h-4 text-white" />) : (<PlayIcon className="w-4 h-4 text-white" />)}
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center space-x-2 flex-1">
-                                            <div className="min-w-0 flex-1">
-                                                <Link to={`/song/${song.id}`} className="text-white hover:text-primary-brand-300 hover:underline font-medium block truncate" title={song.title}>{song.title}</Link>
-                                                <div className="text-sm text-gray-300 truncate">
-                                                    <Link to={song.profile_id ? `/profile/${song.profile_id}` : '#'} className={song.profile_id ? 'text-gray-100 hover:text-primary-brand-300 hover:underline' : 'text-gray-500 cursor-not-allowed'} title={song.profile_name}>{song.profile_name}</Link>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-2"><span className="inline-flex items-center">{Number(song.plays) || 0}<SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" /></span></td>
-                                    <td className="px-4 py-2"><span className="inline-flex items-center">{Number(song.likes_count) || 0}<HeartIconSolid className={`w-4 h-4 ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`} /></span></td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
+            <div className="container mx-auto px-4 py-10">
 
-                        {/* Card Layout for Mobile */}
-                        <div className="md:hidden space-y-4">
-                            {songs.map((song, index) => (
-                                <div key={song.id} ref={index === songs.length - 1 ? lastSongElementRef : null} className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors">
-                                    <div className="flex items-center space-x-4">
-                                        <div className="relative flex-shrink-0 w-16 h-16">
-                                            {song.image_url ? (
-                                                <Link to={`/song/${song.id}`} tabIndex={0}>
-                                                    <img src={song.image_url} alt={song.title} className="w-16 h-16 rounded-md object-cover" onError={(e) => { console.error(`Failed to load song image for song ${song.id}:`, song.image_url); e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} loading="lazy" />
-                                                </Link>
-                                            ) : (
-                                                <div className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs" style={{ display: song.image_url ? 'none' : 'flex' }}>?</div>
-                                            )}
-                                            {song.mp3_url && (
-                                                <button onClick={() => { if (currentSong?.id === song.id) { togglePlayPause(); } else { handleSongPlay(song); } }} className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-md" aria-label={currentSong?.id === song.id && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}>
-                                                    {currentSong?.id === song.id && isPlaying ? (<PauseIcon className="w-4 h-4 text-white" />) : (<PlayIcon className="w-4 h-4 text-white" />)}
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <Link to={`/song/${song.id}`} className="text-white hover:text-primary-brand-300 hover:underline font-medium">{song.title}</Link>
-                                            <div className="text-sm text-gray-300"><Link to={song.profile_id ? `/profile/${song.profile_id}` : '#'} className={song.profile_id ? 'text-gray-100 hover:text-primary-brand-300 hover:underline' : 'text-gray-500 cursor-not-allowed'}>{song.profile_name}</Link></div>
-                                            <div className="text-sm text-gray-300 mt-1">Genre: <Link to={`/tag/${encodeURIComponent(song.genre)}`} className="text-white hover:text-primary-brand-300 hover:underline capitalize">{song.genre}</Link></div>
-                                            <div className="text-sm text-gray-300 mt-1">Plays: {Number(song.plays) || 0}<SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" /></div>
-                                            <div className="text-sm text-gray-300">Likes: {Number(song.likes_count) || 0}<HeartIconSolid className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`} /></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+                {/* ==================== MASTHEAD ==================== */}
+                <header className="mb-6">
+                    <div className="retro-eyebrow mb-3">// The Crate //</div>
+                    <h1 className="retro-display retro-chrome text-3xl sm:text-5xl capitalize">{title}</h1>
+                    {overview?.spellings?.length > 1 && (
+                        <p className="retro-mono text-lg text-gray-500 mt-2">
+                            also tagged: {overview.spellings.slice(0, 6).join(' · ')}
+                        </p>
+                    )}
+                    <div className="retro-rule mt-4" />
+                </header>
+
+                {/* ==================== STATS ==================== */}
+                {overview && overview.total > 0 && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">{formatCount(overview.total)}</span>
+                            <span className="retro-stat__label">Tracks</span>
+                        </div>
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">{formatCount(overview.totalPlays)}</span>
+                            <span className="retro-stat__label">Plays</span>
+                        </div>
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">{formatCount(overview.artistCount)}</span>
+                            <span className="retro-stat__label">Artists</span>
+                        </div>
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">
+                                {overview.newest ? new Date(overview.newest).toLocaleDateString() : '—'}
+                            </span>
+                            <span className="retro-stat__label">Latest Drop</span>
                         </div>
                     </div>
                 )}
+
+                {/* ==================== CONTROLS ==================== */}
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                    <button
+                        onClick={playCrate}
+                        disabled={songs.filter(s => s.mp3_url).length === 0}
+                        className="retro-btn retro-btn--hot px-5 py-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <PlayIcon className="w-4 h-4" /> Play This Crate
+                    </button>
+
+                    <div className="flex items-center gap-1 ml-auto">
+                        {['list', 'crate'].map((mode) => (
+                            <button
+                                key={mode}
+                                onClick={() => { stopPreview(); setView(mode); }}
+                                className={`retro-btn px-4 py-2 text-[0.6rem] ${view === mode ? 'retro-btn--hot' : ''}`}
+                                aria-pressed={view === mode}
+                            >
+                                {mode}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                    {SORTS.map(option => (
+                        <button
+                            key={option.id}
+                            onClick={() => handleSortChange(option.id)}
+                            className={`retro-btn px-4 py-2 text-[0.6rem] ${sort === option.id ? 'retro-btn--hot' : ''}`}
+                            title={option.id === 'deep' ? 'Barely-heard tracks that the few who found them liked' : undefined}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* ==================== RELATED GENRES ==================== */}
+                {overview?.related?.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 mb-8">
+                        <span className="retro-eyebrow mr-1">Heads To</span>
+                        {overview.related.map(neighbour => (
+                            <Link
+                                key={neighbour.tag}
+                                to={`/tag/${encodeURIComponent(neighbour.tag)}`}
+                                className="retro-chip capitalize"
+                            >
+                                {neighbour.label} <span className="text-cyan-300/60">{neighbour.count}</span>
+                            </Link>
+                        ))}
+                    </div>
+                )}
+
+                <div className="flex flex-col lg:flex-row gap-8">
+                    <div className="w-full lg:w-3/4 min-w-0">
+                        {songs.length === 0 && !loading ? (
+                            <div className="retro-panel retro-cut p-6">
+                                <p className="retro-mono text-xl text-gray-400">
+                                    &gt; nothing filed under "{decodedTag}" yet.
+                                </p>
+                                <Link to="/browse" className="retro-btn px-4 py-2 text-xs mt-4">
+                                    Back to Browse
+                                </Link>
+                            </div>
+                        ) : view === 'crate' ? (
+                            /* ---------- CRATE ---------- */
+                            <div className="retro-crate" onMouseLeave={stopPreview}>
+                                {songs.map((song, index) => (
+                                    <div
+                                        key={song.id}
+                                        ref={index === songs.length - 1 ? lastSongElementRef : null}
+                                        className="retro-crate__sleeve"
+                                        onMouseEnter={() => startPreview(song)}
+                                        onMouseLeave={stopPreview}
+                                    >
+                                        <div className="retro-crate__art retro-scanlines">
+                                            {song.image_url ? (
+                                                <img
+                                                    src={song.image_url}
+                                                    alt={song.title}
+                                                    loading="lazy"
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center retro-pixel text-[0.5rem] text-cyan-200">
+                                                    NO ART
+                                                </div>
+                                            )}
+                                            {previewingId === song.id && (
+                                                <span className="retro-preview-badge">
+                                                    <span className="retro-eq" style={{ height: '0.5rem' }}>
+                                                        <span /><span /><span /><span />
+                                                    </span>
+                                                    Previewing
+                                                </span>
+                                            )}
+                                            <PlayOverlay song={song} iconSize="w-9 h-9" />
+                                        </div>
+                                        <div className="mt-3">
+                                            <Link
+                                                to={`/song/${song.id}`}
+                                                className="retro-display text-[0.7rem] text-white hover:text-cyan-200 block truncate"
+                                                title={song.title}
+                                            >
+                                                {song.title}
+                                            </Link>
+                                            <Link
+                                                to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
+                                                className="retro-mono text-lg retro-link block truncate"
+                                            >
+                                                {song.profile_name}
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            /* ---------- LIST ---------- */
+                            <div className="overflow-x-auto">
+                                <table className="retro-table table-fixed">
+                                    <thead>
+                                        <tr>
+                                            <th className="w-[10%]">#</th>
+                                            <th className="w-[54%]">Track</th>
+                                            <th className="w-[18%]">Plays</th>
+                                            <th className="w-[18%]">Likes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {songs.map((song, index) => (
+                                            <tr
+                                                key={song.id}
+                                                ref={index === songs.length - 1 ? lastSongElementRef : null}
+                                            >
+                                                <td className="retro-pixel text-[0.5rem] text-fuchsia-400">
+                                                    {String(index + 1).padStart(2, '0')}
+                                                </td>
+                                                <td>
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div
+                                                            className="relative flex-shrink-0 w-12 h-12 retro-scanlines overflow-hidden border border-cyan-400/30"
+                                                            onMouseEnter={() => startPreview(song)}
+                                                            onMouseLeave={stopPreview}
+                                                        >
+                                                            {song.image_url ? (
+                                                                <img
+                                                                    src={song.image_url}
+                                                                    alt={song.title}
+                                                                    loading="lazy"
+                                                                    className="w-full h-full object-cover"
+                                                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300">?</div>
+                                                            )}
+                                                            {previewingId === song.id && (
+                                                                <span className="retro-eq absolute bottom-1 right-1 z-10">
+                                                                    <span /><span /><span /><span />
+                                                                </span>
+                                                            )}
+                                                            <PlayOverlay song={song} />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <Link
+                                                                to={`/song/${song.id}`}
+                                                                className="retro-display text-xs text-white hover:text-cyan-200 block truncate"
+                                                                title={song.title}
+                                                            >
+                                                                {song.title}
+                                                            </Link>
+                                                            <Link
+                                                                to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
+                                                                className="retro-mono text-lg retro-link block truncate"
+                                                            >
+                                                                {song.profile_name}
+                                                            </Link>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span className="retro-mono text-lg text-cyan-300 inline-flex items-center gap-1">
+                                                        {formatCount(song.plays)}
+                                                        <SpeakerWaveIcon className="w-4 h-4" />
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span className="retro-mono text-lg inline-flex items-center gap-1 text-gray-300">
+                                                        {formatCount(song.likes_count)}
+                                                        <HeartIconSolid
+                                                            className={`w-4 h-4 ${Number(song.likes_count) > 0 ? 'text-fuchsia-400' : 'text-gray-500'}`}
+                                                        />
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {loading && (
+                            <p className="retro-mono text-xl text-cyan-200 mt-6">&gt; digging&hellip;</p>
+                        )}
+                    </div>
+
+                    {/* ==================== TOP ARTISTS ==================== */}
+                    <aside className="w-full lg:w-1/4">
+                        <section className="retro-panel retro-cut p-4">
+                            <h2 className="retro-eyebrow mb-3">// Top Artists //</h2>
+                            {overview?.topArtists?.length > 0 ? (
+                                <ul className="space-y-1">
+                                    {overview.topArtists.map((artist, i) => (
+                                        <li key={artist.profile_id}>
+                                            <Link
+                                                to={`/profile/${artist.profile_id}`}
+                                                className="flex items-center gap-3 py-1.5 px-2 hover:bg-cyan-400/10 border-l-2 border-transparent hover:border-fuchsia-500 transition-colors group"
+                                            >
+                                                <span className="retro-pixel text-[0.5rem] text-fuchsia-400 w-4 shrink-0">
+                                                    {String(i + 1).padStart(2, '0')}
+                                                </span>
+                                                <img
+                                                    src={artist.picture_url || getDefaultAvatar(artist.profile_id)}
+                                                    alt=""
+                                                    className="w-8 h-8 object-cover border border-cyan-400/40 group-hover:border-fuchsia-400 transition-colors"
+                                                />
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="retro-mono text-lg text-gray-200 group-hover:text-cyan-200 block truncate">
+                                                        {artist.name}
+                                                    </span>
+                                                    <span className="retro-mono text-base text-cyan-300/70">
+                                                        {artist.tracks} track{artist.tracks === 1 ? '' : 's'}
+                                                    </span>
+                                                </span>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="retro-mono text-lg text-gray-500">&gt; no artists yet.</p>
+                            )}
+                        </section>
+                    </aside>
+                </div>
             </div>
         </div>
     );

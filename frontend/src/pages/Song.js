@@ -5,7 +5,7 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import AudioPlayer from '../components/AudioPlayer';
 import IconActionButton from '../components/IconActionButton';
-import { SpeakerWaveIcon, PlusIcon, HeartIcon as HeartIconSolid, LinkIcon, UserPlusIcon, UserMinusIcon } from '@heroicons/react/24/solid';
+import { SpeakerWaveIcon, PlusIcon, HeartIcon as HeartIconSolid, LinkIcon, UserPlusIcon, UserMinusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import sanitizeHtml from 'sanitize-html';
 import API_URL from '../utils/api';
@@ -268,6 +268,15 @@ const Song = () => {
         } catch (err) {
             setFollowError(`Failed to ${isFollowing ? 'unfollow' : 'follow'} artist: ${err.response?.data?.error || err.message}`);
         }
+    };
+
+    const handleDownloadSong = () => {
+        const link = document.createElement('a');
+        link.href = `${API_URL}/music/${songId}/download`;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const handleCopyShareLink = async () => {
@@ -605,7 +614,7 @@ const Song = () => {
                 ) : (
                     <>
                         {/* Top Section */}
-                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl mb-8 backdrop-blur-sm">
+                        <div className="retro-panel retro-cut p-6 mb-8">
                             <div className="flex flex-col lg:flex-row lg:items-start gap-8">
                                 {/* Left Column: Image, Buttons, Plays, Likes */}
                                 <div className="flex flex-col gap-4 flex-shrink-0">
@@ -615,11 +624,11 @@ const Song = () => {
                                             <img
                                                 src={song.image_url}
                                                 alt={song.title}
-                                                className="w-80 h-80 rounded-md object-cover"
+                                                className="w-80 h-80 max-w-full object-cover border border-cyan-400/40"
                                                 onError={() => console.error('Song image failed to load:', song.image_url)}
                                             />
                                         ) : (
-                                            <div className="w-80 h-80 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-sm">
+                                            <div className="w-80 h-80 max-w-full border border-cyan-400/40 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.6rem] text-cyan-300">
                                                 No Image
                                             </div>
                                         )}
@@ -633,14 +642,19 @@ const Song = () => {
                                                 setShareStatus('');
                                                 setShowShareModal(true);
                                             }}
-                                            className="bg-[#008dcb]/16 border-[#73cbf0]/40 hover:bg-[#008dcb]/26"
                                         />
+                                        {song?.allow_download && (
+                                            <IconActionButton
+                                                icon={ArrowDownTrayIcon}
+                                                label="Download song"
+                                                onClick={handleDownloadSong}
+                                            />
+                                        )}
                                         {isAuthenticated && (
                                             <IconActionButton
                                                 icon={PlusIcon}
                                                 label="Add to playlist"
                                                 onClick={() => setShowPlaylistModal(true)}
-                                                className="bg-[#008dcb]/20 border-[#73cbf0]/45 hover:bg-[#008dcb]/30"
                                             />
                                         )}
                                         {isAuthenticated && (
@@ -648,7 +662,7 @@ const Song = () => {
                                                 icon={isLiked ? HeartIconSolid : HeartIconOutline}
                                                 label={isLiked ? 'Unlike song' : 'Like song'}
                                                 onClick={handleLikeSong}
-                                                className={isLiked ? 'bg-[#008dcb]/30 border-[#73cbf0]/50 hover:bg-[#008dcb]/40' : 'bg-[#73cbf0]/16 border-[#73cbf0]/45 hover:bg-[#73cbf0]/24'}
+                                                className={isLiked ? 'retro-action--on' : ''}
                                             />
                                         )}
                                         {isAuthenticated && song?.profile_id && user?.id !== song?.user_id && (
@@ -656,13 +670,13 @@ const Song = () => {
                                                 icon={isFollowing ? UserMinusIcon : UserPlusIcon}
                                                 label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
                                                 onClick={handleFollowToggle}
-                                                className={isFollowing ? 'bg-[#008dcb]/28 border-[#73cbf0]/50 hover:bg-[#008dcb]/38' : 'bg-[#008dcb]/18 border-[#73cbf0]/40 hover:bg-[#008dcb]/28'}
+                                                className={isFollowing ? 'retro-action--on' : ''}
                                             />
                                         )}
                                     </div>
                                     {/* Plays, Likes */}
                                     <div className="space-y-2">
-                                        <div className="text-sm text-gray-300 flex space-x-4">
+                                        <div className="retro-mono text-xl text-cyan-300 flex space-x-4">
                                             <span className="inline-flex items-center">
                                             {Number(song?.plays) || 0}
                                                <SpeakerWaveIcon
@@ -682,10 +696,10 @@ const Song = () => {
                                 <div className="flex-1 flex flex-col gap-4 min-w-0">
                                     {/* Title and Profile Link */}
                                     <div>
-                                        <h1 className="text-3xl font-bold break-words">{song?.title || 'Loading...'}</h1>
+                                        <h1 className="retro-display text-2xl sm:text-3xl retro-chrome break-words">{song?.title || 'Loading...'}</h1>
                                         <Link
                                             to={song?.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                             className={song?.profile_id ? 'text-primary-brand-300 hover:underline text-lg' : 'text-gray-500 cursor-not-allowed text-lg'}
+                                             className={song?.profile_id ? 'retro-link retro-mono text-2xl' : 'text-gray-500 cursor-not-allowed retro-mono text-2xl'}
                                         >
                                             {song?.profile_name || 'Profile'}
                                         </Link>
@@ -703,7 +717,7 @@ const Song = () => {
                                     {/* Description and Genre Tags */}
                                     <div className="space-y-2">
                                         {song?.description && (
-                                            <p className="text-gray-300 whitespace-pre-line">
+                                            <p className="retro-mono text-xl text-gray-300 whitespace-pre-line">
                                                 {sanitizeHtml(song.description, { allowedTags: [], allowedAttributes: {} })}
                                             </p>
                                         )}
@@ -716,7 +730,7 @@ const Song = () => {
                                                         <Link
                                                             key={index}
                                                             to={`/tag/${genre.trim()}`}
-                                                            className="inline-block bg-primary-brand-500/15 text-primary-brand-200 border border-primary-brand-500/30 text-sm font-semibold px-2 py-1 rounded-md hover:bg-primary-brand-500/25 transition-colors"
+                                                            className="retro-chip"
                                                         >
                                                             {genre.trim()}
                                                         </Link>
@@ -735,8 +749,8 @@ const Song = () => {
                             {/* Left Column: Review Form and Reviews */}
                             <div className="space-y-6">
                                 {isAuthenticated && (
-                                    <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                        <h2 className="text-2xl font-bold mb-4">Post a Comment</h2>
+                                    <div className="retro-panel retro-cut p-6">
+                                        <h2 className="retro-display text-lg retro-glow-magenta mb-4">Post a Comment</h2>
                                         <form onSubmit={handleReviewSubmit} className="space-y-6">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-300">Comment</label>
@@ -768,8 +782,8 @@ const Song = () => {
                                     </div>
                                 )}
 
-                                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                    <h2 className="text-2xl font-bold mb-4">Comments</h2>
+                                <div className="retro-panel retro-cut p-6">
+                                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Comments</h2>
                                     {reviews.length === 0 ? (
                                         <p className="text-gray-300">No comments yet.</p>
                                     ) : (
@@ -778,7 +792,7 @@ const Song = () => {
                                                 <div
                                                     key={review.id}
                                                     data-review-profile-id={review.profile_id}
-                                                    className="p-4 bg-white/5 rounded-lg shadow-sm border border-white/10"
+                                                    className="retro-card retro-cut p-4"
                                                 >
                                                     <div className="flex items-start space-x-4">
                                                         <Link
@@ -798,7 +812,7 @@ const Song = () => {
                                                             <div className="flex items-center justify-between">
                                                                 <Link
                                                                     to={review.profile_id ? `/profile/${review.profile_id}` : '#'}
-                                                                    className={review.profile_id ? 'text-gray-100 hover:text-primary-brand-300 hover:underline text-sm font-semibold' : 'text-gray-500 cursor-not-allowed text-sm font-semibold'}
+                                                                    className={review.profile_id ? 'retro-link retro-mono text-lg' : 'text-gray-500 cursor-not-allowed text-sm font-semibold'}
                                                                 >
                                                                     {review.user_name}
                                                                 </Link>
@@ -841,8 +855,8 @@ const Song = () => {
 
                             {/* Right Column: Other Songs + Activity Feed */}
                             <div className="space-y-6">
-                                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                    <h2 className="text-2xl font-bold mb-4">More by {song?.profile_name || 'Artist'}</h2>
+                                <div className="retro-panel retro-cut p-6">
+                                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">More by {song?.profile_name || 'Artist'}</h2>
                                     {otherSongs.length === 0 ? (
                                         <p className="text-sm text-gray-300">No other songs by this artist.</p>
                                     ) : (
@@ -850,26 +864,26 @@ const Song = () => {
                                             {otherSongs.map((otherSong) => (
                                                 <div
                                                     key={otherSong.id}
-                                                    className="flex items-start space-x-4 p-2 bg-white/5 rounded-md shadow-sm border border-white/10 cursor-pointer hover:bg-white/10"
+                                                    className="retro-card retro-cut flex items-start space-x-4 p-2 cursor-pointer"
                                                     onClick={() => handleSongNavigation(otherSong.id)}
                                                 >
                                                     {otherSong.image_url ? (
                                                         <img
                                                             src={otherSong.image_url}
                                                             alt={otherSong.title}
-                                                            className="w-16 h-16 rounded-md object-cover"
+                                                            className="w-16 h-16 object-cover border border-cyan-400/30"
                                                             onError={() => console.error('Song image failed to load:', otherSong.image_url)}
                                                         />
                                                     ) : (
-                                                        <div className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs">
+                                                        <div className="w-16 h-16 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300">
                                                             No Image
                                                         </div>
                                                     )}
                                                     <div className="flex-1">
-                            <span className="text-sm font-semibold text-gray-100 hover:text-primary-brand-300 hover:underline">
+                            <span className="retro-display text-[0.7rem] text-white hover:text-cyan-200">
                               {otherSong.title}
                             </span>
-                                                        <div className="text-xs text-gray-300 flex items-center gap-x-2">
+                                                        <div className="retro-mono text-base text-cyan-300/80 flex items-center gap-x-2">
                                                             {otherSong.genre && <span>{otherSong.genre}</span>}
                                                             {otherSong.genre && <span>|</span>}
                                                             <span className="inline-flex items-center">
@@ -894,8 +908,8 @@ const Song = () => {
                                 </div>
 
                                 {/* Activity Feed */}
-                                <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                    <h2 className="text-xl font-bold mb-4">Activity</h2>
+                                <div className="retro-panel retro-cut p-6">
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Activity</h2>
                                     {isLoadingActivity ? (
                                         <div className="space-y-3">
                                             {[...Array(4)].map((_, i) => (
@@ -940,7 +954,7 @@ const Song = () => {
                                                         <p className="text-sm text-gray-200 leading-snug">
                                                             <Link
                                                                 to={item.actor_profile_id ? `/profile/${item.actor_profile_id}` : '#'}
-                                                                className="font-semibold hover:text-primary-brand-300 hover:underline"
+                                                                className="retro-link retro-mono text-lg"
                                                             >
                                                                 {item.actor_name}
                                                             </Link>
@@ -951,7 +965,7 @@ const Song = () => {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => scrollToReview(item.actor_profile_id)}
-                                                                        className="text-gray-400 hover:text-primary-brand-300 hover:underline text-sm cursor-pointer"
+                                                                        className="retro-mono text-lg text-gray-400 hover:text-fuchsia-300 cursor-pointer"
                                                                     >
                                                                         {getActivityLabel(item)}
                                                                     </button>
@@ -969,8 +983,8 @@ const Song = () => {
 
                                 {/* You Might Also Like */}
                                 {(isLoadingSimilar || similarSongs.length > 0) && (
-                                    <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                                        <h2 className="text-2xl font-bold mb-5">You might also like</h2>
+                                    <div className="retro-panel retro-cut p-6">
+                                        <h2 className="retro-display text-lg retro-glow-magenta mb-5">You might also like</h2>
                                         {isLoadingSimilar ? (
                                             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                                                 {[...Array(6)].map((_, i) => (
@@ -989,7 +1003,7 @@ const Song = () => {
                                                         className="group cursor-pointer"
                                                         onClick={() => handleSongNavigation(s.id)}
                                                     >
-                                                        <div className="relative aspect-square mb-2 overflow-hidden rounded-md">
+                                                        <div className="relative aspect-square mb-2 overflow-hidden retro-scanlines border border-cyan-400/30">
                                                             {s.image_url ? (
                                                                 <img
                                                                     src={s.image_url}
@@ -997,22 +1011,22 @@ const Song = () => {
                                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                                                                 />
                                                             ) : (
-                                                                <div className="w-full h-full bg-white/10 flex items-center justify-center text-gray-500 text-xs">
+                                                                <div className="w-full h-full bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300">
                                                                     No Image
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <p className="text-sm font-semibold text-gray-100 group-hover:text-primary-brand-300 truncate leading-tight">
+                                                        <p className="retro-display text-[0.7rem] text-white group-hover:text-cyan-200 truncate leading-tight">
                                                             {s.title}
                                                         </p>
                                                         <Link
                                                             to={`/profile/${s.profile_id}`}
-                                                            className="text-xs text-gray-400 hover:text-primary-brand-300 hover:underline truncate block"
+                                                            className="retro-mono text-base retro-link truncate block"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {s.profile_name}
                                                         </Link>
-                                                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                                        <div className="flex items-center gap-2 mt-1 retro-mono text-base text-gray-400">
                                                             <span className="inline-flex items-center gap-0.5">
                                                                 {Number(s.plays) || 0}
                                                                 <SpeakerWaveIcon className="w-3 h-3" />
@@ -1034,8 +1048,8 @@ const Song = () => {
                         {/* Feedback Input Modal */}
                         {showShareModal && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-lg w-full text-gray-100">
-                                    <h2 className="text-xl font-bold mb-2">Share Song</h2>
+                                <div className="retro-panel retro-cut p-6 max-w-lg w-full text-gray-100">
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-2">Share Song</h2>
                                     <p className="text-sm text-gray-300 mb-4">Copy or open the direct link to this song.</p>
                                     <div className="flex flex-col sm:flex-row gap-3">
                                         <input
@@ -1079,8 +1093,8 @@ const Song = () => {
 
                         {showFeedbackModal && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
-                                    <h2 className="text-xl font-bold mb-4">Detailed Feedback</h2>
+                                <div className="retro-panel retro-cut p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Detailed Feedback</h2>
                                     <div className="space-y-4">
                                         {feedbackCriteria.map(criterion => (
                                             <div key={criterion} className="flex items-center space-x-4">
@@ -1125,8 +1139,8 @@ const Song = () => {
                         {/* Feedback Results Modal */}
                         {showFeedbackResultsModal && selectedFeedback && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
-                                    <h2 className="text-xl font-bold mb-4">Detailed Feedback Results</h2>
+                                <div className="retro-panel retro-cut p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Detailed Feedback Results</h2>
                                     <div className="space-y-4">
                                         {feedbackCriteria.map(criterion => (
                                             <div key={criterion} className="flex items-center space-x-4">
@@ -1167,11 +1181,11 @@ const Song = () => {
 
                         {showPlaylistModal && isAuthenticated && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-md w-full text-gray-100">
-                                    <h2 className="text-xl font-bold mb-4">Add to Playlist</h2>
+                                <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Add to Playlist</h2>
                                     {playlistError && <p className="text-red-400 text-sm mb-4">{playlistError}</p>}
                                     <div className="mb-4">
-                                        <h3 className="text-lg font-semibold mb-2">Create New Playlist</h3>
+                                        <h3 className="retro-eyebrow mb-2">Create New Playlist</h3>
                                         <form onSubmit={handleCreatePlaylist} className="flex space-x-2">
                                             <input
                                                 type="text"
@@ -1189,7 +1203,7 @@ const Song = () => {
                                         </form>
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-semibold mb-2">Favorite Playlists</h3>
+                                        <h3 className="retro-eyebrow mb-2">Favorite Playlists</h3>
                                         {playlists.length === 0 ? (
                                             <p className="text-sm text-gray-300">No playlists found. Create one above.</p>
                                         ) : (
@@ -1222,8 +1236,8 @@ const Song = () => {
 
                         {showReviewDeleteConfirm && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-md w-full text-gray-100">
-                                    <h2 className="text-xl font-bold mb-4">Confirm Delete Review</h2>
+                                <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Confirm Delete Review</h2>
                                     <p className="mb-6 text-gray-300">
                                         Are you sure you want to delete this review? This action cannot be undone.
                                     </p>

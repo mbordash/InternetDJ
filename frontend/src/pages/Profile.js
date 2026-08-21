@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -38,7 +38,7 @@ window.Buffer = window.Buffer || Buffer;
 const ProfilePage = () => {
     const { profileId } = useParams();
     const { user } = useContext(AuthContext);
-    const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
+    const { playSong, playPlaylist, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
     const [profile, setProfile] = useState(null);
     const [songs, setSongs] = useState([]);
     const [error, setError] = useState(null);
@@ -85,6 +85,12 @@ const ProfilePage = () => {
     const [selectedWalletKey, setSelectedWalletKey] = useState(null);
     const [shareStatus, setShareStatus] = useState('');
     const [isArtistInfoExpanded, setIsArtistInfoExpanded] = useState(false);
+    // Discography browsing, mirroring the genre pages.
+    const [songSort, setSongSort] = useState('newest');
+    const [songView, setSongView] = useState('list');
+    const [previewingId, setPreviewingId] = useState(null);
+    const previewAudioRef = useRef(null);
+    const previewTimersRef = useRef({ start: null, stop: null });
     const backgroundImageInputRef = useRef(null);
 
     const baseUrl = SITE_URL;
@@ -99,6 +105,11 @@ const ProfilePage = () => {
         { id: 'bg-gradient-dark-grey', name: 'Dark Grey Gradient', class: 'bg-gradient-dark-grey' },
         { id: 'bg-line-pattern', name: 'Line Pattern', class: 'bg-line-pattern' },
         { id: 'bg-inverse-line-pattern', name: 'Inverse Line Pattern', class: 'bg-inverse-line-pattern' },
+        { id: 'bg-retro-grid', name: 'Neon Grid', class: 'bg-retro-grid' },
+        { id: 'bg-retro-sunset', name: 'Retro Sunset', class: 'bg-retro-sunset' },
+        { id: 'bg-retro-vhs', name: 'VHS Static', class: 'bg-retro-vhs' },
+        { id: 'bg-retro-miami', name: 'Miami Chrome', class: 'bg-retro-miami' },
+        { id: 'bg-retro-matrix', name: 'Terminal Green', class: 'bg-retro-matrix' },
     ];
 
     const IDJ_COIN_MINT = new PublicKey('DTLkUR3Sfp1LcPVZMSv8toTTK3iwU7WTdF66TawwJpKN');
@@ -994,6 +1005,113 @@ const ProfilePage = () => {
     const isOwner = user && profile && user.id === profile.user_id;
     const featuredSong = songs.find((song) => Boolean(song.is_featured));
     const nonFeaturedSongs = songs.filter((song) => !song.is_featured);
+
+    const SONG_SORTS = [
+        { id: 'newest', label: 'Newest' },
+        { id: 'listens', label: 'Most Played' },
+        { id: 'likes', label: 'Most Liked' },
+        { id: 'alpha', label: 'A–Z' },
+        { id: 'deep', label: 'Deep Cuts' },
+    ];
+
+    const sortedSongs = useMemo(() => {
+        const list = [...nonFeaturedSongs];
+        switch (songSort) {
+            case 'listens':
+                return list.sort((a, b) => (b.plays || 0) - (a.plays || 0));
+            case 'likes':
+                return list.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
+            case 'alpha':
+                return list.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+            case 'deep':
+                // Same smoothed like-to-play ratio the genre pages use: quietly
+                // loved tracks first, rather than the artist's greatest hits.
+                return list.sort((a, b) => {
+                    const score = (s) => ((s.likes_count || 0) + 1) / ((s.plays || 0) + 10);
+                    return score(b) - score(a) || (a.plays || 0) - (b.plays || 0);
+                });
+            case 'newest':
+            default:
+                return list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        }
+    }, [nonFeaturedSongs, songSort]);
+
+    // Headline numbers, derived from the songs already on the page.
+    const discographyStats = useMemo(() => {
+        const totalPlays = songs.reduce((sum, song) => sum + (Number(song.plays) || 0), 0);
+        const totalLikes = songs.reduce((sum, song) => sum + (Number(song.likes_count) || 0), 0);
+        const newest = songs.reduce((latest, song) => {
+            if (!song.created_at) return latest;
+            return !latest || new Date(song.created_at) > new Date(latest) ? song.created_at : latest;
+        }, null);
+        return { tracks: songs.length, totalPlays, totalLikes, newest };
+    }, [songs]);
+
+    // The genres this artist files under, de-duplicated case-insensitively.
+    // Links use the raw spelling — /by-tag normalises it on the way in.
+    const artistGenres = useMemo(() => {
+        const seen = new Map();
+        songs.forEach(song => {
+            (song.genre || '').split(',').map(part => part.trim()).filter(Boolean).forEach(raw => {
+                const key = raw.toLowerCase();
+                const entry = seen.get(key) || { label: raw, count: 0 };
+                entry.count += 1;
+                seen.set(key, entry);
+            });
+        });
+        return [...seen.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+    }, [songs]);
+
+    const formatCount = (value) => Number(value || 0).toLocaleString();
+
+    // ---------- Listening post ----------
+    const stopPreview = useCallback(() => {
+        clearTimeout(previewTimersRef.current.start);
+        clearTimeout(previewTimersRef.current.stop);
+        const audio = previewAudioRef.current;
+        if (audio) {
+            audio.pause();
+            audio.src = '';
+        }
+        setPreviewingId(null);
+    }, []);
+
+    const startPreview = (song) => {
+        if (isPlaying || !song.mp3_url) return;   // never talk over the deck
+        clearTimeout(previewTimersRef.current.start);
+        previewTimersRef.current.start = setTimeout(() => {
+            if (!previewAudioRef.current) {
+                previewAudioRef.current = new Audio();
+                previewAudioRef.current.volume = 0.55;
+            }
+            const audio = previewAudioRef.current;
+            audio.src = song.mp3_url;
+            audio.currentTime = 0;
+            audio.play()
+                .then(() => {
+                    setPreviewingId(song.id);
+                    previewTimersRef.current.stop = setTimeout(stopPreview, 20000);
+                })
+                .catch(() => setPreviewingId(null));  // autoplay blocked; fail quietly
+        }, 600);
+    };
+
+    useEffect(() => () => stopPreview(), [stopPreview]);
+    useEffect(() => { if (isPlaying) stopPreview(); }, [isPlaying, stopPreview]);
+
+    const playDiscography = () => {
+        const playable = [featuredSong, ...sortedSongs].filter(song => song && song.mp3_url);
+        if (playable.length === 0) return;
+        stopPreview();
+        playPlaylist(playable.map(song => ({
+            id: song.id,
+            title: song.title,
+            mp3_url: song.mp3_url,
+            image_url: song.image_url,
+            profile_id: song.profile_id,
+            profile_name: song.profile_name || profile?.name || 'Unknown Artist',
+        })));
+    };
     const viewerLikedSongIdSet = new Set(viewerLikedSongIds.map((id) => Number(id)));
     const followerProfileIdSet = new Set(followers.map((p) => Number(p.profile_id)));
     const followingProfileIdSet = new Set(followingProfiles.map((p) => Number(p.profile_id)));
@@ -1011,146 +1129,146 @@ const ProfilePage = () => {
         if (isOwner) {
             return (
                 <div className="container mx-auto px-4 py-8 max-w-2xl text-gray-100 pt-2">
-                    <h1 className="text-3xl font-bold mb-4">Your Profile</h1>
+                    <h1 className="retro-display text-2xl retro-chrome mb-4">Your Profile</h1>
                     <p className="mb-6">Your profile has not been created yet. Create it below:</p>
-                    <form onSubmit={handleSubmit} className="space-y-6 bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                    <form onSubmit={handleSubmit} className="space-y-6 retro-panel retro-cut p-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Name</label>
+                            <label className="retro-label">Name</label>
                             <input
                                 type="text"
                                 name="name"
                                 value={formData.name}
                                 onChange={handleInputChange}
                                 required
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Genre</label>
+                            <label className="retro-label">Genre</label>
                             <input
                                 type="text"
                                 name="genre"
                                 value={formData.genre}
                                 onChange={handleInputChange}
                                 required
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Location</label>
+                            <label className="retro-label">Location</label>
                             <input
                                 type="text"
                                 name="location"
                                 value={formData.location}
                                 onChange={handleInputChange}
                                 placeholder="City, State / Country"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Description</label>
+                            <label className="retro-label">Description</label>
                             <textarea
                                 name="description"
                                 value={formData.description}
                                 onChange={handleInputChange}
                                 rows="4"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Donation Link (e.g., PayPal, Patreon)</label>
+                            <label className="retro-label">Donation Link (e.g., PayPal, Patreon)</label>
                             <input
                                 type="url"
                                 name="donation_link"
                                 value={formData.donation_link}
                                 onChange={handleInputChange}
                                 placeholder="https://www.paypal.me/username"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                             />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Website</label>
-                                <input type="url" name="website_url" value={formData.website_url} onChange={handleInputChange} placeholder="https://yourwebsite.com" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                <label className="retro-label">Website</label>
+                                <input type="url" name="website_url" value={formData.website_url} onChange={handleInputChange} placeholder="https://yourwebsite.com" className="retro-field mt-1" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">X</label>
-                                <input type="url" name="x_url" value={formData.x_url} onChange={handleInputChange} placeholder="https://x.com/username" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                <label className="retro-label">X</label>
+                                <input type="url" name="x_url" value={formData.x_url} onChange={handleInputChange} placeholder="https://x.com/username" className="retro-field mt-1" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Facebook</label>
-                                <input type="url" name="facebook_url" value={formData.facebook_url} onChange={handleInputChange} placeholder="https://facebook.com/username" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                <label className="retro-label">Facebook</label>
+                                <input type="url" name="facebook_url" value={formData.facebook_url} onChange={handleInputChange} placeholder="https://facebook.com/username" className="retro-field mt-1" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">YouTube</label>
-                                <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleInputChange} placeholder="https://youtube.com/@channel" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                <label className="retro-label">YouTube</label>
+                                <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleInputChange} placeholder="https://youtube.com/@channel" className="retro-field mt-1" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Instagram</label>
-                                <input type="url" name="instagram_url" value={formData.instagram_url} onChange={handleInputChange} placeholder="https://instagram.com/username" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                <label className="retro-label">Instagram</label>
+                                <input type="url" name="instagram_url" value={formData.instagram_url} onChange={handleInputChange} placeholder="https://instagram.com/username" className="retro-field mt-1" />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Solana Address (Optional)</label>
+                            <label className="retro-label">Solana Address (Optional)</label>
                             <input
                                 type="text"
                                 name="solana_address"
                                 value={formData.solana_address}
                                 onChange={handleInputChange}
                                 placeholder="Enter your Solana wallet address"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                             />
-                            <p className="mt-1 text-sm text-gray-400">
+                            <p className="retro-mono text-lg text-gray-400 mt-1">
                                 Your Solana address is used to receive IDJ Coin grants and donations for your contributions to InternetDJ.{' '}
                                 <a
                                     href="https://phantom.app/"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-primary-brand-300 hover:underline"
+                                    className="retro-link retro-mono text-lg"
                                 >
                                     Get one with Phantom
                                 </a>
                             </p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Profile Picture</label>
+                            <label className="retro-label">Profile Picture</label>
                             <input
                                 type="file"
                                 name="picture"
                                 onChange={handleFileChange}
                                 accept="image/*"
-                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+                                className="retro-mono text-lg text-gray-300 mt-1 block w-full file:mr-4 file:py-1 file:px-3 file:border file:border-cyan-400/40 file:bg-cyan-400/10 file:text-cyan-200 file:font-normal hover:file:bg-cyan-400/20"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Background</label>
+                            <label className="retro-label">Background</label>
                             <button
                                 type="button"
                                 onClick={() => setIsBackgroundModalOpen(true)}
-                                className="mt-1 w-full py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand border border-white/10"
+                                className="retro-btn mt-1 w-full py-2 px-4 text-xs"
                             >
                                 Choose Background
                             </button>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Upload Page Background Image</label>
+                            <label className="retro-label">Upload Page Background Image</label>
                             <input
                                 type="file"
                                 name="backgroundImage"
                                 onChange={handleFileChange}
                                 accept="image/*"
                                 ref={backgroundImageInputRef}
-                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+                                className="retro-mono text-lg text-gray-300 mt-1 block w-full file:mr-4 file:py-1 file:px-3 file:border file:border-cyan-400/40 file:bg-cyan-400/10 file:text-cyan-200 file:font-normal hover:file:bg-cyan-400/20"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Upload Header Background Image</label>
+                            <label className="retro-label">Upload Header Background Image</label>
                             <input
                                 type="file"
                                 name="heroBackgroundImage"
                                 onChange={handleFileChange}
                                 accept="image/*"
-                                className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+                                className="retro-mono text-lg text-gray-300 mt-1 block w-full file:mr-4 file:py-1 file:px-3 file:border file:border-cyan-400/40 file:bg-cyan-400/10 file:text-cyan-200 file:font-normal hover:file:bg-cyan-400/20"
                             />
                         </div>
                         <button
@@ -1241,23 +1359,23 @@ const ProfilePage = () => {
             ></div>
             <div className="relative container mx-auto px-4 py-8 max-w-7xl text-gray-100 z-0 pt-2">
                 <div
-                    className={`bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl mb-8 backdrop-blur-sm ${headerBackgroundClass}`}
+                    className={`retro-panel retro-cut p-6 mb-8 ${headerBackgroundClass}`}
                     style={headerBackgroundStyle}
                 >
                     <div className="flex flex-col md:flex-row md:items-center md:space-x-6 gap-4">
                         <img
                             src={profile.picture_url || getDefaultAvatar(profile.id || profile.user_id || profile.name)}
                             alt={profile.name || 'Profile'}
-                            className="w-32 h-32 rounded-full object-cover shadow-sm"
+                            className="w-32 h-32 object-cover border-2 border-cyan-400/50"
                             onError={(e) => {
                                 e.currentTarget.src = getDefaultAvatar(profile.id || profile.user_id || profile.name);
                             }}
                         />
                         <div>
-                            <h1 className="text-3xl font-bold">{profile.name}</h1>
-                            {profile.location && <p className="text-base text-gray-300">{profile.location}</p>}
-                            <p className="text-lg">Genre: {profile.genre}</p>
-                            <Link to="/idj-coin" className="text-lg text-primary-brand-300 hover:underline">
+                            <h1 className="retro-display text-2xl sm:text-3xl retro-chrome">{profile.name}</h1>
+                            {profile.location && <p className="retro-mono text-xl text-fuchsia-300">{profile.location}</p>}
+                            <p className="retro-mono text-xl text-cyan-200">Genre: {profile.genre}</p>
+                            <Link to="/idj-coin" className="retro-link retro-mono text-xl">
                                 IDJC Earned: {profile.total_idjc_earned || 0}
                             </Link>
                         </div>
@@ -1269,7 +1387,6 @@ const ProfilePage = () => {
                                 icon={PencilSquareIcon}
                                 label="Edit profile"
                                 onClick={() => setIsEditing(true)}
-                                className="bg-[#008dcb]/18 border-[#73cbf0]/40 hover:bg-[#008dcb]/28"
                             />
                         )}
                         {user && !isOwner && (
@@ -1277,7 +1394,7 @@ const ProfilePage = () => {
                                 icon={isFollowing ? UserMinusIcon : UserPlusIcon}
                                 label={isFollowing ? 'Unfollow artist' : 'Follow artist'}
                                 onClick={handleFollowToggle}
-                                className={isFollowing ? 'bg-[#008dcb]/28 border-[#73cbf0]/50 hover:bg-[#008dcb]/38' : 'bg-[#008dcb]/18 border-[#73cbf0]/40 hover:bg-[#008dcb]/28'}
+                                className={isFollowing ? 'retro-action--on' : ''}
                             />
                         )}
                         <IconActionButton
@@ -1287,7 +1404,6 @@ const ProfilePage = () => {
                                 setShareStatus('');
                                 setIsShareModalOpen(true);
                             }}
-                            className="bg-[#008dcb]/16 border-[#73cbf0]/40 hover:bg-[#008dcb]/26"
                         />
                         {!isOwner && profile.solana_address && (
                             <IconActionButton
@@ -1308,7 +1424,6 @@ const ProfilePage = () => {
                                 icon={BanknotesIcon}
                                 label={`Pay owed IDJC (${profile.unpaid})`}
                                 onClick={handlePayOwed}
-                                className="bg-[#008dcb]/30 border-[#73cbf0]/50 hover:bg-[#008dcb]/40"
                             />
                         )}
                     </div>
@@ -1316,142 +1431,142 @@ const ProfilePage = () => {
                     {isOwner && isEditing && (
                         <form onSubmit={handleSubmit} className="mt-6 space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Name</label>
+                                <label className="retro-label">Name</label>
                                 <input
                                     type="text"
                                     name="name"
                                     value={formData.name}
                                     onChange={handleInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Genre</label>
+                                <label className="retro-label">Genre</label>
                                 <input
                                     type="text"
                                     name="genre"
                                     value={formData.genre}
                                     onChange={handleInputChange}
                                     required
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Location</label>
+                                <label className="retro-label">Location</label>
                                 <input
                                     type="text"
                                     name="location"
                                     value={formData.location}
                                     onChange={handleInputChange}
                                     placeholder="City, State / Country"
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Description</label>
+                                <label className="retro-label">Description</label>
                                 <textarea
                                     name="description"
                                     value={formData.description}
                                     onChange={handleInputChange}
                                     rows="4"
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Donation Link (e.g., PayPal, Patreon)</label>
+                                <label className="retro-label">Donation Link (e.g., PayPal, Patreon)</label>
                                 <input
                                     type="url"
                                     name="donation_link"
                                     value={formData.donation_link}
                                     onChange={handleInputChange}
                                     placeholder="https://www.paypal.me/username"
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300">Website</label>
-                                    <input type="url" name="website_url" value={formData.website_url} onChange={handleInputChange} placeholder="https://yourwebsite.com" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                    <label className="retro-label">Website</label>
+                                    <input type="url" name="website_url" value={formData.website_url} onChange={handleInputChange} placeholder="https://yourwebsite.com" className="retro-field mt-1" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300">X</label>
-                                    <input type="url" name="x_url" value={formData.x_url} onChange={handleInputChange} placeholder="https://x.com/username" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                    <label className="retro-label">X</label>
+                                    <input type="url" name="x_url" value={formData.x_url} onChange={handleInputChange} placeholder="https://x.com/username" className="retro-field mt-1" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300">Facebook</label>
-                                    <input type="url" name="facebook_url" value={formData.facebook_url} onChange={handleInputChange} placeholder="https://facebook.com/username" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                    <label className="retro-label">Facebook</label>
+                                    <input type="url" name="facebook_url" value={formData.facebook_url} onChange={handleInputChange} placeholder="https://facebook.com/username" className="retro-field mt-1" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300">YouTube</label>
-                                    <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleInputChange} placeholder="https://youtube.com/@channel" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                    <label className="retro-label">YouTube</label>
+                                    <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleInputChange} placeholder="https://youtube.com/@channel" className="retro-field mt-1" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300">Instagram</label>
-                                    <input type="url" name="instagram_url" value={formData.instagram_url} onChange={handleInputChange} placeholder="https://instagram.com/username" className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm" />
+                                    <label className="retro-label">Instagram</label>
+                                    <input type="url" name="instagram_url" value={formData.instagram_url} onChange={handleInputChange} placeholder="https://instagram.com/username" className="retro-field mt-1" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Solana Address (Optional)</label>
+                                <label className="retro-label">Solana Address (Optional)</label>
                                 <input
                                     type="text"
                                     name="solana_address"
                                     value={formData.solana_address}
                                     onChange={handleInputChange}
                                     placeholder="Enter your Solana wallet address"
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 />
-                                <p className="mt-1 text-sm text-gray-400">
+                                <p className="retro-mono text-lg text-gray-400 mt-1">
                                     Your Solana address is used to receive IDJ Coin grants and donations for your contributions to InternetDJ.{' '}
                                     <a
                                         href="https://phantom.app/"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-primary-brand-300 hover:underline"
+                                        className="retro-link retro-mono text-lg"
                                     >
                                         Get one with Phantom
                                     </a>
                                 </p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Profile Picture</label>
+                                <label className="retro-label">Profile Picture</label>
                                 <input
                                     type="file"
                                     name="picture"
                                     onChange={handleFileChange}
                                     accept="image/*"
-                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+                                    className="retro-mono text-lg text-gray-300 mt-1 block w-full file:mr-4 file:py-1 file:px-3 file:border file:border-cyan-400/40 file:bg-cyan-400/10 file:text-cyan-200 file:font-normal hover:file:bg-cyan-400/20"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Background</label>
+                                <label className="retro-label">Background</label>
                                 <button
                                     type="button"
                                     onClick={() => setIsBackgroundModalOpen(true)}
-                                    className="mt-1 w-full py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand border border-white/10"
+                                    className="retro-btn mt-1 w-full py-2 px-4 text-xs"
                                 >
                                     Choose Background
                                 </button>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Upload Page Background Image</label>
+                                <label className="retro-label">Upload Page Background Image</label>
                                 <input
                                     type="file"
                                     name="backgroundImage"
                                     onChange={handleFileChange}
                                     accept="image/*"
                                     ref={backgroundImageInputRef}
-                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+                                    className="retro-mono text-lg text-gray-300 mt-1 block w-full file:mr-4 file:py-1 file:px-3 file:border file:border-cyan-400/40 file:bg-cyan-400/10 file:text-cyan-200 file:font-normal hover:file:bg-cyan-400/20"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Upload Header Background Image</label>
+                                <label className="retro-label">Upload Header Background Image</label>
                                 <input
                                     type="file"
                                     name="heroBackgroundImage"
                                     onChange={handleFileChange}
                                     accept="image/*"
-                                    className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+                                    className="retro-mono text-lg text-gray-300 mt-1 block w-full file:mr-4 file:py-1 file:px-3 file:border file:border-cyan-400/40 file:bg-cyan-400/10 file:text-cyan-200 file:font-normal hover:file:bg-cyan-400/20"
                                 />
                             </div>
                             <div>
@@ -1491,20 +1606,58 @@ const ProfilePage = () => {
                     )}
                 </div>
 
+                {songs.length > 0 && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">{formatCount(discographyStats.tracks)}</span>
+                            <span className="retro-stat__label">Tracks</span>
+                        </div>
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">{formatCount(discographyStats.totalPlays)}</span>
+                            <span className="retro-stat__label">Plays</span>
+                        </div>
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">{formatCount(followerCount)}</span>
+                            <span className="retro-stat__label">Followers</span>
+                        </div>
+                        <div className="retro-stat">
+                            <span className="retro-stat__value">
+                                {discographyStats.newest ? new Date(discographyStats.newest).toLocaleDateString() : '\u2014'}
+                            </span>
+                            <span className="retro-stat__label">Latest Drop</span>
+                        </div>
+                    </div>
+                )}
+
+                {artistGenres.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 mb-8">
+                        <span className="retro-eyebrow mr-1">Files Under</span>
+                        {artistGenres.map((genre) => (
+                            <Link
+                                key={genre.label}
+                                to={`/tag/${encodeURIComponent(genre.label)}`}
+                                className="retro-chip capitalize"
+                            >
+                                {genre.label} <span className="text-cyan-300/60">{genre.count}</span>
+                            </Link>
+                        ))}
+                    </div>
+                )}
+
                 <div className="flex flex-col lg:flex-row lg:items-start gap-8">
-                    <div className="lg:w-[65%] bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                    <div className="lg:w-[65%] retro-panel retro-cut p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                            <h2 className="text-2xl font-bold">Songs</h2>
+                            <h2 className="retro-display text-lg retro-glow-magenta">Songs</h2>
                             {isOwner && songs.length > 0 && (
                                 <div className="flex items-center gap-2">
-                                    <label htmlFor="featured-song" className="text-sm text-gray-300 whitespace-nowrap">
+                                    <label htmlFor="featured-song" className="retro-label mb-0 whitespace-nowrap">
                                         Featured song
                                     </label>
                                     <select
                                         id="featured-song"
                                         value={featuredSong?.id || ''}
                                         onChange={(e) => handleFeaturedSongChange(e.target.value)}
-                                        className="px-3 py-2 border border-white/10 rounded-md bg-white/5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand"
+                                        className="retro-field w-auto"
                                     >
                                         <option value="">None</option>
                                         {songs.map((song) => (
@@ -1517,14 +1670,51 @@ const ProfilePage = () => {
                             )}
                         </div>
 
+                        {songs.length > 0 && (
+                            <>
+                                <div className="flex flex-wrap items-center gap-3 mb-4">
+                                    <button
+                                        onClick={playDiscography}
+                                        className="retro-btn retro-btn--hot px-5 py-3 text-xs"
+                                    >
+                                        <PlayIcon className="w-4 h-4" /> Play All
+                                    </button>
+                                    <div className="flex items-center gap-1 ml-auto">
+                                        {['list', 'crate'].map((mode) => (
+                                            <button
+                                                key={mode}
+                                                onClick={() => { stopPreview(); setSongView(mode); }}
+                                                className={`retro-btn px-4 py-2 text-[0.6rem] ${songView === mode ? 'retro-btn--hot' : ''}`}
+                                                aria-pressed={songView === mode}
+                                            >
+                                                {mode}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2 mb-5">
+                                    {SONG_SORTS.map((option) => (
+                                        <button
+                                            key={option.id}
+                                            onClick={() => setSongSort(option.id)}
+                                            className={`retro-btn px-4 py-2 text-[0.6rem] ${songSort === option.id ? 'retro-btn--hot' : ''}`}
+                                            title={option.id === 'deep' ? 'Barely-heard tracks that the few who found them liked' : undefined}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
                         {songs.length === 0 ? (
-                            <p>No songs found for this profile.</p>
+                            <p className="retro-mono text-xl text-gray-400">&gt; no songs yet.</p>
                         ) : (
                             <div className="space-y-6">
                                 {featuredSong && (
-                                    <div className="border border-primary-brand-400/40 bg-primary-brand-500/10 rounded-md p-3">
-                                        <p className="text-xs uppercase tracking-wide text-primary-brand-300 mb-2">Featured</p>
-                                        <div className="flex items-start space-x-4 p-4 bg-white/5 rounded-md shadow-sm border border-white/10 hover:bg-white/10 transition-colors">
+                                    <div className="border border-fuchsia-500/50 bg-fuchsia-500/10 p-3">
+                                        <p className="retro-eyebrow mb-2">Featured</p>
+                                        <div className="retro-card retro-cut flex items-start space-x-4 p-4">
                                             <div className="relative w-32 h-32 flex-shrink-0">
                                                 {featuredSong.image_url ? (
                                                     <Link to={`/song/${featuredSong.id}`}>
@@ -1563,11 +1753,11 @@ const ProfilePage = () => {
                                             <div className="flex-1">
                                                 <Link
                                                     to={`/song/${featuredSong.id}`}
-                                                    className="text-lg font-semibold text-gray-100 hover:text-primary-brand-300 hover:underline"
+                                                    className="retro-display text-xs text-white hover:text-cyan-200"
                                                 >
                                                     {featuredSong.title}
                                                 </Link>
-                                                <div className="text-sm text-gray-300 flex items-center gap-x-2">
+                                                <div className="retro-mono text-lg text-cyan-300/80 flex items-center gap-x-2">
                                                     {featuredSong.genre && <span>{featuredSong.genre}</span>}
                                                     {featuredSong.genre && <span> | </span>}
                                                     <span className="inline-flex items-center">
@@ -1585,17 +1775,87 @@ const ProfilePage = () => {
                                                     </span>
                                                 </div>
                                                 {featuredSong.description && (
-                                                    <p className="text-sm text-gray-300 mt-1">{featuredSong.description}</p>
+                                                    <p className="retro-mono text-lg text-gray-300 mt-1">{featuredSong.description}</p>
                                                 )}
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
+                                {songView === 'crate' ? (
+                                    <div className="retro-crate" onMouseLeave={stopPreview}>
+                                        {sortedSongs.map((song) => (
+                                            <div
+                                                key={song.id}
+                                                className="retro-crate__sleeve"
+                                                onMouseEnter={() => startPreview(song)}
+                                                onMouseLeave={stopPreview}
+                                            >
+                                                <div className="retro-crate__art retro-scanlines">
+                                                    {song.image_url ? (
+                                                        <img
+                                                            src={song.image_url}
+                                                            alt={song.title}
+                                                            loading="lazy"
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center retro-pixel text-[0.5rem] text-cyan-200">
+                                                            NO ART
+                                                        </div>
+                                                    )}
+                                                    {previewingId === song.id && (
+                                                        <span className="retro-preview-badge">
+                                                            <span className="retro-eq" style={{ height: '0.5rem' }}>
+                                                                <span /><span /><span /><span />
+                                                            </span>
+                                                            Previewing
+                                                        </span>
+                                                    )}
+                                                    {song.mp3_url && (
+                                                        <button
+                                                            onClick={() => {
+                                                                if (currentSong?.id === song.id) {
+                                                                    togglePlayPause();
+                                                                } else {
+                                                                    stopPreview();
+                                                                    handleSongPlay(song);
+                                                                }
+                                                            }}
+                                                            className="retro-play-overlay z-20"
+                                                            aria-label={currentSong?.id === song.id && isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
+                                                        >
+                                                            {currentSong?.id === song.id && isPlaying
+                                                                ? <PauseIcon className="w-9 h-9" />
+                                                                : <PlayIcon className="w-9 h-9" />}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="mt-3">
+                                                    <Link
+                                                        to={`/song/${song.id}`}
+                                                        className="retro-display text-[0.7rem] text-white hover:text-cyan-200 block truncate"
+                                                        title={song.title}
+                                                    >
+                                                        {song.title}
+                                                    </Link>
+                                                    <span className="retro-mono text-lg text-cyan-300/80">
+                                                        {formatCount(song.plays)} plays
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
                                 <div className="space-y-6">
-                                    {nonFeaturedSongs.map((song) => (
-                                        <div key={song.id} className="flex items-start space-x-4 p-4 bg-white/5 rounded-md shadow-sm border border-white/10 hover:bg-white/10 transition-colors">
-                                            <div className="relative w-32 h-32 flex-shrink-0">
+                                    {sortedSongs.map((song) => (
+                                        <div key={song.id} className="retro-card retro-cut flex items-start space-x-4 p-4">
+                                            <div
+                                                className="relative w-32 h-32 flex-shrink-0"
+                                                onMouseEnter={() => startPreview(song)}
+                                                onMouseLeave={stopPreview}
+                                            >
                                                 {song.image_url ? (
                                                     <Link to={`/song/${song.id}`}>
                                                         <img
@@ -1633,11 +1893,11 @@ const ProfilePage = () => {
                                             <div className="flex-1">
                                                 <Link
                                                     to={`/song/${song.id}`}
-                                                    className="text-lg font-semibold text-gray-100 hover:text-primary-brand-300 hover:underline"
+                                                    className="retro-display text-xs text-white hover:text-cyan-200"
                                                 >
                                                     {song.title}
                                                 </Link>
-                                                <div className="text-sm text-gray-300 flex items-center gap-x-2">
+                                                <div className="retro-mono text-lg text-cyan-300/80 flex items-center gap-x-2">
                                                     {song.genre && <span>{song.genre}</span>}
                                                     {song.genre && <span> | </span>}
                                                     <span className="inline-flex items-center">
@@ -1655,20 +1915,21 @@ const ProfilePage = () => {
                                                     </span>
                                                 </div>
                                                 {song.description && (
-                                                    <p className="text-sm text-gray-300 mt-1">{song.description}</p>
+                                                    <p className="retro-mono text-lg text-gray-300 mt-1">{song.description}</p>
                                                 )}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
+                                )}
                             </div>
                         )}
                     </div>
 
                     <div className="lg:w-[35%] space-y-6">
-                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                        <div className="retro-panel retro-cut p-6">
                             <div className="space-y-3 text-gray-200">
-                                <div className={`${!isArtistInfoExpanded && shouldClampArtistInfo ? 'max-h-44 overflow-hidden' : ''}`}>
+                                <div className={`retro-mono text-xl leading-snug text-gray-200 ${!isArtistInfoExpanded && shouldClampArtistInfo ? 'max-h-44 overflow-hidden' : ''}`}>
                                     {profile.description ? (
                                         <div
                                             className="text-gray-300"
@@ -1688,7 +1949,7 @@ const ProfilePage = () => {
                                                         href={link.href}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                                                        className="retro-chip inline-flex items-center gap-1.5 px-2.5 py-1.5"
                                                         title={link.label}
                                                     >
                                                         <Icon className="w-4 h-4" />
@@ -1703,7 +1964,7 @@ const ProfilePage = () => {
                                 {shouldClampArtistInfo && (
                                     <button
                                         onClick={() => setIsArtistInfoExpanded((prev) => !prev)}
-                                        className="text-sm text-primary-brand-300 hover:text-primary-brand-200"
+                                        className="retro-mono text-lg retro-link"
                                     >
                                         {isArtistInfoExpanded ? 'Show less' : 'Show more'}
                                     </button>
@@ -1711,10 +1972,10 @@ const ProfilePage = () => {
                             </div>
                         </div>
 
-                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                        <div className="retro-panel retro-cut p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xl font-semibold">Followers</h3>
-                                <span className="text-sm text-gray-400">{followerCount}</span>
+                                <h3 className="retro-display text-base retro-glow-cyan">Followers</h3>
+                                <span className="retro-mono text-xl text-fuchsia-400">{followerCount}</span>
                             </div>
                             {followers.length === 0 ? (
                                 <p className="text-gray-400">No followers yet.</p>
@@ -1726,7 +1987,7 @@ const ProfilePage = () => {
                                         const actionPending = memberFollowActionIds.includes(memberProfileId);
 
                                         return (
-                                            <div key={`follower-${member.profile_id}`} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-white/10 transition-colors">
+                                            <div key={`follower-${member.profile_id}`} className="flex items-center justify-between gap-2 p-2 border-l-2 border-transparent hover:border-fuchsia-500 hover:bg-cyan-400/10 transition-colors">
                                                 <Link
                                                     to={`/profile/${member.profile_id}`}
                                                     className="flex items-center gap-3 min-w-0"
@@ -1734,18 +1995,18 @@ const ProfilePage = () => {
                                                     <img
                                                         src={member.picture_url || getDefaultAvatar(member.profile_id || member.user_id || member.name)}
                                                         alt={member.name}
-                                                        className="w-9 h-9 rounded-full object-cover"
+                                                        className="w-9 h-9 object-cover border border-cyan-400/40"
                                                         onError={(e) => {
                                                             e.currentTarget.src = getDefaultAvatar(member.profile_id || member.user_id || member.name);
                                                         }}
                                                     />
-                                                    <span className="text-sm text-gray-100 truncate">{member.name}</span>
+                                                    <span className="retro-mono text-xl text-gray-100 truncate">{member.name}</span>
                                                 </Link>
                                                 {isOwner && memberProfileId !== Number(profile.id) && (
                                                     <button
                                                         onClick={() => handleMemberFollowToggle(member, currentlyFollowing)}
                                                         disabled={actionPending}
-                                                        className={`text-xs px-2 py-1 rounded-md border border-white/10 whitespace-nowrap ${currentlyFollowing ? 'bg-white/10 hover:bg-white/20 text-gray-100' : 'bg-primary-brand hover:bg-primary-brand-500 text-white'} disabled:opacity-60 disabled:cursor-not-allowed`}
+                                                        className={`text-[0.6rem] px-2 py-1 whitespace-nowrap ${currentlyFollowing ? 'retro-btn' : 'retro-btn retro-btn--hot'} disabled:opacity-60 disabled:cursor-not-allowed`}
                                                     >
                                                         {actionPending ? 'Saving...' : currentlyFollowing ? 'Following' : 'Follow back'}
                                                     </button>
@@ -1757,10 +2018,10 @@ const ProfilePage = () => {
                             )}
                         </div>
 
-                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
+                        <div className="retro-panel retro-cut p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xl font-semibold">Following</h3>
-                                <span className="text-sm text-gray-400">{followingCount}</span>
+                                <h3 className="retro-display text-base retro-glow-cyan">Following</h3>
+                                <span className="retro-mono text-xl text-fuchsia-400">{followingCount}</span>
                             </div>
                             {followingProfiles.length === 0 ? (
                                 <p className="text-gray-400">Not following anyone yet.</p>
@@ -1772,7 +2033,7 @@ const ProfilePage = () => {
                                         const followsYou = followerProfileIdSet.has(memberProfileId);
 
                                         return (
-                                            <div key={`following-${member.profile_id}`} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-white/10 transition-colors">
+                                            <div key={`following-${member.profile_id}`} className="flex items-center justify-between gap-2 p-2 border-l-2 border-transparent hover:border-fuchsia-500 hover:bg-cyan-400/10 transition-colors">
                                                 <Link
                                                     to={`/profile/${member.profile_id}`}
                                                     className="flex items-center gap-3 min-w-0"
@@ -1780,14 +2041,14 @@ const ProfilePage = () => {
                                                     <img
                                                         src={member.picture_url || getDefaultAvatar(member.profile_id || member.user_id || member.name)}
                                                         alt={member.name}
-                                                        className="w-9 h-9 rounded-full object-cover"
+                                                        className="w-9 h-9 object-cover border border-cyan-400/40"
                                                         onError={(e) => {
                                                             e.currentTarget.src = getDefaultAvatar(member.profile_id || member.user_id || member.name);
                                                         }}
                                                     />
-                                                    <span className="text-sm text-gray-100 truncate">{member.name}</span>
+                                                    <span className="retro-mono text-xl text-gray-100 truncate">{member.name}</span>
                                                     {isOwner && followsYou && (
-                                                        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border border-primary-brand-400/40 bg-primary-brand-500/15 text-primary-brand-200">
+                                                        <span className="retro-badge retro-badge--live">
                                                             Follows you
                                                         </span>
                                                     )}
@@ -1796,7 +2057,7 @@ const ProfilePage = () => {
                                                     <button
                                                         onClick={() => handleMemberFollowToggle(member, true)}
                                                         disabled={actionPending}
-                                                        className="text-xs px-2 py-1 rounded-md border border-white/10 bg-white/10 hover:bg-white/20 text-gray-100 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        className="retro-btn text-[0.6rem] px-2 py-1 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                                                     >
                                                         {actionPending ? 'Saving...' : 'Unfollow'}
                                                     </button>
@@ -1808,8 +2069,8 @@ const ProfilePage = () => {
                             )}
                         </div>
 
-                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                            <h3 className="text-xl font-semibold mb-4">Liked Songs</h3>
+                        <div className="retro-panel retro-cut p-6">
+                            <h3 className="retro-display text-base retro-glow-cyan mb-4">Liked Songs</h3>
                             {likedSongsByArtist.length === 0 ? (
                                 <p className="text-gray-400">No liked songs from other artists yet.</p>
                             ) : (
@@ -1858,10 +2119,10 @@ const ProfilePage = () => {
                                                 </div>
 
                                                 <div className="min-w-0 flex-1">
-                                                    <Link to={`/song/${song.id}`} className="text-sm text-gray-100 hover:text-primary-brand-300 hover:underline block truncate">
+                                                    <Link to={`/song/${song.id}`} className="retro-mono text-lg text-gray-100 hover:text-cyan-200 block truncate">
                                                         {song.title}
                                                     </Link>
-                                                    <Link to={`/profile/${song.profile_id}`} className="text-xs text-gray-400 hover:text-primary-brand-300 hover:underline block truncate">
+                                                    <Link to={`/profile/${song.profile_id}`} className="retro-mono text-base retro-link block truncate">
                                                         by {song.profile_name}
                                                     </Link>
                                                 </div>
@@ -1887,23 +2148,23 @@ const ProfilePage = () => {
                             )}
                         </div>
 
-                        <div className="bg-zinc-900/85 border border-white/10 p-6 rounded-lg shadow-xl backdrop-blur-sm">
-                            <h3 className="text-xl font-semibold mb-4">Latest Reviews</h3>
+                        <div className="retro-panel retro-cut p-6">
+                            <h3 className="retro-display text-base retro-glow-cyan mb-4">Latest Reviews</h3>
                             {latestArtistReviews.length === 0 ? (
                                 <p className="text-gray-400">No recent reviews on other artists yet.</p>
                             ) : (
                                 <div className="max-h-72 overflow-y-auto space-y-3 pr-1">
                                     {latestArtistReviews.map((review) => (
-                                        <div key={`artist-review-${review.id}`} className="p-2 rounded-md border border-white/10 bg-white/5">
+                                        <div key={`artist-review-${review.id}`} className="retro-card retro-cut p-2">
                                             <Link
                                                 to={`/song/${review.song_id}`}
-                                                className="text-sm text-gray-100 hover:text-primary-brand-300 hover:underline block truncate"
+                                                className="retro-mono text-lg text-gray-100 hover:text-cyan-200 block truncate"
                                             >
                                                 {review.song_title}
                                             </Link>
                                             <Link
                                                 to={`/profile/${review.song_profile_id}`}
-                                                className="text-xs text-gray-400 hover:text-primary-brand-300 hover:underline"
+                                                className="retro-mono text-base retro-link"
                                             >
                                                 by {review.song_artist_name}
                                             </Link>
@@ -1921,27 +2182,33 @@ const ProfilePage = () => {
 
             {isBackgroundModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 text-gray-100">
-                        <h3 className="text-xl font-bold mb-4">Choose a Background</h3>
-                        <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="retro-panel retro-cut p-6 max-w-lg w-full mx-4 text-gray-100">
+                        <h3 className="retro-display text-base retro-glow-cyan mb-4">Choose a Background</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 max-h-[55vh] overflow-y-auto">
                             {backgroundOptions.map((option) => (
-                                <div
+                                <button
+                                    type="button"
                                     key={option.id}
-                                    className={`w-16 h-16 rounded-md cursor-pointer border-2 ${
-                                        formData.background === option.id ? 'border-primary-brand-400' : 'border-white/10'
-                                    } hover:border-primary-brand transition-colors`}
-                                    style={{ background: `var(--${option.class})` }}
+                                    className={`cursor-pointer border-2 p-0 transition-all ${
+                                        formData.background === option.id
+                                            ? 'border-fuchsia-400 shadow-[0_0_18px_rgba(255,47,142,0.6)]'
+                                            : 'border-cyan-400/25 hover:border-cyan-400'
+                                    }`}
                                     onClick={() => handleBackgroundSelect(option.id)}
                                     title={option.name}
+                                    aria-pressed={formData.background === option.id}
                                 >
-                                    <div className={`${option.class} w-full h-full rounded-md`}></div>
-                                </div>
+                                    <div className={`${option.class} w-full h-14`}></div>
+                                    <div className="retro-mono text-base text-cyan-200 py-1 px-1 truncate bg-black/70">
+                                        {option.name}
+                                    </div>
+                                </button>
                             ))}
                         </div>
                         <button
                             type="button"
                             onClick={() => setIsBackgroundModalOpen(false)}
-                            className="w-full py-2 px-4 bg-white/10 text-white font-semibold rounded-md shadow-sm hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                            className="retro-btn w-full py-2 px-4 text-xs"
                         >
                             Close
                         </button>
@@ -1951,15 +2218,15 @@ const ProfilePage = () => {
 
             {isShareModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                    <div className="bg-zinc-900/95 border border-white/10 p-6 rounded-lg shadow-xl max-w-lg w-full text-gray-100">
-                        <h2 className="text-xl font-bold mb-2">Share Profile</h2>
-                        <p className="text-sm text-gray-300 mb-4">Copy or open the direct link to this artist profile.</p>
+                    <div className="retro-panel retro-cut p-6 max-w-lg w-full text-gray-100">
+                        <h2 className="retro-display text-base retro-glow-cyan mb-2">Share Profile</h2>
+                        <p className="retro-mono text-lg text-gray-400 mb-4">&gt; copy or open the direct link to this profile.</p>
                         <div className="flex flex-col sm:flex-row gap-3">
                             <input
                                 type="text"
                                 value={profileShareUrl}
                                 readOnly
-                                className="flex-1 px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none sm:text-sm"
+                                className="retro-field flex-1"
                             />
                             <button
                                 type="button"
@@ -1996,8 +2263,8 @@ const ProfilePage = () => {
 
             {isSendCoinModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-md w-full mx-4 text-gray-100">
-                        <h3 className="text-xl font-bold mb-4">Pay owed IDJC to {profile.name}</h3>
+                    <div className="retro-panel retro-cut p-6 max-w-md w-full mx-4 text-gray-100">
+                        <h3 className="retro-display text-base retro-glow-cyan mb-4">Pay owed IDJC to {profile.name}</h3>
                         {sendError && (
                             <p className="text-red-400 text-sm mb-4" dangerouslySetInnerHTML={{ __html: sendError }}></p>
                         )}
@@ -2006,11 +2273,11 @@ const ProfilePage = () => {
                         )}
                         {availableWallets.length > 1 && (
                             <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-300">Wallet</label>
+                                <label className="retro-label">Wallet</label>
                                 <select
                                     value={selectedWalletKey || ''}
                                     onChange={(e) => setSelectedWalletKey(e.target.value)}
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 >
                                     {availableWallets.map((wallet) => (
                                         <option key={wallet.key} value={wallet.key}>{wallet.label}</option>
@@ -2030,13 +2297,13 @@ const ProfilePage = () => {
                             </p>
                         )}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-300">Amount (IDJ Coin)</label>
+                            <label className="retro-label">Amount (IDJ Coin)</label>
                             <input
                                 type="number"
                                 value={sendAmount}
                                 onChange={handleSendAmountChange}
                                 placeholder="Enter amount"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                                 min="0"
                                 step="0.000000001"
                             />
@@ -2066,8 +2333,8 @@ const ProfilePage = () => {
 
             {isGiftCoinModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-zinc-900/95 border border-white/10 rounded-lg shadow-xl p-6 max-w-md w-full mx-4 text-gray-100">
-                        <h3 className="text-xl font-bold mb-4">Gift IDJ Coin to {profile.name}</h3>
+                    <div className="retro-panel retro-cut p-6 max-w-md w-full mx-4 text-gray-100">
+                        <h3 className="retro-display text-base retro-glow-cyan mb-4">Gift IDJ Coin to {profile.name}</h3>
                         {giftError && (
                             <p className="text-red-400 text-sm mb-4" dangerouslySetInnerHTML={{ __html: giftError }}></p>
                         )}
@@ -2076,11 +2343,11 @@ const ProfilePage = () => {
                         )}
                         {availableWallets.length > 1 && (
                             <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-300">Wallet</label>
+                                <label className="retro-label">Wallet</label>
                                 <select
                                     value={selectedWalletKey || ''}
                                     onChange={(e) => setSelectedWalletKey(e.target.value)}
-                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                    className="retro-field mt-1"
                                 >
                                     {availableWallets.map((wallet) => (
                                         <option key={wallet.key} value={wallet.key}>{wallet.label}</option>
@@ -2100,13 +2367,13 @@ const ProfilePage = () => {
                             </p>
                         )}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-300">Gift amount (IDJ Coin)</label>
+                            <label className="retro-label">Gift amount (IDJ Coin)</label>
                             <input
                                 type="number"
                                 value={giftAmount}
                                 onChange={handleGiftAmountChange}
                                 placeholder="Enter gift amount"
-                                className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                className="retro-field mt-1"
                                 min="0"
                                 step="0.000000001"
                             />

@@ -50,23 +50,24 @@ function ResetPassword() {
     };
 
     return (
-        <div className="min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full spotify-surface p-8">
-                <h1 className="text-3xl font-bold text-white text-center mb-6">Reset Password</h1>
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 min-h-screen text-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="retro-panel retro-cut max-w-md w-full p-8">
+                <div className="retro-eyebrow text-center mb-3">&gt;&gt; Recovery</div>
+                <h1 className="retro-display retro-chrome text-2xl text-center mb-6">Reset Password</h1>
                 {error && (
-                    <div className="mb-6 p-4 bg-red-500/10 border border-red-400 text-red-300 rounded-md">
+                    <div className="mb-6 p-4 border border-fuchsia-500/60 bg-fuchsia-500/10 retro-mono text-lg text-fuchsia-200">
                         {error}
                     </div>
                 )}
                 {success && (
-                    <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-400 text-emerald-300 rounded-md">
+                    <div className="mb-6 p-4 border border-cyan-400/60 bg-cyan-400/10 retro-mono text-lg text-cyan-200">
                         {success}
                     </div>
                 )}
 
                 <form onSubmit={handleResetPassword} className="space-y-6">
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                        <label htmlFor="password" className="retro-label">
                             New Password
                         </label>
                         <input
@@ -74,23 +75,23 @@ function ResetPassword() {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-primary-brand focus:border-primary-brand"
+                            className="retro-field mt-1"
                             placeholder="Enter your new password"
                             required
                         />
                     </div>
                     <button
                         type="submit"
-                        className="w-full spotify-pill px-6 py-3 rounded-full transition-colors duration-200"
+                        className="retro-btn retro-btn--hot w-full px-6 py-3 text-xs"
                     >
                         Reset Password
                     </button>
                 </form>
 
                 <div className="text-center mt-4">
-                    <p className="text-sm text-gray-300">
+                    <p className="retro-mono text-lg text-gray-400">
                         Return to{' '}
-                        <Link to="/login" className="text-primary-brand-300 hover:text-primary-brand-200 font-medium">
+                        <Link to="/login" className="retro-link">
                             Login
                         </Link>
                     </p>

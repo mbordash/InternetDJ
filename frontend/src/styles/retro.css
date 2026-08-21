@@ -1,0 +1,933 @@
+/* ==========================================================================
+   InternetDJ — RETRO NEON SKIN  ("est. 1997")
+   A vaporwave / rave-flyer visual layer that sits on top of the modern
+   responsive layout. Skin only: no layout hacks, no fixed pixel widths.
+   ========================================================================== */
+
+:root {
+    --neon-magenta: #ff2f8e;
+    --neon-pink: #ff6ec7;
+    --neon-cyan: #00f0ff;
+    --neon-blue: #3b82f6;
+    --neon-purple: #9d4edd;
+    --neon-amber: #ffb020;
+
+    --void-0: #04010c;
+    --void-1: #0a0418;
+    --void-2: #140628;
+    --void-3: #1d0a38;
+
+    --retro-display: 'Orbitron', 'Trebuchet MS', system-ui, sans-serif;
+    --retro-pixel: 'Press Start 2P', 'Courier New', monospace;
+    --retro-mono: 'VT323', 'Courier New', monospace;
+}
+
+/* ---------- 1. Page ground ------------------------------------------------ */
+
+.retro-page {
+    position: relative;
+    isolation: isolate;
+    background:
+        radial-gradient(90rem 50rem at 50% -10%, rgba(157, 78, 221, 0.30), transparent 60%),
+        radial-gradient(60rem 40rem at 10% 15%, rgba(255, 47, 142, 0.16), transparent 65%),
+        radial-gradient(60rem 40rem at 90% 30%, rgba(0, 240, 255, 0.14), transparent 65%),
+        linear-gradient(180deg, var(--void-1) 0%, var(--void-0) 100%);
+}
+
+/* Faint starfield + fine grid wash over the whole page. */
+.retro-page::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(0, 240, 255, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 47, 142, 0.045) 1px, transparent 1px);
+    background-size: 48px 48px, 48px 48px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 70%);
+    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 70%);
+}
+
+/* ---------- 2. Type ------------------------------------------------------- */
+
+.retro-display {
+    font-family: var(--retro-display);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.retro-pixel {
+    font-family: var(--retro-pixel);
+    line-height: 1.7;
+    letter-spacing: 0.02em;
+}
+
+.retro-mono {
+    font-family: var(--retro-mono);
+    letter-spacing: 0.03em;
+}
+
+/* Liquid-chrome headline, the flyer classic. */
+.retro-chrome {
+    background: linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #dceeff 22%,
+        #7cc0ff 42%,
+        #123a72 50%,
+        #7cc0ff 58%,
+        #ffd8f2 78%,
+        #ffffff 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter:
+        drop-shadow(0 2px 0 rgba(255, 47, 142, 0.7))
+        drop-shadow(0 0 24px rgba(0, 240, 255, 0.45));
+}
+
+.retro-glow-cyan {
+    color: #d7feff;
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.9), 0 0 22px rgba(0, 240, 255, 0.5);
+}
+
+.retro-glow-magenta {
+    color: #ffe3f2;
+    text-shadow: 0 0 6px rgba(255, 47, 142, 0.9), 0 0 22px rgba(255, 47, 142, 0.5);
+}
+
+/* Small all-caps label above a heading. */
+.retro-eyebrow {
+    font-family: var(--retro-pixel);
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+/* ---------- 3. Horizon grid ---------------------------------------------- */
+
+.retro-horizon {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 55%;
+    overflow: hidden;
+    perspective: 260px;
+    perspective-origin: 50% 0%;
+    pointer-events: none;
+    mask-image: linear-gradient(180deg, transparent, #000 35%);
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 35%);
+}
+
+.retro-horizon::before {
+    content: '';
+    position: absolute;
+    left: -60%;
+    right: -60%;
+    top: 0;
+    bottom: -120%;
+    background-image:
+        linear-gradient(90deg, rgba(0, 240, 255, 0.55) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 47, 142, 0.45) 1px, transparent 1px);
+    background-size: 64px 64px;
+    transform: rotateX(74deg);
+    transform-origin: 50% 0%;
+    animation: retro-grid-run 5s linear infinite;
+    will-change: background-position;
+}
+
+@keyframes retro-grid-run {
+    from { background-position: 0 0, 0 0; }
+    to   { background-position: 0 0, 0 64px; }
+}
+
+/* The sun on the horizon. */
+.retro-sun {
+    position: absolute;
+    left: 50%;
+    bottom: 18%;
+    width: min(24rem, 60vw);
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: linear-gradient(180deg, #ffd166 0%, #ff6ec7 55%, #ff2f8e 100%);
+    filter: blur(0.5px);
+    opacity: 0.42;
+    pointer-events: none;
+    mask-image:
+        linear-gradient(180deg, #000 0 52%, transparent 52%),
+        repeating-linear-gradient(180deg, #000 0 6px, transparent 6px 12px);
+    -webkit-mask-image:
+        linear-gradient(180deg, #000 0 52%, transparent 52%),
+        repeating-linear-gradient(180deg, #000 0 6px, transparent 6px 12px);
+    mask-composite: intersect;
+    -webkit-mask-composite: source-in;
+}
+
+/* ---------- 4. Surfaces --------------------------------------------------- */
+
+.retro-panel {
+    position: relative;
+    background:
+        linear-gradient(165deg, rgba(29, 10, 56, 0.92) 0%, rgba(10, 4, 24, 0.95) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.28);
+    box-shadow:
+        0 0 0 1px rgba(255, 47, 142, 0.12),
+        0 10px 34px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Cut corners — the laser-cut flyer edge. */
+.retro-cut {
+    clip-path: polygon(
+        14px 0, 100% 0, 100% calc(100% - 14px),
+        calc(100% - 14px) 100%, 0 100%, 0 14px
+    );
+}
+
+.retro-card {
+    position: relative;
+    background: linear-gradient(165deg, rgba(29, 10, 56, 0.88) 0%, rgba(8, 3, 20, 0.94) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.22);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.retro-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255, 47, 142, 0.75);
+    box-shadow:
+        0 0 26px rgba(255, 47, 142, 0.32),
+        0 14px 34px rgba(0, 0, 0, 0.65),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.retro-card--live {
+    border-color: rgba(0, 240, 255, 0.85);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.35), 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+/* CRT scanlines. Apply to a positioned element. */
+.retro-scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.55) 0 1px,
+        transparent 1px 5px
+    );
+    opacity: 0.16;
+}
+
+/* ---------- 5. Controls --------------------------------------------------- */
+
+.retro-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: var(--retro-display);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: 2px solid rgba(0, 240, 255, 0.6);
+    color: #eafcff;
+    background: rgba(0, 240, 255, 0.07);
+    transition: all 0.16s ease;
+    clip-path: polygon(
+        10px 0, 100% 0, 100% calc(100% - 10px),
+        calc(100% - 10px) 100%, 0 100%, 0 10px
+    );
+}
+
+.retro-btn:hover {
+    background: rgba(0, 240, 255, 0.16);
+    box-shadow: 0 0 22px rgba(0, 240, 255, 0.45);
+    color: #ffffff;
+}
+
+.retro-btn--hot {
+    border-color: rgba(255, 47, 142, 0.85);
+    color: #0b0114;
+    background: linear-gradient(100deg, var(--neon-magenta), var(--neon-purple) 55%, var(--neon-cyan));
+    box-shadow: 0 0 24px rgba(255, 47, 142, 0.5);
+}
+
+.retro-btn--hot:hover {
+    box-shadow: 0 0 38px rgba(255, 47, 142, 0.75);
+    filter: brightness(1.1);
+    color: #0b0114;
+}
+
+.retro-link {
+    color: var(--neon-cyan);
+    text-decoration: none;
+    transition: color 0.15s ease, text-shadow 0.15s ease;
+}
+
+.retro-link:hover {
+    color: var(--neon-pink);
+    text-shadow: 0 0 12px rgba(255, 110, 199, 0.7);
+}
+
+/* ---------- 6. Section headings ------------------------------------------ */
+
+.retro-rule {
+    height: 2px;
+    background: linear-gradient(90deg, var(--neon-magenta), var(--neon-purple), var(--neon-cyan), transparent);
+    box-shadow: 0 0 12px rgba(157, 78, 221, 0.6);
+}
+
+/* ---------- 7. Ticker ----------------------------------------------------- */
+
+.retro-ticker {
+    position: relative;
+    overflow: hidden;
+    border-top: 1px solid rgba(255, 47, 142, 0.35);
+    border-bottom: 1px solid rgba(0, 240, 255, 0.35);
+    background: linear-gradient(90deg, rgba(255, 47, 142, 0.1), rgba(0, 240, 255, 0.1));
+}
+
+.retro-ticker__track {
+    display: inline-flex;
+    align-items: center;
+    gap: 2.5rem;
+    white-space: nowrap;
+    padding-block: 0.5rem;
+    animation: retro-ticker-run 38s linear infinite;
+    will-change: transform;
+}
+
+/* Pause for mouse users AND for anyone tabbing through, so the links are
+   never a moving target at the moment you try to activate one. */
+.retro-ticker:hover .retro-ticker__track,
+.retro-ticker:focus-within .retro-ticker__track {
+    animation-play-state: paused;
+}
+
+.retro-ticker__item {
+    color: inherit;
+    text-decoration: none;
+    padding: 0.1rem 0.2rem;
+    transition: color 0.15s ease, text-shadow 0.15s ease;
+}
+
+.retro-ticker__item:hover {
+    color: #ffe3f2;
+    text-shadow: 0 0 12px rgba(255, 110, 199, 0.8);
+}
+
+.retro-ticker__item:focus-visible {
+    outline: 2px solid var(--neon-cyan);
+    outline-offset: 2px;
+    color: #ffffff;
+}
+
+@keyframes retro-ticker-run {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+}
+
+/* ---------- 8. Equalizer bars (playing indicator) ------------------------- */
+
+.retro-eq {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 0.85rem;
+}
+
+.retro-eq span {
+    width: 3px;
+    background: var(--neon-cyan);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.9);
+    animation: retro-eq-bounce 0.9s ease-in-out infinite;
+}
+
+.retro-eq span:nth-child(2) { animation-delay: 0.18s; }
+.retro-eq span:nth-child(3) { animation-delay: 0.36s; }
+.retro-eq span:nth-child(4) { animation-delay: 0.54s; }
+
+@keyframes retro-eq-bounce {
+    0%, 100% { height: 25%; }
+    50%      { height: 100%; }
+}
+
+/* ---------- 9. Badges ----------------------------------------------------- */
+
+.retro-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--retro-pixel);
+    font-size: 0.5rem;
+    letter-spacing: 0.12em;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid currentColor;
+    text-transform: uppercase;
+}
+
+.retro-badge--new  { color: var(--neon-amber); text-shadow: 0 0 10px rgba(255, 176, 32, 0.6); }
+.retro-badge--live { color: var(--neon-cyan);  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6); }
+.retro-badge--hot  { color: var(--neon-pink);  text-shadow: 0 0 10px rgba(255, 110, 199, 0.6); }
+
+/* ---------- 10. Motion / contrast preferences ----------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-horizon::before,
+    .retro-ticker__track,
+    .retro-eq span {
+        animation: none !important;
+    }
+    .retro-eq span { height: 60%; }
+    .retro-card:hover { transform: none; }
+}
+
+/* ---------- 11. Chrome: top bar + bottom deck ---------------------------- */
+
+.retro-topbar {
+    background:
+        linear-gradient(180deg, rgba(20, 6, 40, 0.94) 0%, rgba(6, 2, 16, 0.96) 100%);
+    border-bottom: 1px solid transparent;
+    border-image: linear-gradient(90deg, var(--neon-magenta), var(--neon-purple), var(--neon-cyan)) 1;
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.65), 0 1px 0 rgba(0, 240, 255, 0.15) inset;
+}
+
+.retro-deck {
+    background:
+        linear-gradient(180deg, rgba(6, 2, 16, 0.96) 0%, rgba(20, 6, 40, 0.96) 100%);
+    border-top: 1px solid transparent;
+    border-image: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple), var(--neon-magenta)) 1;
+    box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.65);
+}
+
+/* ---------- 12. Nav links ------------------------------------------------- */
+
+.retro-navlink {
+    position: relative;
+    font-family: var(--retro-display);
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #b9c6e6;
+    padding: 0.5rem 0.15rem;
+    transition: color 0.15s ease, text-shadow 0.15s ease;
+}
+
+.retro-navlink::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--neon-magenta), var(--neon-cyan));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.18s ease;
+}
+
+.retro-navlink:hover {
+    color: #ffffff;
+    text-shadow: 0 0 12px rgba(0, 240, 255, 0.7);
+}
+
+.retro-navlink:hover::after,
+.retro-navlink[aria-current='page']::after,
+.retro-navlink.is-active::after {
+    transform: scaleX(1);
+}
+
+.retro-navlink.is-active {
+    color: #ffe3f2;
+    text-shadow: 0 0 12px rgba(255, 47, 142, 0.8);
+}
+
+/* ---------- 13. Inputs ---------------------------------------------------- */
+
+.retro-input {
+    font-family: var(--retro-mono);
+    font-size: 1.15rem;
+    color: #eafcff;
+    background: rgba(0, 240, 255, 0.06);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    border-right: 0;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.retro-input::placeholder {
+    color: rgba(160, 200, 230, 0.65);
+}
+
+.retro-input:focus {
+    outline: none;
+    border-color: var(--neon-magenta);
+    box-shadow: 0 0 18px rgba(255, 47, 142, 0.35);
+}
+
+/* ---------- 14. Icon buttons --------------------------------------------- */
+
+.retro-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #b9c6e6;
+    border: 1px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.retro-icon-btn:hover:not(:disabled) {
+    color: var(--neon-cyan);
+    border-color: rgba(0, 240, 255, 0.5);
+    background: rgba(0, 240, 255, 0.08);
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.3);
+}
+
+.retro-icon-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.retro-icon-btn--on {
+    color: var(--neon-magenta);
+    border-color: rgba(255, 47, 142, 0.55);
+    background: rgba(255, 47, 142, 0.1);
+    box-shadow: 0 0 16px rgba(255, 47, 142, 0.35);
+}
+
+/* Big round transport button on the player deck. */
+.retro-transport {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #0b0114;
+    background: linear-gradient(140deg, var(--neon-cyan), var(--neon-magenta));
+    box-shadow: 0 0 22px rgba(0, 240, 255, 0.5);
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.retro-transport:hover {
+    filter: brightness(1.12);
+    box-shadow: 0 0 34px rgba(255, 47, 142, 0.6);
+}
+
+/* ---------- 15. Seek bar -------------------------------------------------- */
+
+.retro-progress {
+    position: relative;
+    height: 8px;
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid rgba(0, 240, 255, 0.28);
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.retro-progress__fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple), var(--neon-magenta));
+    box-shadow: 0 0 14px rgba(255, 47, 142, 0.65);
+}
+
+/* Segmented LED look over the fill. */
+.retro-progress::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        90deg,
+        transparent 0 5px,
+        rgba(0, 0, 0, 0.55) 5px 7px
+    );
+}
+
+/* ---------- 16. Dropdown menu -------------------------------------------- */
+
+.retro-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-family: var(--retro-mono);
+    font-size: 1.15rem;
+    color: #cfe0f5;
+    padding: 0.35rem 0.9rem;
+    border-left: 2px solid transparent;
+    transition: color 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+}
+
+.retro-menu-item:hover {
+    color: #ffffff;
+    background: rgba(0, 240, 255, 0.1);
+    border-left-color: var(--neon-magenta);
+}
+
+/* ---------- 17. Track tables --------------------------------------------- */
+
+.retro-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.retro-table th {
+    font-family: var(--retro-pixel);
+    font-size: 0.5rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.retro-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.retro-table tbody tr {
+    border-left: 2px solid transparent;
+    transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.retro-table tbody tr:nth-child(even) {
+    background: rgba(157, 78, 221, 0.07);
+}
+
+.retro-table tbody tr:hover {
+    background: rgba(0, 240, 255, 0.09);
+    border-left-color: var(--neon-magenta);
+}
+
+/* ---------- 18. Neon play overlay on artwork ------------------------------ */
+
+.retro-play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 47, 142, 0.35);
+    opacity: 0;
+    transition: opacity 0.16s ease;
+    color: #eafcff;
+}
+
+.retro-play-overlay:hover,
+.retro-play-overlay:focus-visible {
+    opacity: 1;
+}
+
+/* ---------- 19. Artist-selectable retro backgrounds ----------------------- */
+/* Used by profile pages; each is a full-page ground an artist can pick. */
+
+.bg-retro-grid {
+    background-color: #05010f;
+    background-image:
+        linear-gradient(rgba(0, 240, 255, 0.35) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 47, 142, 0.35) 1px, transparent 1px),
+        radial-gradient(70rem 40rem at 50% 0%, rgba(157, 78, 221, 0.5), transparent 65%);
+    background-size: 44px 44px, 44px 44px, 100% 100%;
+}
+
+.bg-retro-sunset {
+    background:
+        repeating-linear-gradient(
+            180deg,
+            rgba(0, 0, 0, 0.25) 0 3px,
+            transparent 3px 8px
+        ),
+        linear-gradient(180deg, #2b0a4d 0%, #7b1f6a 45%, #ff6b35 75%, #ffd166 100%);
+}
+
+.bg-retro-vhs {
+    background-color: #0a0418;
+    background-image:
+        repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 4px),
+        linear-gradient(115deg, rgba(255, 47, 142, 0.4) 0%, rgba(157, 78, 221, 0.35) 40%, rgba(0, 240, 255, 0.35) 100%);
+}
+
+.bg-retro-miami {
+    background:
+        linear-gradient(160deg, #00f0ff 0%, #9d4edd 45%, #ff2f8e 100%);
+}
+
+.bg-retro-matrix {
+    background-color: #01120a;
+    background-image:
+        repeating-linear-gradient(90deg, rgba(0, 255, 140, 0.16) 0 1px, transparent 1px 14px),
+        repeating-linear-gradient(180deg, rgba(0, 255, 140, 0.1) 0 1px, transparent 1px 14px);
+}
+
+/* ---------- 20. Icon action button (shared component) --------------------- */
+
+.retro-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #cfe9ff;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    transition: all 0.16s ease;
+    clip-path: polygon(
+        7px 0, 100% 0, 100% calc(100% - 7px),
+        calc(100% - 7px) 100%, 0 100%, 0 7px
+    );
+}
+
+.retro-action:hover:not(:disabled) {
+    color: #ffffff;
+    background: rgba(0, 240, 255, 0.18);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 18px rgba(0, 240, 255, 0.45);
+}
+
+.retro-action:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Toggled-on state: following, liked, etc. */
+.retro-action--on {
+    color: #ffe3f2;
+    background: rgba(255, 47, 142, 0.22);
+    border-color: var(--neon-magenta);
+    box-shadow: 0 0 18px rgba(255, 47, 142, 0.5);
+}
+
+.retro-action--on:hover:not(:disabled) {
+    background: rgba(255, 47, 142, 0.32);
+    border-color: var(--neon-magenta);
+    box-shadow: 0 0 26px rgba(255, 47, 142, 0.65);
+}
+
+.retro-tooltip {
+    font-family: var(--retro-pixel);
+    font-size: 0.45rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    background: rgba(6, 2, 16, 0.95);
+    border: 1px solid rgba(0, 240, 255, 0.45);
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.25);
+}
+
+/* ---------- 21. Genre / tag chips ---------------------------------------- */
+
+.retro-chip {
+    display: inline-block;
+    font-family: var(--retro-mono);
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    padding: 0.1rem 0.55rem;
+    transition: all 0.15s ease;
+}
+
+.retro-chip:hover {
+    color: #ffe3f2;
+    background: rgba(255, 47, 142, 0.16);
+    border-color: var(--neon-magenta);
+    box-shadow: 0 0 14px rgba(255, 47, 142, 0.4);
+}
+
+/* ---------- 22. Form controls -------------------------------------------- */
+
+.retro-field {
+    width: 100%;
+    font-family: var(--retro-mono);
+    font-size: 1.15rem;
+    color: #eafcff;
+    background: rgba(4, 1, 12, 0.6);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    padding: 0.4rem 0.65rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.retro-field::placeholder {
+    color: rgba(160, 200, 230, 0.5);
+}
+
+.retro-field:focus {
+    outline: none;
+    border-color: var(--neon-magenta);
+    box-shadow: 0 0 16px rgba(255, 47, 142, 0.3);
+}
+
+.retro-label {
+    display: block;
+    font-family: var(--retro-pixel);
+    font-size: 0.5rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    margin-bottom: 0.45rem;
+}
+
+/* ---------- 23. Arcade buttons (Discover deck) --------------------------- */
+
+.retro-arcade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4.25rem;
+    height: 4.25rem;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    background: rgba(4, 1, 12, 0.7);
+    transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.retro-arcade:active {
+    transform: translateY(2px) scale(0.97);
+}
+
+.retro-arcade--nope { color: #ff4d5e; box-shadow: 0 0 16px rgba(255, 77, 94, 0.35); }
+.retro-arcade--nope:hover { background: rgba(255, 77, 94, 0.18); box-shadow: 0 0 30px rgba(255, 77, 94, 0.6); }
+
+.retro-arcade--skip { color: var(--neon-cyan); box-shadow: 0 0 16px rgba(0, 240, 255, 0.35); }
+.retro-arcade--skip:hover { background: rgba(0, 240, 255, 0.18); box-shadow: 0 0 30px rgba(0, 240, 255, 0.6); }
+
+.retro-arcade--yes { color: var(--neon-magenta); box-shadow: 0 0 16px rgba(255, 47, 142, 0.35); }
+.retro-arcade--yes:hover { background: rgba(255, 47, 142, 0.18); box-shadow: 0 0 30px rgba(255, 47, 142, 0.6); }
+
+/* Latched on, i.e. already liked. */
+.retro-arcade--on {
+    background: rgba(255, 47, 142, 0.28);
+    box-shadow: 0 0 32px rgba(255, 47, 142, 0.7), inset 0 0 18px rgba(255, 47, 142, 0.35);
+}
+
+.retro-arcade__cap {
+    font-family: var(--retro-pixel);
+    font-size: 0.4rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-arcade:active { transform: none; }
+}
+
+/* ---------- 24. The crate (genre browsing as record sleeves) -------------- */
+
+.retro-crate {
+    display: flex;
+    gap: 1.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2.5rem 1rem 2rem;
+    scroll-snap-type: x proximity;
+    /* Sleeves lean back like records in a box. */
+    perspective: 900px;
+}
+
+.retro-crate__sleeve {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(140px, 22vw, 200px);
+    scroll-snap-align: center;
+    transform: rotateY(14deg) translateZ(0);
+    transform-origin: left center;
+    transition: transform 0.22s ease, filter 0.22s ease;
+    filter: brightness(0.78);
+}
+
+.retro-crate__sleeve:hover,
+.retro-crate__sleeve:focus-within {
+    /* Pull the record forward out of the box, the way you'd flip through. */
+    transform: rotateY(0deg) translateY(-14px) scale(1.04);
+    filter: brightness(1);
+    z-index: 2;
+}
+
+.retro-crate__art {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    box-shadow: -8px 10px 26px rgba(0, 0, 0, 0.65);
+    background: linear-gradient(140deg, rgba(157, 78, 221, 0.4), rgba(0, 240, 255, 0.2));
+}
+
+/* The paper spine down the left edge of a sleeve. */
+.retro-crate__art::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 7px;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.75), transparent);
+    z-index: 3;
+}
+
+/* ---------- 25. Listening post ------------------------------------------- */
+
+.retro-preview-badge {
+    position: absolute;
+    left: 0.4rem;
+    bottom: 0.4rem;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: var(--retro-pixel);
+    font-size: 0.4rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    background: rgba(4, 1, 12, 0.85);
+    border: 1px solid rgba(0, 240, 255, 0.5);
+    padding: 0.25rem 0.4rem;
+}
+
+/* ---------- 26. Stat strip ----------------------------------------------- */
+
+.retro-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.75rem 1rem;
+    border-left: 2px solid rgba(255, 47, 142, 0.55);
+    background: linear-gradient(90deg, rgba(255, 47, 142, 0.08), transparent);
+}
+
+.retro-stat__value {
+    font-family: var(--retro-display);
+    font-weight: 900;
+    font-size: 1.25rem;
+    color: #ffffff;
+    font-variant-numeric: tabular-nums;
+}
+
+.retro-stat__label {
+    font-family: var(--retro-pixel);
+    font-size: 0.4rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-crate__sleeve,
+    .retro-crate__sleeve:hover,
+    .retro-crate__sleeve:focus-within {
+        transform: none;
+        transition: none;
+    }
+}

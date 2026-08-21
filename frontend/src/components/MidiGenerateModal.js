@@ -53,56 +53,56 @@ const MidiGenerateModal = ({ track, bpm, onClose, onApply }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 text-gray-200 rounded-lg shadow-lg w-full max-w-lg flex flex-col">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+            <div className="retro-panel retro-cut w-full max-w-lg flex flex-col">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-cyan-400/25">
                     <h2 className="text-lg font-semibold">✨ Generate MIDI — {track.name}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none" aria-label="Close">×</button>
                 </div>
                 <div className="p-5 space-y-4 overflow-y-auto">
                     <div>
-                        <label className="block text-sm font-medium mb-1" htmlFor="midi-gen-prompt">Describe it</label>
+                        <label className="retro-label" htmlFor="midi-gen-prompt">Describe it</label>
                         <input
                             id="midi-gen-prompt"
                             type="text"
                             value={prompt}
                             onChange={(e) => applyPrompt(e.target.value)}
                             placeholder='e.g. "lead melody in F# minor" or "busy arpeggio in C dorian, 8 bars"'
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                            className="w-full px-3 py-2 bg-[#1d0a38] border border-cyan-400/30 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
                         />
                         <p className="text-xs text-gray-400 mt-1">Fills in the settings below — tweak them anytime.</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="midi-gen-key">Key</label>
+                            <label className="retro-label" htmlFor="midi-gen-key">Key</label>
                             <select id="midi-gen-key" value={key} onChange={(e) => setKey(e.target.value)}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm">
+                                className="retro-field w-full">
                                 {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="midi-gen-mode">Scale</label>
+                            <label className="retro-label" htmlFor="midi-gen-mode">Scale</label>
                             <select id="midi-gen-mode" value={mode} onChange={(e) => setMode(e.target.value)}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm">
+                                className="retro-field w-full">
                                 {MODES.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="midi-gen-style">Style</label>
+                            <label className="retro-label" htmlFor="midi-gen-style">Style</label>
                             <select id="midi-gen-style" value={style} onChange={(e) => setStyle(e.target.value)}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm">
+                                className="retro-field w-full">
                                 {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" htmlFor="midi-gen-bars">Bars</label>
+                            <label className="retro-label" htmlFor="midi-gen-bars">Bars</label>
                             <select id="midi-gen-bars" value={bars} onChange={(e) => setBars(Number(e.target.value))}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm">
+                                className="retro-field w-full">
                                 {[1, 2, 4, 8, 16].map(b => <option key={b} value={b}>{b}</option>)}
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1" htmlFor="midi-gen-density">
+                        <label className="retro-label" htmlFor="midi-gen-density">
                             Density: {density <= 0.55 ? 'sparse' : density >= 0.95 ? 'busy' : 'medium'}
                         </label>
                         <input
@@ -114,17 +114,17 @@ const MidiGenerateModal = ({ track, bpm, onClose, onApply }) => {
                         />
                     </div>
                     {preview && (
-                        <p className="text-sm text-green-400">
+                        <p className="retro-mono text-lg text-cyan-300">
                             Generated {preview.length} notes over {bars} bar{bars > 1 ? 's' : ''} at {bpm} BPM. Not feeling it? Regenerate for a new take.
                         </p>
                     )}
                     {hasExistingNotes && (
                         <p className="text-sm text-yellow-400">⚠ Applying will replace the {track.midi_notes.length} existing notes on this track.</p>
                     )}
-                    {error && <p className="text-sm text-red-400">{error}</p>}
+                    {error && <p className="retro-mono text-lg text-fuchsia-400">{error}</p>}
                 </div>
-                <div className="flex justify-end space-x-3 px-5 py-3 border-t border-gray-700">
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-700 rounded-lg text-sm hover:bg-gray-600">Cancel</button>
+                <div className="flex justify-end space-x-3 px-5 py-3 border-t border-cyan-400/25">
+                    <button onClick={onClose} className="px-4 py-2 bg-[#1d0a38] rounded-lg text-sm hover:bg-gray-600">Cancel</button>
                     <button
                         onClick={handleGenerate}
                         className="px-4 py-2 bg-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-500"

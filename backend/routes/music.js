@@ -4,6 +4,7 @@ const { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aw
 const s3Client = require('../config/tigris');
 const authenticate = require('../middleware/authenticate');
 const logger = require('../utils/logger');
+const { normalizeGenre, aliasSourcesFor } = require('../utils/genres');
 const router = express.Router();
 const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
@@ -18,6 +19,30 @@ const getClientIp = (req) => {
         return forwarded.split(',')[0].trim();
     }
     return req.socket.remoteAddress || 'unknown';
+};
+
+// Normalize a boolean flag arriving from JSON or multipart form data
+const parseBooleanFlag = (value) => {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return value !== 0;
+    }
+    if (typeof value === 'string') {
+        return ['true', '1', 'yes', 'on'].includes(value.trim().toLowerCase());
+    }
+    return false;
+};
+
+// Build a safe download filename from a song title
+const buildDownloadFilename = (title) => {
+    const base = String(title || 'song')
+        .replace(/[^\w\s.-]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100) || 'song';
+    return `${base}.mp3`;
 };
 
 const { getRunningJobs, incrementRunningJobs, decrementRunningJobs } = require('../utils/concurrency');
@@ -53,6 +78,7 @@ router.get('/user-songs', authenticate, async (req, res) => {
             plays: Number(row.plays) || 0,
             profile_name: row.profile_name || 'Unknown',
             likes_count: Number(row.likes_count) || 0,
+            allow_download: Boolean(row.allow_download),
         }));
 
         res.json(Array.isArray(sanitizedRows) ? sanitizedRows : []);
@@ -511,46 +537,52 @@ router.get('/by-genre', async (req, res) => {
 
 router.get('/by-tags', async (req, res) => {
     try {
+        // The Browse page is a genre directory: it needs a name, a count and a
+        // few covers per genre, not the whole tagged catalogue. Genres are
+        // comma-separated free text in a VARCHAR, so they can't be grouped in
+        // SQL — but we only need two tiny columns per row to do it in JS, and
+        // dropping the per-row likes subquery and the profiles join removes the
+        // expensive part of the old query.
+        const THUMBS_PER_TAG = 3;
+
         const rows = await pool.query(`
-            SELECT s.genre, s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name,
-                   (SELECT COUNT(*)
-                    FROM playlist_songs ps
-                             JOIN playlists pl ON ps.playlist_id = pl.id
-                    WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+            SELECT s.genre, s.image_url
             FROM songs s
-                     LEFT JOIN profiles p ON s.profile_id = p.id
             WHERE s.genre IS NOT NULL AND s.genre != ''
             ORDER BY s.plays DESC
         `);
 
-        // Group songs by unique tags
-        const songsByTag = {};
+        // Genres are free text, so one genre arrives spelled a dozen ways.
+        // normalizeGenre() collapses case, punctuation and connector words (and
+        // maps known abbreviations like 'dnb'), while we remember how often each
+        // spelling was used so the label shown is the one artists actually type.
+        const buckets = {};
         rows.forEach(row => {
             const genres = row.genre ? row.genre.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
-            genres.forEach(tag => {
-                if (!songsByTag[tag]) {
-                    songsByTag[tag] = [];
+            genres.forEach(rawTag => {
+                const tag = normalizeGenre(rawTag);
+                if (!tag) return;
+                const bucket = buckets[tag] || (buckets[tag] = { count: 0, thumbs: [], labels: {} });
+                bucket.count += 1;
+                bucket.labels[rawTag] = (bucket.labels[rawTag] || 0) + 1;
+                // Rows arrive most-played first, so the first covers we see are
+                // the genre's best-known tracks.
+                if (row.image_url && bucket.thumbs.length < THUMBS_PER_TAG) {
+                    bucket.thumbs.push(row.image_url);
                 }
-                songsByTag[tag].push({
-                    id: Number(row.id),
-                    profile_id: Number(row.profile_id),
-                    title: row.title,
-                    mp3_url: row.mp3_url,
-                    image_url: row.image_url,
-                    plays: Number(row.plays) || 0,
-                    profile_name: row.profile_name || 'Unknown',
-                    likes_count: Number(row.likes_count) || 0,
-                });
             });
         });
 
-        // Convert to array and sort
-        const result = Object.keys(songsByTag)
-            .map(tag => ({
-                tag,
-                songs: songsByTag[tag],
-            }))
-            .sort((a, b) => b.songs.length - a.songs.length);
+        // `tag` stays lowercase so it round-trips through /tag/:tag links;
+        // `label` is the most-used spelling, for display.
+        const result = Object.keys(buckets)
+            .map(tag => {
+                const { count, thumbs, labels } = buckets[tag];
+                const label = Object.keys(labels)
+                    .sort((a, b) => labels[b] - labels[a] || b.length - a.length || a.localeCompare(b))[0] || tag;
+                return { tag, label, count, thumbs };
+            })
+            .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 
         res.json(result);
     } catch (err) {
@@ -559,16 +591,156 @@ router.get('/by-tags', async (req, res) => {
     }
 });
 
+// Existing genres, for the upload form's typeahead. Suggesting what artists
+// already use is what stops new spelling variants being created; free text is
+// still accepted, so a brand-new genre can always be typed.
+router.get('/genres', async (req, res) => {
+    try {
+        const rows = await pool.query(`
+            SELECT s.genre
+            FROM songs s
+            WHERE s.genre IS NOT NULL AND s.genre != ''
+        `);
+
+        const buckets = {};
+        rows.forEach(row => {
+            (row.genre || '').split(',').forEach(rawTag => {
+                const trimmed = rawTag.trim();
+                if (!trimmed) return;
+                const key = normalizeGenre(trimmed);
+                if (!key) return;
+                const bucket = buckets[key] || (buckets[key] = { count: 0, labels: {} });
+                bucket.count += 1;
+                bucket.labels[trimmed] = (bucket.labels[trimmed] || 0) + 1;
+            });
+        });
+
+        const genres = Object.keys(buckets)
+            .map(key => {
+                const { count, labels } = buckets[key];
+                // Most-used spelling wins. On a tie prefer the longer, more
+                // explicit form, so a genre reads 'Drum and Bass' not 'D&B'.
+                const label = Object.keys(labels)
+                    .sort((a, b) => labels[b] - labels[a] || b.length - a.length || a.localeCompare(b))[0] || key;
+                // Ship the typed forms that map here (dnb, d&b, goa...) so the
+                // client can match an abbreviation without re-implementing the
+                // normaliser and drifting from it.
+                const aliases = [...new Set([
+                    ...aliasSourcesFor(key),
+                    ...Object.keys(labels).map(l => l.toLowerCase()),
+                ])];
+                return { key, label, count, aliases };
+            })
+            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+        res.json(genres);
+    } catch (err) {
+        logger.error('Error in GET /music/genres:', err);
+        res.status(500).json({ error: 'Failed to fetch genres' });
+    }
+});
+
+// Everything the genre page needs once, as opposed to per page of results:
+// headline stats, the spellings that were merged into this genre, the genres it
+// is most often tagged alongside, and its most active artists.
+router.get('/tag/:tag/overview', async (req, res) => {
+    try {
+        const wanted = normalizeGenre(req.params.tag);
+        if (!wanted) {
+            return res.status(404).json({ error: 'Unknown genre' });
+        }
+
+        const rows = await pool.query(`
+            SELECT s.genre, s.plays, s.created_at, s.profile_id, p.name AS profile_name, p.picture_url
+            FROM songs s
+                     LEFT JOIN profiles p ON s.profile_id = p.id
+            WHERE s.genre IS NOT NULL AND s.genre != ''
+        `);
+
+        const spellings = {};
+        const related = {};
+        const artists = {};
+        let total = 0;
+        let totalPlays = 0;
+        let newest = null;
+
+        rows.forEach(row => {
+            const parts = (row.genre || '').split(',').map(part => part.trim()).filter(Boolean);
+            const keys = parts.map(part => ({ raw: part, key: normalizeGenre(part) }));
+            const hit = keys.find(entry => entry.key === wanted);
+            if (!hit) return;
+
+            total += 1;
+            totalPlays += Number(row.plays) || 0;
+            spellings[hit.raw] = (spellings[hit.raw] || 0) + 1;
+
+            if (row.created_at && (!newest || new Date(row.created_at) > new Date(newest))) {
+                newest = row.created_at;
+            }
+
+            // Genres tagged on the same song are this genre's neighbours.
+            keys.forEach(entry => {
+                if (!entry.key || entry.key === wanted) return;
+                const neighbour = related[entry.key] || (related[entry.key] = { count: 0, labels: {} });
+                neighbour.count += 1;
+                neighbour.labels[entry.raw] = (neighbour.labels[entry.raw] || 0) + 1;
+            });
+
+            if (row.profile_id) {
+                const id = Number(row.profile_id);
+                const artist = artists[id] || (artists[id] = {
+                    profile_id: id,
+                    name: row.profile_name || 'Unknown',
+                    picture_url: row.picture_url || null,
+                    tracks: 0,
+                    plays: 0,
+                });
+                artist.tracks += 1;
+                artist.plays += Number(row.plays) || 0;
+            }
+        });
+
+        if (total === 0) {
+            return res.json({
+                tag: wanted, label: req.params.tag, total: 0, totalPlays: 0,
+                artistCount: 0, newest: null, spellings: [], related: [], topArtists: [],
+            });
+        }
+
+        const bestLabel = (counts) => Object.keys(counts)
+            .sort((a, b) => counts[b] - counts[a] || b.length - a.length || a.localeCompare(b))[0];
+
+        res.json({
+            tag: wanted,
+            label: bestLabel(spellings),
+            total,
+            totalPlays,
+            artistCount: Object.keys(artists).length,
+            newest,
+            // Only worth showing when the genre actually arrived spelled several ways.
+            spellings: Object.keys(spellings).sort((a, b) => spellings[b] - spellings[a]),
+            related: Object.keys(related)
+                .map(key => ({ tag: key, label: bestLabel(related[key].labels), count: related[key].count }))
+                .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+                .slice(0, 8),
+            topArtists: Object.values(artists)
+                .sort((a, b) => b.tracks - a.tracks || b.plays - a.plays)
+                .slice(0, 5),
+        });
+    } catch (err) {
+        logger.error(`Error in GET /music/tag/${req.params.tag}/overview:`, err);
+        res.status(500).json({ error: 'Failed to fetch genre overview' });
+    }
+});
+
 router.get('/by-tag/:tag', async (req, res) => {
     try {
         const { tag } = req.params;
         const { limit = 20, offset = 0, sort = 'random' } = req.query;
 
-        // Validate query parameters
         const limitNum = parseInt(limit) || 20;
         const offsetNum = parseInt(offset) || 0;
 
-        // Sanitize sort parameter
         let orderBy;
         switch (sort) {
             case 'alpha':
@@ -577,8 +749,14 @@ router.get('/by-tag/:tag', async (req, res) => {
             case 'listens':
                 orderBy = 's.plays DESC';
                 break;
-            case 'likes': // Replace 'rating' with 'likes'
+            case 'likes':
                 orderBy = 'likes_count DESC, s.id ASC';
+                break;
+            case 'deep':
+                // Deep cuts: tracks hardly anyone has heard that the few who did
+                // liked. A smoothed like-to-play ratio, so a brand-new upload
+                // with no history doesn't automatically beat a loved rarity.
+                orderBy = '((likes_count + 1) / (s.plays + 10)) DESC, s.plays ASC, s.id DESC';
                 break;
             case 'random':
             default:
@@ -586,7 +764,33 @@ router.get('/by-tag/:tag', async (req, res) => {
                 break;
         }
 
-        // Query songs by tag
+        // Matching has to normalise both sides: a link to "drum bass" must find
+        // songs stored as "Drum 'n' Bass" or "DnB", which no SQL LIKE can do.
+        // Step one is a cheap two-column scan to work out which songs match.
+        const wanted = normalizeGenre(tag);
+        if (!wanted) {
+            return res.json({ songs: [] });
+        }
+
+        const candidates = await pool.query(`
+            SELECT s.id, s.genre
+            FROM songs s
+            WHERE s.genre IS NOT NULL AND s.genre != ''
+        `);
+
+        const matchingIds = candidates
+            .filter(row => (row.genre || '')
+                .split(',')
+                .some(part => normalizeGenre(part) === wanted))
+            .map(row => Number(row.id));
+
+        if (matchingIds.length === 0) {
+            return res.json({ songs: [] });
+        }
+
+        // Step two fetches the full records for just those songs, leaving the
+        // sorting and pagination in SQL where they belong.
+        const placeholders = matchingIds.map(() => '?').join(',');
         const query = `
             SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name,
                    (SELECT COUNT(*)
@@ -595,21 +799,12 @@ router.get('/by-tag/:tag', async (req, res) => {
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.genre LIKE ? OR s.genre LIKE ? OR s.genre LIKE ? OR s.genre LIKE ?
+            WHERE s.id IN (${placeholders})
             ORDER BY ${orderBy}
                 LIMIT ? OFFSET ?
         `;
 
-        const values = [
-            `%${tag}%`,
-            `%,${tag}`,
-            `${tag},%`,
-            `%,${tag},%`,
-            limitNum,
-            offsetNum,
-        ];
-
-        const rows = await pool.query(query, values);
+        const rows = await pool.query(query, [...matchingIds, limitNum, offsetNum]);
 
         const songs = rows.map(row => ({
             id: Number(row.id),
@@ -622,10 +817,10 @@ router.get('/by-tag/:tag', async (req, res) => {
             likes_count: Number(row.likes_count) || 0,
         }));
 
-        res.json({ songs });
+        res.json({ songs, total: matchingIds.length });
     } catch (err) {
         logger.error(`Error in GET /music/by-tag/${req.params.tag}:`, err);
-        res.status(500).json({ error: 'Failed to fetch songs for tag' });
+        res.status(500).json({ error: 'Failed to fetch songs by tag' });
     }
 });
 
@@ -1001,6 +1196,7 @@ router.get('/:songId', async (req, res) => {
             profile_name: songs[0].profile_name || 'Unknown Artist',
             background: songs[0].background || null,
             likes_count: Number(songs[0].likes_count) || 0,
+            allow_download: Boolean(songs[0].allow_download),
         };
         res.json({ song });
     } catch (err) {
@@ -1010,7 +1206,7 @@ router.get('/:songId', async (req, res) => {
 });
 
 router.put('/:songId', authenticate, async (req, res) => {
-    const { title, description, genre, stems_url } = req.body;
+    const { title, description, genre, stems_url, allow_download } = req.body;
     const mp3 = req.files?.mp3;
     const image = req.files?.image;
     try {
@@ -1020,7 +1216,7 @@ router.put('/:songId', authenticate, async (req, res) => {
         }
 
         const songs = await pool.query(`
-            SELECT s.id, s.profile_id, s.mp3_url, s.image_url, s.stems_url
+            SELECT s.id, s.profile_id, s.mp3_url, s.image_url, s.stems_url, s.allow_download
             FROM songs s
                      JOIN profiles p ON s.profile_id = p.id
             WHERE s.id = ?
@@ -1078,7 +1274,7 @@ router.put('/:songId', authenticate, async (req, res) => {
 
         await pool.query(`
             UPDATE songs
-            SET title = ?, description = ?, genre = ?, mp3_url = ?, image_url = ?, stems_url = ?
+            SET title = ?, description = ?, genre = ?, mp3_url = ?, image_url = ?, stems_url = ?, allow_download = ?
             WHERE id = ?
         `, [
             title || songs[0].title,
@@ -1087,6 +1283,7 @@ router.put('/:songId', authenticate, async (req, res) => {
             mp3Url,
             imageUrl,
             stems_url !== undefined ? stems_url : songs[0].stems_url,
+            allow_download !== undefined ? parseBooleanFlag(allow_download) : Boolean(songs[0].allow_download),
             songId
         ]);
 
@@ -1097,12 +1294,101 @@ router.put('/:songId', authenticate, async (req, res) => {
             profile_id: Number(updatedSongs[0].profile_id),
             plays: Number(updatedSongs[0].plays) || 0,
             stems_url: updatedSongs[0].stems_url,
+            allow_download: Boolean(updatedSongs[0].allow_download),
             likes_count: 0,
         };
 
         res.status(200).json({ song });
     } catch (err) {
         logger.error('Error in PUT /music/:songId:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Toggle public downloads for a single song (owner only)
+router.patch('/:songId/allow-download', authenticate, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const { allow_download } = req.body;
+        if (allow_download === undefined) {
+            return res.status(400).json({ error: 'allow_download is required' });
+        }
+        const allowDownload = parseBooleanFlag(allow_download);
+
+        const songs = await pool.query('SELECT id, profile_id FROM songs WHERE id = ?', [songId]);
+        if (!songs || songs.length === 0) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
+        const profileResult = await pool.query('SELECT user_id FROM profiles WHERE id = ?', [songs[0].profile_id]);
+        if (!profileResult || profileResult.length === 0 || Number(profileResult[0].user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        await pool.query('UPDATE songs SET allow_download = ? WHERE id = ?', [allowDownload, songId]);
+
+        res.status(200).json({ id: songId, allow_download: allowDownload });
+    } catch (err) {
+        logger.error('Error in PATCH /music/:songId/allow-download:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Public download of a song, only when the owner has enabled it
+router.get('/:songId/download', async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const songs = await pool.query('SELECT id, title, mp3_url, allow_download FROM songs WHERE id = ?', [songId]);
+        if (!songs || songs.length === 0) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
+        const song = songs[0];
+        if (!song.allow_download) {
+            return res.status(403).json({ error: 'Downloads are not enabled for this song' });
+        }
+        if (!song.mp3_url) {
+            return res.status(404).json({ error: 'Song file not found' });
+        }
+
+        const s3Key = extractObjectKey(song.mp3_url);
+        if (!s3Key) {
+            return res.status(400).json({ error: 'Invalid S3 URL format' });
+        }
+
+        const { Body, ContentLength } = await s3Client.send(new GetObjectCommand({
+            Bucket: process.env.BUCKET_NAME,
+            Key: s3Key,
+        }));
+
+        const filename = buildDownloadFilename(song.title);
+        res.set({
+            'Content-Type': 'audio/mpeg',
+            'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        });
+        if (ContentLength) {
+            res.set('Content-Length', String(ContentLength));
+        }
+
+        Body.on('error', (streamErr) => {
+            logger.error('Error streaming download for song:', { songId, message: streamErr.message });
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to download song' });
+            } else {
+                res.destroy(streamErr);
+            }
+        });
+        Body.pipe(res);
+    } catch (err) {
+        logger.error('Error in GET /music/:songId/download:', err);
         res.status(500).json({ error: err.message });
     }
 });

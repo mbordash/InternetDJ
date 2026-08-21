@@ -70,13 +70,13 @@ function New() {
     if (error) {
         return (
             <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
-                <p className="text-red-400 text-lg">{error}</p>
+                <p className="retro-mono text-2xl text-fuchsia-400">{error}</p>
             </div>
         );
     }
 
     return (
-        <div className="text-gray-100 pt-2">
+        <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
             <Helmet>
                 <title>InternetDJ New Music Recently Uploaded</title>
                 <meta
@@ -94,26 +94,30 @@ function New() {
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8">
-                <h1 className="text-3xl font-bold mb-8 text-white">Recently uploaded songs</h1>
+                <header className="mb-8">
+                    <div className="retro-eyebrow mb-3">&gt;&gt; Straight Off The Wire</div>
+                    <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">New Releases</h1>
+                    <div className="retro-rule mt-4" />
+                </header>
                 {songs.length === 0 ? (
-                    <p className="text-gray-300">No new songs available recently.</p>
+                    <p className="retro-mono text-xl text-gray-300">No new songs available recently.</p>
                 ) : (
                     <div className="md:overflow-x-auto">
                         {/* Table for Desktop */}
-                        <table className="min-w-full hidden md:table table-fixed">
+                        <table className="retro-table hidden md:table table-fixed">
                             <thead>
-                            <tr className="bg-white/5">
-                                <th className="px-4 py-2 text-left text-gray-300 w-[40%]">Song</th>
-                                <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Genre</th>
-                                <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Plays</th>
-                                <th className="px-4 py-2 text-left text-gray-300 w-[20%]">Likes</th>
+                            <tr>
+                                <th className="px-4 py-2 text-left w-[40%]">Song</th>
+                                <th className="px-4 py-2 text-left w-[20%]">Genre</th>
+                                <th className="px-4 py-2 text-left w-[20%]">Plays</th>
+                                <th className="px-4 py-2 text-left w-[20%]">Likes</th>
                             </tr>
                             </thead>
                             <tbody>
                             {songs.map((song, index) => (
                                 <tr
                                     key={song.id}
-                                    className={`${index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'} hover:bg-white/10 transition-colors`}
+                                    
                                 >
                                     <td className="px-4 py-2 flex items-center space-x-2">
                                         <div className="relative flex-shrink-0 w-12 h-12">
@@ -132,7 +136,7 @@ function New() {
                                                     />
                                                 </Link>
                                             ) : (
-                                                <div className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs" style={{ display: song.image_url ? 'none' : 'flex' }}>?
+                                                <div className="w-12 h-12 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300" style={{ display: song.image_url ? 'none' : 'flex' }}>?
                                                 </div>
                                             )}
                                             {song.mp3_url && (
@@ -159,7 +163,7 @@ function New() {
                                             <div className="min-w-0 flex-1">
                                                 <Link
                                                     to={`/song/${song.id}`}
-                                                    className="text-white hover:text-primary-brand-300 hover:underline font-medium block truncate"
+                                                    className="retro-display text-xs text-white hover:text-cyan-200 block truncate"
                                                     title={song.title}
                                                 >
                                                     {song.title}
@@ -167,7 +171,7 @@ function New() {
                                                 <div className="text-sm text-gray-300 truncate">
                                                     <Link
                                                         to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                                        className={song.profile_id ? 'text-gray-100 hover:text-primary-brand-300 hover:underline' : 'text-gray-500 cursor-not-allowed'}
+                                                        className={song.profile_id ? 'retro-link' : 'text-gray-500 cursor-not-allowed'}
                                                         title={song.profile_name}
                                                     >
                                                         {song.profile_name}
@@ -179,7 +183,7 @@ function New() {
                                     <td className="px-4 py-2">
                                         <Link
                                             to={`/tag/${encodeURIComponent(song.genre)}`}
-                                            className="text-white hover:text-primary-brand-300 hover:underline capitalize"
+                                            className="retro-link capitalize"
                                         >
                                             {song.genre}
                                         </Link>
@@ -204,7 +208,7 @@ function New() {
                         {/* Card Layout for Mobile */}
                         <div className="md:hidden space-y-4">
                             {songs.map((song) => (
-                                <div key={song.id} className="bg-zinc-900/80 border border-white/10 p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors">
+                                <div key={song.id} className="retro-card retro-cut p-4 rounded-md shadow-sm hover:bg-zinc-800 transition-colors">
                                     <div className="flex items-center space-x-4">
                                         <div className="relative flex-shrink-0 w-16 h-16">
                                             {song.image_url ? (
@@ -222,7 +226,7 @@ function New() {
                                                     />
                                                 </Link>
                                             ) : (
-                                                <div className="w-16 h-16 rounded-md bg-white/10 flex items-center justify-center text-gray-400 text-xs" style={{ display: song.image_url ? 'none' : 'flex' }}>?
+                                                <div className="w-16 h-16 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300" style={{ display: song.image_url ? 'none' : 'flex' }}>?
                                                 </div>
                                             )}
                                             {song.mp3_url && (
@@ -248,26 +252,26 @@ function New() {
                                         <div className="flex-1">
                                             <Link
                                                 to={`/song/${song.id}`}
-                                                className="text-white hover:text-primary-brand-300 hover:underline font-medium"
+                                                className="retro-display text-xs text-white hover:text-cyan-200"
                                             >
                                                 {song.title}
                                             </Link>
-                                            <div className="text-sm text-gray-300">
+                                            <div className="retro-mono text-lg text-gray-400">
                                                 <Link
                                                     to={song.profile_id ? `/profile/${song.profile_id}` : '#'}
-                                                    className={song.profile_id ? 'text-gray-100 hover:text-primary-brand-300 hover:underline' : 'text-gray-500 cursor-not-allowed'}
+                                                    className={song.profile_id ? 'retro-link' : 'text-gray-500 cursor-not-allowed'}
                                                 >
                                                     {song.profile_name}
                                                 </Link>
                                             </div>
-                                            <div className="text-sm text-gray-300 mt-1">
-                                                Genre: <Link to={`/tag/${encodeURIComponent(song.genre)}`} className="text-white hover:text-primary-brand-300 hover:underline capitalize">{song.genre}</Link>
+                                            <div className="retro-mono text-lg text-gray-400 mt-1">
+                                                Genre: <Link to={`/tag/${encodeURIComponent(song.genre)}`} className="retro-link capitalize">{song.genre}</Link>
                                             </div>
-                                            <div className="text-sm text-gray-300 mt-1">
+                                            <div className="retro-mono text-lg text-gray-400 mt-1">
                                                 Plays: {Number(song.plays) || 0}
                                                 <SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" />
                                             </div>
-                                            <div className="text-sm text-gray-300">
+                                            <div className="retro-mono text-lg text-gray-400">
                                                 Likes: {Number(song.likes_count) || 0}
                                                 <HeartIconSolid className={`w-4 h-4 inline ml-1 ${Number(song.likes_count) > 0 ? 'text-primary-brand-300' : 'text-gray-400'}`} />
                                             </div>

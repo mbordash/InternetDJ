@@ -57,14 +57,14 @@ const Knob = ({ label, value, onChange, min = 0, max = 1, step = 0.01 }) => {
         <div className="flex flex-col items-center space-y-1">
             <div
                 ref={knobRef}
-                className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center cursor-pointer shadow-inner md:w-12 md:h-12"
+                className="w-10 h-10 bg-[#1d0a38] rounded-full flex items-center justify-center cursor-pointer shadow-inner border border-cyan-400/30 md:w-12 md:h-12"
                 style={{ transform: `rotate(${angle}deg)` }}
                 onMouseDown={handleMouseDown}
             >
-                <div className="w-1 h-3 bg-purple-500 rounded-full absolute top-1 md:h-4"></div>
+                <div className="w-1 h-3 bg-fuchsia-400 rounded-full absolute top-1 md:h-4"></div>
             </div>
-            <label className="text-xs text-gray-300 text-center">{label}</label>
-            <span className="text-xs text-gray-400">{value.toFixed(2)}</span>
+            <label className="retro-mono text-base text-cyan-300 text-center">{label}</label>
+            <span className="retro-mono text-base text-gray-400">{value.toFixed(2)}</span>
         </div>
     );
 };
@@ -89,7 +89,7 @@ const Lever = ({ label, value, onChange, min = 0, max = 1, step = 0.01, showValu
                     appearance: 'none',
                 }}
             />
-            {showValue && <span className="text-xs text-gray-400">{value.toFixed(2)}</span>}
+            {showValue && <span className="retro-mono text-base text-gray-400">{value.toFixed(2)}</span>}
             <style jsx>{`
                 input[type="range"]::-webkit-slider-thumb {
                     -webkit-appearance: none;
@@ -157,7 +157,7 @@ const PianoRoll = ({ instrumentType, previewSynthRef }) => {
                         <button
                             key={note}
                             onClick={() => handleNoteClick(note)}
-                            className={`relative flex-1 h-12 md:h-16 border border-gray-600 ${
+                            className={`relative flex-1 h-12 md:h-16 border border-cyan-400/30 ${
                                 isBlackKey ? 'bg-gray-900 z-10 -mx-1 w-[calc(100%/12+2px)]' : 'bg-gray-200'
                             } hover:bg-opacity-80 transition-colors`}
                             style={{
@@ -427,7 +427,7 @@ const TrackSettingsModal = ({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 text-gray-200 rounded-lg shadow-lg w-full max-w-5xl max-h-[85vh] flex flex-col relative">
+            <div className="retro-panel retro-cut w-full max-w-5xl max-h-[85vh] flex flex-col relative">
                 {/* Close Button */}
                 <button
                     onClick={onClose}
@@ -453,7 +453,7 @@ const TrackSettingsModal = ({
                             <h3 className="text-sm font-medium">General</h3>
                             {/* Volume */}
                             <div>
-                                <label htmlFor="volume" className="block text-sm font-medium">
+                                <label htmlFor="volume" className="retro-label">
                                     Volume: {(volume * 100).toFixed(0)}%
                                 </label>
                                 <Lever
@@ -469,7 +469,7 @@ const TrackSettingsModal = ({
 
                             {/* Pan */}
                             <div>
-                                <label htmlFor="pan" className="block text-sm font-medium">
+                                <label htmlFor="pan" className="retro-label">
                                     Pan: {pan === 0 ? 'Center' : pan < 0 ? `${Math.round(Math.abs(pan) * 100)}% L` : `${Math.round(pan * 100)}% R`}
                                 </label>
                                 <Lever
@@ -487,7 +487,7 @@ const TrackSettingsModal = ({
                                 <>
                                     {/* Instrument Type */}
                                     <div>
-                                        <label htmlFor="instrument-type" className="block text-sm font-medium">
+                                        <label htmlFor="instrument-type" className="retro-label">
                                             Instrument Type
                                         </label>
                                         <select
@@ -528,7 +528,7 @@ const TrackSettingsModal = ({
                                                     });
                                                 }
                                             }}
-                                            className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 text-sm"
+                                            className="mt-1 block w-full px-3 py-2 bg-[#1d0a38] border border-cyan-400/30 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 text-sm"
                                         >
                                             {Object.keys(synthConfigs).map((key) => (
                                                 <option key={key} value={key}>
@@ -546,7 +546,7 @@ const TrackSettingsModal = ({
                                             checked={polyphonic}
                                             onChange={(e) => handleSettingChange(setPolyphonic, e.target.checked, 'is_polyphonic')}
                                             disabled={instrumentType === 'drumsampler'}
-                                            className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-gray-600 rounded disabled:opacity-50"
+                                            className="h-4 w-4 text-purple-500 focus:ring-purple-500 border-cyan-400/30 rounded disabled:opacity-50"
                                         />
                                         <label htmlFor="polyphonic" className="ml-2 text-sm">
                                             Polyphonic Mode
@@ -705,7 +705,7 @@ const TrackSettingsModal = ({
                     </div>
 
                     {/* Separator */}
-                    <hr className="border-gray-600 my-6" />
+                    <hr className="border-cyan-400/30 my-6" />
 
                     {/* Footer with Save and Delete */}
                     <div className="flex flex-col items-start gap-4">
@@ -721,7 +721,7 @@ const TrackSettingsModal = ({
                                     </button>
                                     <button
                                         onClick={() => setShowDeleteConfirm(false)}
-                                        className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-700"
+                                        className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-[#1d0a38]"
                                     >
                                         Cancel
                                     </button>
