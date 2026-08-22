@@ -16,13 +16,13 @@ const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, title, message }) => {
                 <div className="flex justify-end space-x-4">
                     <button
                         onClick={onClose}
-                        className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                        className="retro-btn px-4 py-2 text-[0.6rem]"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={onConfirm}
-                        className="py-2 px-4 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700"
+                        className="retro-btn px-4 py-2 text-[0.6rem] !border-red-400 !text-red-300"
                     >
                         Delete
                     </button>
@@ -48,13 +48,13 @@ const ConfirmInviteModal = ({ isOpen, onClose, onConfirm, invite }) => {
                 <div className="flex justify-end space-x-4">
                     <button
                         onClick={onClose}
-                        className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                        className="retro-btn px-4 py-2 text-[0.6rem]"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => onConfirm()}
-                        className="py-2 px-4 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
+                        className="retro-btn px-4 py-2 text-[0.6rem] !border-emerald-400 !text-emerald-300"
                     >
                         Accept
                     </button>
@@ -97,17 +97,17 @@ const RecordModal = ({ isOpen, onClose, tracks, onStartRecording, onStopRecordin
                 <div className="flex justify-end space-x-4">
                     <button
                         onClick={onClose}
-                        className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                        className="retro-btn px-4 py-2 text-[0.6rem]"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={isRecording ? onStopRecording : () => onStartRecording(selectedTrack)}
                         disabled={!selectedTrack}
-                        className={`py-2 px-4 font-semibold rounded-md ${
+                        className={`retro-btn px-4 py-2 text-[0.6rem] ${
                             isRecording
-                                ? 'bg-red-600 text-white hover:bg-red-700'
-                                : 'bg-green-600 text-white hover:bg-green-700'
+                                ? '!border-red-400 !text-red-300'
+                                : '!border-emerald-400 !text-emerald-300'
                         } ${!selectedTrack ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         {isRecording ? 'Stop Recording' : 'Start Recording'}
@@ -1031,6 +1031,7 @@ const CollaborationsManager = () => {
 
     return (
             <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
+            <div className="container mx-auto px-4 py-8 max-w-6xl">
             <h1 className="retro-display retro-chrome text-3xl mb-6">Collaborations Manager</h1>
             {error && <p className="text-red-400 mb-4">{error}</p>}
 
@@ -1142,7 +1143,7 @@ const CollaborationsManager = () => {
                         </div>
                         <button
                             type="submit"
-                            className="w-full py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                            className="retro-btn retro-btn--hot w-full px-4 py-2 text-[0.6rem]"
                         >
                             Create
                         </button>
@@ -1178,7 +1179,7 @@ const CollaborationsManager = () => {
                                 {collab.profile_id === Number(profileId) && (
                                     <button
                                         onClick={() => handleDeleteCollaboration(collab.id)}
-                                        className="p-2 text-red-600 hover:text-red-700"
+                                        className="retro-action p-2 !text-red-300 hover:!text-red-200"
                                         title="Delete Collaboration"
                                     >
                                         <TrashIcon className="w-5 h-5" />
@@ -1270,14 +1271,14 @@ const CollaborationsManager = () => {
                                                 <div className="flex space-x-2">
                                                     <button
                                                         onClick={() => handleResendInvite(invitee.id)}
-                                                        className="p-2 text-blue-600 hover:text-primary-brand-800"
+                                                        className="retro-action p-2"
                                                         title="Resend Invitation"
                                                     >
                                                         <EnvelopeIcon className="w-5 h-5" />
                                                     </button>
                                                     <button
                                                         onClick={() => handleRevokeInvite(invitee.id, invitee.email)}
-                                                        className="p-2 text-red-600 hover:text-red-700"
+                                                        className="retro-action p-2 !text-red-300 hover:!text-red-200"
                                                         title="Revoke Invitation"
                                                     >
                                                         <TrashIcon className="w-5 h-5" />
@@ -1287,7 +1288,7 @@ const CollaborationsManager = () => {
                                             {invitee.status === 'accepted' && invitee.profile_id && (
                                                 <button
                                                     onClick={() => handleRemoveCollaborator(invitee.profile_id, invitee.profile_name)}
-                                                    className="p-2 text-red-600 hover:text-red-700"
+                                                    className="retro-action p-2 !text-red-300 hover:!text-red-200"
                                                     title="Remove Collaborator"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />
@@ -1370,14 +1371,14 @@ const CollaborationsManager = () => {
                                                                 {playingTrackPair?.mainTrackId === mainTrack.id && playingTrackPair?.vocalTrackId === vocalTrack.id ? (
                                                                     <button
                                                                         onClick={() => stopTrackPair()}
-                                                                        className="mt-1 py-1 px-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
+                                                                        className="retro-btn mt-1 px-3 py-1 text-[0.55rem] !border-red-400 !text-red-300"
                                                                     >
                                                                         Stop Playback
                                                                     </button>
                                                                 ) : (
                                                                     <button
                                                                         onClick={() => playTrackPair(mainTrack, vocalTrack)}
-                                                                        className="mt-1 py-1 px-2 bg-primary-brand-500 text-white text-sm rounded-md hover:bg-primary-brand-700"
+                                                                        className="retro-btn retro-btn--hot mt-1 px-3 py-1 text-[0.55rem]"
                                                                     >
                                                                         Play with Main Track
                                                                     </button>
@@ -1475,7 +1476,7 @@ const CollaborationsManager = () => {
                             </div>
                             <button
                                 type="submit"
-                                className="w-full py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                                className="retro-btn retro-btn--hot w-full px-4 py-2 text-[0.6rem]"
                             >
                                 Save Changes
                             </button>
@@ -1535,9 +1536,9 @@ const CollaborationsManager = () => {
                                 </label>
                             </div>
                             {isUploading && (
-                                <div className="relative w-full bg-white/10 rounded-full h-6">
+                                <div className="relative w-full bg-cyan-400/10 border border-cyan-400/30 h-6">
                                     <div
-                                        className="bg-primary-brand-500 h-6 rounded-full flex items-center justify-center text-sm text-white px-2"
+                                        className="retro-mono h-6 flex items-center justify-center text-lg text-[#04010c] font-bold px-2 bg-gradient-to-r from-fuchsia-500 to-cyan-400 transition-[width] duration-200"
                                         style={{ width: `${uploadProgress}%` }}
                                     >
                                         {uploadProgress > 10 && uploadProgress < 100 && `${uploadProgress}%`}
@@ -1548,7 +1549,7 @@ const CollaborationsManager = () => {
                             <button
                                 type="submit"
                                 disabled={isUploading}
-                                className={`w-full py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-brand-700'}`}
+                                className={`retro-btn retro-btn--hot w-full px-4 py-2 text-[0.6rem] ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-brand-700'}`}
                             >
                                 {isUploading ? 'Uploading...' : 'Upload Track'}
                             </button>
@@ -1597,7 +1598,7 @@ const CollaborationsManager = () => {
                             </div>
                             <button
                                 type="submit"
-                                className="w-full py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700"
+                                className="retro-btn retro-btn--hot w-full px-4 py-2 text-[0.6rem]"
                             >
                                 Send Invitation
                             </button>
@@ -1632,6 +1633,7 @@ const CollaborationsManager = () => {
                 onConfirm={() => handleInviteAction(selectedInvite)}
                 invite={selectedInvite}
             />
+            </div>
         </div>
     );
 };

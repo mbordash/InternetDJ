@@ -3,6 +3,7 @@ const pool = require('../config/database');
 const { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require('../config/tigris');
 const authenticate = require('../middleware/authenticate');
+const authenticateOptional = require('../middleware/authenticateOptional');
 const logger = require('../utils/logger');
 const { normalizeGenre, aliasSourcesFor, expandGenreString, isLikelyJunkGenre } = require('../utils/genres');
 const router = express.Router();
@@ -229,8 +230,16 @@ router.get('/:songId/similar', async (req, res) => {
     }
 });
 
+// Resolve the caller's profile id when a valid token came along. The activity
+// feed is public, so an anonymous viewer is a normal case rather than an error.
+const viewerProfileIdFor = async (req) => {
+    if (!req.user?.id) return null;
+    const rows = await pool.query('SELECT id FROM profiles WHERE user_id = ? LIMIT 1', [req.user.id]);
+    return rows.length ? Number(rows[0].id) : null;
+};
+
 // GET /music/:songId/activity – public activity feed for a song
-router.get('/:songId/activity', async (req, res) => {
+router.get('/:songId/activity', authenticateOptional, async (req, res) => {
     const songId = parseInt(req.params.songId);
     if (!songId) return res.status(400).json({ error: 'Invalid song ID' });
 
@@ -260,8 +269,10 @@ router.get('/:songId/activity', async (req, res) => {
             LIMIT 20
         `, [songId]);
 
-        // 2. Added to any non-Likes playlist
-        const playlistAdds = await pool.query(`
+        // 2. Added to any non-Likes crate. The crate's id comes back so the feed
+        // can link to it, and its visibility comes back so a private crate - a
+        // surprise mixtape, say - never announces itself on a public song page.
+        const playlistAddRows = await pool.query(`
             SELECT
                 'playlist_add'  AS type,
                 p.id            AS actor_profile_id,
@@ -269,7 +280,11 @@ router.get('/:songId/activity', async (req, res) => {
                 p.name          AS actor_name,
                 p.picture_url   AS actor_picture,
                 ps.added_at     AS created_at,
-                pl.name         AS extra
+                pl.name         AS extra,
+                pl.id           AS extra_id,
+                pl.is_public    AS crate_is_public,
+                pl.profile_id   AS crate_owner_profile_id,
+                pl.dedicated_to_profile_id AS crate_dedicated_to_profile_id
             FROM playlist_songs ps
             JOIN playlists pl ON ps.playlist_id = pl.id
             JOIN profiles p   ON pl.profile_id  = p.id
@@ -277,6 +292,17 @@ router.get('/:songId/activity', async (req, res) => {
             ORDER BY ps.added_at DESC
             LIMIT 20
         `, [songId]);
+
+        // Same visibility rule the crate page itself enforces: public, yours, or
+        // dedicated to you.
+        const viewerProfileId = await viewerProfileIdFor(req);
+        const playlistAdds = playlistAddRows.filter((row) => (
+            row.crate_is_public
+            || (viewerProfileId != null && (
+                Number(row.crate_owner_profile_id) === viewerProfileId
+                || Number(row.crate_dedicated_to_profile_id) === viewerProfileId
+            ))
+        ));
 
         // 3. Reviews
         const reviews = await pool.query(`
@@ -322,6 +348,7 @@ router.get('/:songId/activity', async (req, res) => {
                 actor_picture: row.actor_picture || null,
                 created_at: row.created_at,
                 extra: row.extra || null,
+                extra_id: row.extra_id != null ? Number(row.extra_id) : null,
             }))
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             .slice(0, 30);

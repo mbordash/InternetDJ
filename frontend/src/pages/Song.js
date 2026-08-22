@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async';
-import { useState, useEffect, useContext, useMemo } from 'react';
+import { Fragment, useState, useEffect, useContext, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -199,7 +199,13 @@ const Song = () => {
         const fetchActivity = async () => {
             setIsLoadingActivity(true);
             try {
-                const response = await axios.get(`${API_URL}/music/${songId}/activity`);
+                // Sent with the token when there is one: crates you own or were
+                // gifted are part of your feed, but nobody else's.
+                const token = localStorage.getItem('token');
+                const response = await axios.get(
+                    `${API_URL}/music/${songId}/activity`,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+                );
                 setActivity(response.data.activity || []);
             } catch (err) {
                 console.error('Failed to fetch activity:', err);
@@ -514,12 +520,13 @@ const Song = () => {
                     actor_picture: item.actor_picture,
                     created_at: item.created_at,
                     types: new Set(),
-                    extra_list: [],
+                    crates: [],
                 };
             }
             grouped[key].types.add(item.type);
-            if (item.extra && !grouped[key].extra_list.includes(item.extra)) {
-                grouped[key].extra_list.push(item.extra);
+            // Keep the crate's id alongside its name so the label can link to it.
+            if (item.extra && !grouped[key].crates.some(c => c.id === item.extra_id && c.name === item.extra)) {
+                grouped[key].crates.push({ id: item.extra_id ?? null, name: item.extra });
             }
             // Always update created_at to the most recent
             if (new Date(item.created_at) > new Date(grouped[key].created_at)) {
@@ -529,40 +536,81 @@ const Song = () => {
         return Object.values(grouped).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     };
 
-    const getActivityLabel = (groupedItem) => {
+    // Each clause carries its own direct object so the line reads as a sentence -
+    // "added this song to X crate", not "added to X this song" - and every object
+    // with a page of its own is rendered as a link to it.
+    const renderActivityLabel = (groupedItem) => {
         const hasReview = hasType(groupedItem.types, 'song_reviewed');
         const hasLike = hasType(groupedItem.types, 'song_liked');
-        const hasPlaylistAdd = hasType(groupedItem.types, 'playlist_add');
+        const crates = (groupedItem.crates || []).filter(c => c.name);
+        const hasPlaylistAdd = hasType(groupedItem.types, 'playlist_add') && crates.length > 0;
         const hasFollow = hasType(groupedItem.types, 'profile_followed');
 
-        const parts = [];
-        if (hasReview) parts.push('reviewed');
-        if (hasLike) parts.push('liked');
+        const clauses = [];
+
+        // "reviewed and liked this song" - both verbs share the one direct object.
+        if (hasReview || hasLike) {
+            const verbs = [];
+            if (hasReview) {
+                verbs.push(
+                    <button
+                        key="reviewed"
+                        type="button"
+                        onClick={() => scrollToReview(groupedItem.actor_profile_id)}
+                        className="cursor-pointer hover:text-fuchsia-300 hover:underline underline-offset-2"
+                    >
+                        reviewed
+                    </button>
+                );
+            }
+            if (hasLike) verbs.push(<span key="liked">liked</span>);
+            clauses.push(
+                <span key="song">
+                    {verbs.map((verb, i) => (
+                        <Fragment key={i}>{i > 0 ? ' and ' : ''}{verb}</Fragment>
+                    ))}
+                    {' this song'}
+                </span>
+            );
+        }
+
         if (hasPlaylistAdd) {
-            const playlists = groupedItem.extra_list.filter(Boolean);
-            if (playlists.length > 0) {
-                parts.push(`added to ${playlists.length === 1 ? `"${playlists[0]}"` : 'playlist(s)'}`);
-            }
-        }
-        if (hasFollow) parts.push(`followed ${song?.profile_name || 'this artist'}`);
-
-        // Only add "this song" if the action is about the song itself, not follows
-        const songActions = parts.filter(p => !p.includes('followed'));
-        const followActions = parts.filter(p => p.includes('followed'));
-
-        let label = '';
-        if (songActions.length > 0) {
-            label = songActions.join(' and ') + ' this song';
-        }
-        if (followActions.length > 0) {
-            if (label) {
-                label += ' and ' + followActions.join(' and ');
-            } else {
-                label = followActions.join(' and ');
-            }
+            clauses.push(
+                <span key="crates">
+                    {/* "it" once the song is already the subject of an earlier clause. */}
+                    {clauses.length > 0 ? 'added it to ' : 'added this song to '}
+                    {crates.map((crate, i) => (
+                        <Fragment key={crate.id ?? crate.name}>
+                            {i === 0 ? '' : i === crates.length - 1 ? ' and ' : ', '}
+                            {crate.id ? (
+                                <Link to={`/crate/${crate.id}`} className="retro-link">
+                                    &quot;{crate.name}&quot;
+                                </Link>
+                            ) : (
+                                <span>&quot;{crate.name}&quot;</span>
+                            )}
+                        </Fragment>
+                    ))}
+                    {crates.length === 1 ? ' crate' : ' crates'}
+                </span>
+            );
         }
 
-        return label;
+        if (hasFollow) {
+            const artistName = song?.profile_name || 'this artist';
+            clauses.push(
+                <span key="follow">
+                    {'followed '}
+                    {song?.profile_id
+                        ? <Link to={profilePath(song)} className="retro-link">{artistName}</Link>
+                        : artistName}
+                </span>
+            );
+        }
+
+        return clauses.map((clause, i) => (
+            <Fragment key={i}>{i > 0 ? ' and ' : ''}{clause}</Fragment>
+        ));
     };
 
     const hasType = (types, typeToCheck) => {
@@ -1051,17 +1099,9 @@ const Song = () => {
                                                             {' '}
                                                             <span className="inline-flex items-center gap-1">
                                                                 {getActivityIcon(item.types)}
-                                                                {hasType(item.types, 'song_reviewed') ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => scrollToReview(item.actor_profile_id)}
-                                                                        className="retro-mono text-lg text-gray-400 hover:text-fuchsia-300 cursor-pointer"
-                                                                    >
-                                                                        {getActivityLabel(item)}
-                                                                    </button>
-                                                                ) : (
-                                                                    <span className="text-gray-400">{getActivityLabel(item)}</span>
-                                                                )}
+                                                                <span className="retro-mono text-lg text-gray-400">
+                                                                    {renderActivityLabel(item)}
+                                                                </span>
                                                             </span>
                                                         </p>
                                                     </div>

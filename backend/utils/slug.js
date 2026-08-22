@@ -20,6 +20,7 @@ const RESERVED_SLUGS = new Set([
     // the ones declared before it would leave that profile unreachable.
     'latest', 'most-popular', 'top-reviewers', 'top-earners', 'slug-available',
     'recommended-songs', 'liked-songs', 'followed-songs',
+    'crate', 'crates', 'mixtape', 'mixtapes', 'playlist', 'playlists',
 ]);
 
 const MIN_LENGTH = 3;

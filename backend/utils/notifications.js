@@ -11,6 +11,7 @@ const NOTIFICATION_TYPES = {
     IDJC_RECEIVED: 'idjc_received',
     COLLAB_TRACK_ADDED: 'collab_track_added',
     ARTIST_SONG_UPLOADED: 'artist_song_uploaded',
+    PLAYLIST_DEDICATION: 'playlist_dedication',
 };
 
 const FRONTEND_URL =
@@ -38,6 +39,9 @@ const buildActivityUrl = (type, entityType, entityId, metadata) => {
     }
     if (entityType === 'profile' && entityId) {
         return `${FRONTEND_URL}/profile/${entityId}`;
+    }
+    if (entityType === 'playlist' && entityId) {
+        return `${FRONTEND_URL}/crate/${entityId}`;
     }
     if (entityType === 'collaboration') {
         if (metadata?.owner_profile_id) {

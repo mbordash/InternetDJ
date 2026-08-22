@@ -91,9 +91,24 @@ app.use(
 );
 
 // Rate limiter
+// Audio playback is byte-range streaming: a single track can issue dozens of
+// requests and every seek issues more, so it gets its own generous bucket
+// instead of eating the shared API budget and 429ing the rest of the app.
+const AUDIO_PROXY_PATH = '/api/proxy/audio';
+const isAudioProxyRequest = (req) => req.originalUrl.split('?')[0] === AUDIO_PROXY_PATH;
+
+const audioProxyRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 600,
+    message: { error: 'Too many audio requests from this IP, please try again shortly' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 const globalRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 1000,
+    skip: isAudioProxyRequest,
     message: { error: 'Too many requests from this IP, please try again after 15 minutes' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -109,6 +124,7 @@ const globalRateLimiter = rateLimit({
     },
 });
 
+app.use(AUDIO_PROXY_PATH, audioProxyRateLimiter);
 app.use('/api/', globalRateLimiter);
 
 // Middleware

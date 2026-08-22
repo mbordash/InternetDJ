@@ -16,6 +16,8 @@ function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
     const dropdownRef = useRef(null);
+    const createMenuRef = useRef(null);
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -44,6 +46,28 @@ function Navbar() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // The Create menu closes the same way the profile menu does, and on Escape
+    // so it is dismissable without a mouse.
+    useEffect(() => {
+        const handleOutside = (event) => {
+            if (createMenuRef.current && !createMenuRef.current.contains(event.target)) {
+                setIsCreateOpen(false);
+            }
+        };
+        const handleEscape = (event) => {
+            if (event.key === 'Escape') setIsCreateOpen(false);
+        };
+        document.addEventListener('mousedown', handleOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, []);
+
+    // Never leave the menu hanging open across a navigation.
+    useEffect(() => { setIsCreateOpen(false); }, [location.pathname]);
+
     const logout = () => {
         localStorage.removeItem('token');
         setUser(null); // AuthContext, so every page re-renders as signed out
@@ -71,15 +95,26 @@ function Navbar() {
         return initials.toUpperCase();
     };
 
+    // "Create" groups the two production tools. DAW is jargon to a newcomer;
+    // the group name says what you go there to do, and collapsing two items
+    // into one keeps the bar at four.
     const navItems = [
         { to: '/discover', label: 'Discover' },
         { to: '/browse', label: 'Browse' },
-        { to: '/projects', label: 'DAW' },
-        { to: '/stems', label: 'AI Stems' },
+        {
+            label: 'Create',
+            children: [
+                { to: '/projects', label: 'Studio / DAW' },
+                { to: '/stems', label: 'AI Stems' },
+            ],
+        },
         { to: '/forum', label: 'Forum' },
     ];
 
     const isActive = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+    // A group reads as current whenever you are inside any of its pages.
+    const isGroupActive = (item) => (item.children || []).some((child) => isActive(child.to));
 
     const getNavLinkClass = (path) => `retro-navlink ${isActive(path) ? 'is-active' : ''}`;
 
@@ -141,9 +176,40 @@ function Navbar() {
                         <div className="hidden md:flex items-center space-x-5">
                             {searchForm()}
                             {navItems.map((item) => (
-                                <Link key={item.to} to={item.to} className={getNavLinkClass(item.to)}>
-                                    {item.label}
-                                </Link>
+                                item.children ? (
+                                    <div key={item.label} className="relative" ref={createMenuRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsCreateOpen((open) => !open)}
+                                            aria-expanded={isCreateOpen}
+                                            aria-haspopup="true"
+                                            className={`retro-navlink ${isGroupActive(item) ? 'is-active' : ''}`}
+                                        >
+                                            {item.label}
+                                            <span aria-hidden="true" className="ml-1 text-[0.6em]">
+                                                {isCreateOpen ? '\u25B2' : '\u25BC'}
+                                            </span>
+                                        </button>
+                                        {isCreateOpen && (
+                                            <div className="absolute left-0 top-full mt-2 w-44 retro-panel retro-cut p-2 z-50">
+                                                {item.children.map((child) => (
+                                                    <Link
+                                                        key={child.to}
+                                                        to={child.to}
+                                                        onClick={() => setIsCreateOpen(false)}
+                                                        className="retro-menu-item"
+                                                    >
+                                                        &gt; {child.label}
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Link key={item.to} to={item.to} className={getNavLinkClass(item.to)}>
+                                        {item.label}
+                                    </Link>
+                                )
                             ))}
                         </div>
                     </div>
@@ -250,14 +316,33 @@ function Navbar() {
                         <div>
                             <div className="retro-eyebrow mb-2">// Explore //</div>
                             {navItems.map((item) => (
-                                <Link
-                                    key={item.to}
-                                    to={item.to}
-                                    className="retro-menu-item"
-                                    onClick={() => setIsOpen(false)}
-                                >
-                                    &gt; {item.label}
-                                </Link>
+                                item.children ? (
+                                    // A nested dropdown inside a hamburger is a
+                                    // tap too many, so the group flattens into a
+                                    // labelled section instead.
+                                    <div key={item.label} className="mt-2">
+                                        <div className="retro-eyebrow mb-1 opacity-70">// {item.label} //</div>
+                                        {item.children.map((child) => (
+                                            <Link
+                                                key={child.to}
+                                                to={child.to}
+                                                className="retro-menu-item pl-4"
+                                                onClick={() => setIsOpen(false)}
+                                            >
+                                                &gt; {child.label}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <Link
+                                        key={item.to}
+                                        to={item.to}
+                                        className="retro-menu-item"
+                                        onClick={() => setIsOpen(false)}
+                                    >
+                                        &gt; {item.label}
+                                    </Link>
+                                )
                             ))}
                         </div>
 

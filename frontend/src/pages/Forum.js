@@ -11,6 +11,7 @@ import profilePath from '../utils/profilePath';
 function Forum() {
     const [posts, setPosts] = useState([]);
     const [popularPosts, setPopularPosts] = useState([]);
+    const [openCollabs, setOpenCollabs] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [limit] = useState(10);
@@ -48,6 +49,22 @@ function Forum() {
                 });
         }
     }, [navigate]);
+
+    // Open collabs sit alongside the board because both are about finding
+    // other members to work with. Failures stay silent: the panel simply
+    // falls back to its invitation state.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const response = await axios.get(`${API_URL}/collabs/public?limit=5`);
+                if (!cancelled) setOpenCollabs(Array.isArray(response.data) ? response.data : []);
+            } catch {
+                if (!cancelled) setOpenCollabs([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         const fetchPosts = async () => {
@@ -538,6 +555,52 @@ function Forum() {
                                             </li>
                                         ))}
                                     </ul>
+                                )}
+                            </section>
+
+                            <section className="retro-panel retro-cut p-4 mt-6">
+                                <h2 className="retro-display text-base retro-glow-cyan mb-1">Open Collabs</h2>
+                                <p className="retro-mono text-lg text-gray-500 mb-4">
+                                    &gt; tracks looking for other members
+                                </p>
+                                {openCollabs.length === 0 ? (
+                                    <div>
+                                        <p className="retro-mono text-xl text-gray-300 mb-4">
+                                            No public collabs yet. Start one and see who joins.
+                                        </p>
+                                        <Link
+                                            to={user ? `${profilePath(user)}/collaborations` : '/collabs'}
+                                            className="retro-btn retro-btn--hot px-4 py-2 text-[0.6rem]"
+                                        >
+                                            Start a Collab
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <ul className="space-y-3">
+                                            {openCollabs.map((collab) => (
+                                                <li key={collab.id} className="border-b border-white/10 pb-2 last:border-b-0">
+                                                    <Link
+                                                        to={collab.profile_id ? `${profilePath(collab)}/collaborations` : '/collabs'}
+                                                        className="retro-mono text-xl block truncate text-gray-200 hover:text-cyan-200"
+                                                    >
+                                                        {collab.title}
+                                                    </Link>
+                                                    <div className="retro-mono text-lg text-gray-500 truncate">
+                                                        {collab.owner_name}
+                                                        {' \u00b7 '}
+                                                        {collab.track_count} track{collab.track_count === 1 ? '' : 's'}
+                                                        {collab.allow_uploads && (
+                                                            <span className="text-emerald-300"> \u00b7 open</span>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <Link to="/collabs" className="retro-link retro-mono text-lg block mt-4">
+                                            See all collabs &raquo;&raquo;
+                                        </Link>
+                                    </>
                                 )}
                             </section>
                         </div>

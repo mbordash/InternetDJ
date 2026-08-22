@@ -128,6 +128,7 @@ const ProfilePage = () => {
     // Share and canonical links prefer the vanity address, falling back to the
     // numeric id, which always resolves.
     const profileAddress = profile?.slug || profileId;
+    const [crates, setCrates] = useState([]);
     const profileShareUrl = `${baseUrl}/profile/${profileAddress}`;
 
     const backgroundOptions = [
@@ -854,6 +855,7 @@ const ProfilePage = () => {
         }
     };
 
+
     const handleFollowToggle = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -1085,6 +1087,27 @@ const ProfilePage = () => {
 
     // Whichever address the visitor arrived on, actions key off the numeric id.
     const apiProfileId = profile?.id ?? profileId;
+
+    // Public crates for this profile. Sends the token when present so the
+    // owner also sees their private ones and any mixtape made for them.
+    useEffect(() => {
+        if (!apiProfileId) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(
+                    `${API_URL}/playlists/by-profile/${apiProfileId}`,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+                );
+                if (!cancelled) setCrates(Array.isArray(response.data) ? response.data : []);
+            } catch (err) {
+                if (!cancelled) setCrates([]);   // a missing crate list must not break the profile
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [apiProfileId]);
+
     const isOwner = user && profile && user.id === profile.user_id;
     const featuredSong = songs.find((song) => Boolean(song.is_featured));
     const nonFeaturedSongs = songs.filter((song) => !song.is_featured);
@@ -2185,6 +2208,44 @@ const ProfilePage = () => {
                                 </div>
                             )}
                         </div>
+
+                        {crates.length > 0 && (
+                            <div className="retro-panel retro-cut p-6">
+                                <h3 className="retro-display text-base retro-glow-cyan mb-4">Crates &amp; Mixtapes</h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    {crates.map((crate) => (
+                                        <Link key={crate.id} to={`/crate/${crate.id}`} className="retro-crate group">
+                                            <div className="retro-crate__sleeve aspect-square mb-2">
+                                                {crate.cover_art?.length ? (
+                                                    <div className="grid grid-cols-2 grid-rows-2 gap-px w-full h-full">
+                                                        {[0, 1, 2, 3].map((i) => (
+                                                            crate.cover_art[i]
+                                                                ? <img key={i} src={crate.cover_art[i]} alt="" className="w-full h-full object-cover" />
+                                                                : <div key={i} className="w-full h-full bg-cyan-400/10" />
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-fuchsia-500/10">
+                                                        <span className="retro-display text-[0.6rem] retro-glow-magenta text-center px-1">
+                                                            {crate.name?.slice(0, 12)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="retro-mono text-lg text-gray-200 truncate group-hover:text-cyan-200">
+                                                {crate.name}
+                                            </div>
+                                            <div className="retro-mono text-lg text-gray-500 truncate">
+                                                {crate.dedicated_to_name
+                                                    ? `mixtape for ${crate.dedicated_to_name}`
+                                                    : `${crate.song_count} track${crate.song_count === 1 ? '' : 's'}`}
+                                                {!crate.is_public && ' · private'}
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="retro-panel retro-cut p-6">
                             <h3 className="retro-display text-base retro-glow-cyan mb-4">Liked Songs</h3>

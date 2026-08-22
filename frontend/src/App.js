@@ -29,6 +29,8 @@ import Projects from './pages/Projects';
 import MultitrackSampler from './pages/MultitrackSampler';
 import PublicMultiTrackSampler from './pages/PublicMultiTrackSampler';
 import Playlists from './pages/Playlists';
+import Crate from './pages/Crate';
+import Crates from './pages/Crates';
 import About from './pages/About';
 import Discover from './pages/Discover';
 import StemGenerator from './pages/AIStems';
@@ -83,6 +85,8 @@ function Layout() {
                     <Route path="/projects/:projectId" element={<MultitrackSampler />} />
                     <Route path="/public/:projectId" element={<PublicMultiTrackSampler />} />
                     <Route path="/playlists" element={<Playlists />} />
+                    <Route path="/crate/:crateId" element={<Crate />} />
+                    <Route path="/crates" element={<Crates />} />
                     <Route path="/idj-coin" element={<IDJCoin />} />
                     <Route path="/stems" element={<StemGenerator />} />
                 </Routes>
