@@ -931,3 +931,67 @@
         transition: none;
     }
 }
+
+/* 27. Slider — continuous rating control (detailed song feedback).
+   Native range inputs ignore most styling, so the track and thumb are
+   painted per-engine. Kept on the neon palette with a lit thumb so the
+   handle stays findable against the dark track. */
+.retro-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+}
+
+.retro-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    background: linear-gradient(90deg,
+        var(--neon-magenta) 0%,
+        var(--neon-amber) 45%,
+        var(--neon-cyan) 75%,
+        #34e5a0 100%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    opacity: 0.75;
+}
+
+.retro-slider::-moz-range-track {
+    height: 6px;
+    background: linear-gradient(90deg,
+        var(--neon-magenta) 0%,
+        var(--neon-amber) 45%,
+        var(--neon-cyan) 75%,
+        #34e5a0 100%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    opacity: 0.75;
+}
+
+.retro-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 20px;
+    margin-top: -8px;              /* centre the thumb on a 6px track */
+    background: #f4f0ff;
+    border: 1px solid var(--void-0);
+    box-shadow: 0 0 6px var(--neon-cyan), 0 0 12px rgba(0, 240, 255, 0.45);
+    cursor: grab;
+}
+
+.retro-slider::-moz-range-thumb {
+    width: 14px;
+    height: 20px;
+    border-radius: 0;
+    background: #f4f0ff;
+    border: 1px solid var(--void-0);
+    box-shadow: 0 0 6px var(--neon-cyan), 0 0 12px rgba(0, 240, 255, 0.45);
+    cursor: grab;
+}
+
+.retro-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 2px var(--neon-magenta), 0 0 10px var(--neon-magenta);
+}
+
+.retro-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 2px var(--neon-magenta), 0 0 10px var(--neon-magenta);
+}

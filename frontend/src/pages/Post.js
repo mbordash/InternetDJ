@@ -229,6 +229,14 @@ function Post() {
         return `${monthNames[date.getMonth()]} ${day}${suffix}, ${date.getFullYear()}`;
     };
 
+    // The form has just moved next to the comment being answered, so put the
+    // cursor in it rather than making the user click again.
+    useEffect(() => {
+        if (!newComment.parent_comment_id && !editingComment) return;
+        const editor = document.querySelector('.ql-editor');
+        if (editor) editor.focus({ preventScroll: false });
+    }, [newComment.parent_comment_id, editingComment]);
+
     const buildCommentTree = (comments) => {
         const commentMap = new Map();
         const tree = [];
@@ -259,6 +267,72 @@ function Post() {
         const minutesSinceCreation = (now - createdAt) / (1000 * 60);
         return minutesSinceCreation <= 10;
     };
+
+    // The comment form follows whoever is being replied to. On a long thread a
+    // single form pinned to the bottom means clicking Reply scrolls you away
+    // from the comment you were answering.
+    const renderCommentForm = () => (
+                    <section>
+                        <h2 className="retro-display text-lg retro-glow-magenta mb-4">
+                            {editingComment ? 'Edit Comment' : newComment.parent_comment_id ? 'Reply to Comment' : 'Add a Comment'}
+                        </h2>
+                        <form onSubmit={handleAddOrUpdateComment} className="space-y-4">
+                            <div>
+                                <ReactQuill
+                                    id="comment-content"
+                                    value={newComment.content}
+                                    onChange={(content) => setNewComment((prev) => ({ ...prev, content }))}
+                                    modules={quillModules}
+                                    placeholder="Your comment..."
+                                    className="retro-field"
+                                />
+                            </div>
+                            {!editingComment && (
+                                <div>
+                                    <label htmlFor="comment-image-upload" className="retro-mono text-xl text-gray-300 mr-2">
+                                        Image
+                                    </label>
+                                    <input
+                                        id="comment-image-upload"
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/gif"
+                                        onChange={handleImageChange}
+                                        className="retro-field"
+                                    />
+                                    {imagePreview && (
+                                        <div className="mt-2">
+                                            <img src={imagePreview} alt="Preview" className="max-w-xs h-auto rounded-md" />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <div className="flex space-x-2">
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className={`retro-btn retro-btn--hot px-4 py-2 text-xs ${
+                                        isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                                    }`}
+                                >
+                                    {editingComment ? 'Update Comment' : 'Post Comment'}
+                                </button>
+                                {(newComment.parent_comment_id || editingComment) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setNewComment((prev) => ({ ...prev, content: '', parent_comment_id: null }));
+                                            setEditingComment(null);
+                                        }}
+                                        className="retro-btn px-4 py-2 text-xs"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+                    </section>
+    );
+
 
     const renderComments = (comments, level = 0) => {
         return comments.map((comment) => (
@@ -344,6 +418,11 @@ function Post() {
                         </button>
                     )}
                 </div>
+                {(newComment.parent_comment_id === comment.id || editingComment?.id === comment.id) && (
+                    <div className="mt-4 border-l-2 border-fuchsia-500/60 pl-4">
+                        {renderCommentForm()}
+                    </div>
+                )}
                 {comment.children && comment.children.length > 0 && (
                     <div className="mt-4">{renderComments(comment.children, level + 1)}</div>
                 )}
@@ -491,66 +570,8 @@ function Post() {
                     )}
                 </section>
 
-                {/* Add/Edit Comment Form */}
-                <section>
-                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">
-                        {editingComment ? 'Edit Comment' : newComment.parent_comment_id ? 'Reply to Comment' : 'Add a Comment'}
-                    </h2>
-                    <form onSubmit={handleAddOrUpdateComment} className="space-y-4">
-                        <div>
-                            <ReactQuill
-                                id="comment-content"
-                                value={newComment.content}
-                                onChange={(content) => setNewComment((prev) => ({ ...prev, content }))}
-                                modules={quillModules}
-                                placeholder="Your comment..."
-                                className="retro-field"
-                            />
-                        </div>
-                        {!editingComment && (
-                            <div>
-                                <label htmlFor="comment-image-upload" className="retro-mono text-xl text-gray-300 mr-2">
-                                    Image
-                                </label>
-                                <input
-                                    id="comment-image-upload"
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/gif"
-                                    onChange={handleImageChange}
-                                    className="retro-field"
-                                />
-                                {imagePreview && (
-                                    <div className="mt-2">
-                                        <img src={imagePreview} alt="Preview" className="max-w-xs h-auto rounded-md" />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        <div className="flex space-x-2">
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className={`retro-btn retro-btn--hot px-4 py-2 text-xs ${
-                                    isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
-                            >
-                                {editingComment ? 'Update Comment' : 'Post Comment'}
-                            </button>
-                            {(newComment.parent_comment_id || editingComment) && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setNewComment((prev) => ({ ...prev, content: '', parent_comment_id: null }));
-                                        setEditingComment(null);
-                                    }}
-                                    className="retro-btn px-4 py-2 text-xs"
-                                >
-                                    Cancel
-                                </button>
-                            )}
-                        </div>
-                    </form>
-                </section>
+                {!newComment.parent_comment_id && !editingComment && renderCommentForm()}
+
             </div>
         </div>
     );

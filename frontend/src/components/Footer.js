@@ -44,6 +44,29 @@ const Footer = () => {
     const [likeError, setLikeError] = useState(null);
     const [playlists, setPlaylists] = useState([]);
     const progressBarRef = useRef(null);
+    const deckRef = useRef(null);
+    // When a song is playing the deck is position:fixed, so it sits on top of
+    // the page. The layout used to reserve a hardcoded 112px for it, but the
+    // deck is 118px — enough to clip a button sitting at the very bottom.
+    // Measure it instead and reserve exactly that much.
+    const [deckHeight, setDeckHeight] = useState(0);
+
+    useEffect(() => {
+        const node = deckRef.current;
+        if (!node || !currentSong) {
+            setDeckHeight(0);
+            return;
+        }
+        const measure = () => setDeckHeight(node.getBoundingClientRect().height);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(node);
+        window.addEventListener('resize', measure);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, [currentSong]);
 
     const formatTime = (seconds) => {
         if (isNaN(seconds) || seconds === 0) return '0:00';
@@ -176,7 +199,14 @@ const Footer = () => {
     };
 
     return (
-        <footer className={`retro-deck text-white py-4 w-full ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}>
+        <>
+        {/* Occupies the space the fixed deck covers, so the end of the page can
+            always be scrolled clear of it. Height tracks the deck exactly. */}
+        {currentSong && <div aria-hidden="true" style={{ height: `${deckHeight}px` }} />}
+        <footer
+            ref={deckRef}
+            className={`retro-deck text-white py-4 w-full ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}
+        >
             <div className="container mx-auto px-4">
                 {currentSong ? (
                     <div className="retro-panel retro-cut px-4 py-3 flex items-center gap-4 w-full">
@@ -358,6 +388,7 @@ const Footer = () => {
                 )}
             </div>
         </footer>
+        </>
     );
 };
 

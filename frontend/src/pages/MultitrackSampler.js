@@ -477,6 +477,11 @@ const MultiTrackSampler = () => {
     const { projectId } = useParams();
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
+    const [saveState, setSaveState] = useState('idle');   // 'idle' | 'saving' | 'saved'
+    const [lastSavedAt, setLastSavedAt] = useState(null);
+    // Clicking Save blurs the title input first, which already fires a save.
+    // setState is async, so saveState can't gate the duplicate - a ref can.
+    const savingRef = useRef(null);   // holds the in-flight save promise
     const [project, setProject] = useState(null);
     const [editTitle, setEditTitle] = useState('');
     const [tracks, setTracks] = useState([]);
@@ -1115,21 +1120,54 @@ const MultiTrackSampler = () => {
     const handleSaveTitle = async () => {
         if (!editTitle.trim()) {
             setError('Project title cannot be empty');
-            return;
+            setSaveState('idle');
+            return false;
         }
+        // Clicking Save blurs the input, which already fires a save. Rather
+        // than drop the second call (Save & Exit would then never leave) or
+        // duplicate the PUT, later callers join the in-flight save.
+        if (savingRef.current) return savingRef.current;
+
+        const inFlight = (async () => {
+            setSaveState('saving');
+            try {
+                const token = localStorage.getItem('token');
+                await axios.put(
+                    `${API_URL}/projects/${projectId}`,
+                    { title: editTitle.trim(), is_public: project.is_public },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                setProject(prev => ({ ...prev, title: editTitle.trim() }));
+                setError(null);
+                setLastSavedAt(new Date());
+                setSaveState('saved');
+                return true;
+            } catch (err) {
+                console.error('Save title error:', err.response?.data || err.message);
+                setError('Failed to save project title: ' + (err.response?.data?.error || err.message));
+                setSaveState('idle');
+                return false;
+            }
+        })();
+
+        savingRef.current = inFlight;
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(
-                `${API_URL}/projects/${projectId}`,
-                { title: editTitle.trim(), is_public: project.is_public },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setProject(prev => ({ ...prev, title: editTitle.trim() }));
-            setError(null);
-        } catch (err) {
-            console.error('Save title error:', err.response?.data || err.message);
-            setError('Failed to save project title: ' + (err.response?.data?.error || err.message));
+            return await inFlight;
+        } finally {
+            savingRef.current = null;
         }
+    };
+
+    // Arrangement edits each persist as they happen, so this is a confirmation
+    // affordance more than a flush: it commits the one genuinely pending edit
+    // (the title) and gives an explicit "your work is stored" signal.
+    const handleSaveProject = async () => {
+        await handleSaveTitle();
+    };
+
+    const handleSaveAndExit = async () => {
+        const ok = await handleSaveTitle();
+        if (ok) navigate('/projects');
     };
 
     const handleVolumeChange = async (trackId, newVolume) => {
@@ -2623,16 +2661,51 @@ const MultiTrackSampler = () => {
     return (
         <DndProvider backend={HTML5Backend}>
             <div className="w-full min-h-screen text-gray-100 pt-2 px-4">
-                <div className="mb-6">
+                <div className="mb-6 flex flex-wrap items-center gap-3">
                     <input
                         type="text"
                         value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
+                        onChange={(e) => { setEditTitle(e.target.value); setSaveState('idle'); }}
                         onBlur={handleSaveTitle}
                         onKeyPress={(e) => e.key === 'Enter' && handleSaveTitle()}
-                        className="retro-display text-lg w-full px-2 py-1 border border-cyan-400/25 bg-cyan-400/5 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500"
+                        className="retro-display text-lg flex-1 min-w-[12rem] px-2 py-1 border border-cyan-400/25 bg-cyan-400/5 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500"
                         placeholder="Enter project title"
                     />
+                    <button
+                        onClick={handleSaveProject}
+                        disabled={saveState === 'saving'}
+                        title="Save this project"
+                        className="retro-btn px-4 py-2 text-[0.6rem] whitespace-nowrap"
+                    >
+                        {saveState === 'saving' ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                        onClick={handleSaveAndExit}
+                        disabled={saveState === 'saving'}
+                        title="Save this project and return to your projects"
+                        className="retro-btn retro-btn--hot px-4 py-2 text-[0.6rem] whitespace-nowrap"
+                    >
+                        Save &amp; Exit
+                    </button>
+                    <span
+                        aria-live="polite"
+                        className="retro-mono text-lg min-w-[9rem] text-right"
+                    >
+                        {saveState === 'saving' && <span className="text-cyan-300">Saving...</span>}
+                        {saveState === 'saved' && (
+                            <span className="text-emerald-300">
+                                &#10003; Saved{lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+                            </span>
+                        )}
+                        {saveState === 'idle' && lastSavedAt && (
+                            <span className="text-gray-500">
+                                Last saved {lastSavedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            </span>
+                        )}
+                        {saveState === 'idle' && !lastSavedAt && (
+                            <span className="text-gray-500">Changes save automatically</span>
+                        )}
+                    </span>
                 </div>
                 {error && <p className="retro-mono text-xl text-fuchsia-400 mb-4">{error}</p>}
                 <div className="retro-panel retro-cut mb-8 flex flex-wrap items-center gap-3 p-4">
