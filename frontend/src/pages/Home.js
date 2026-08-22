@@ -20,6 +20,7 @@ function Home() {
     const [popularProfiles, setPopularProfiles] = useState([]);
     const [followedSongs, setFollowedSongs] = useState([]);
     const [recentlyCommentedPosts, setRecentlyCommentedPosts] = useState([]);
+    const [topReviewers, setTopReviewers] = useState([]);
     const [error, setError] = useState(null);
     const [showWelcome, setShowWelcome] = useState(true);
 
@@ -52,6 +53,7 @@ function Home() {
                     axios.get(`${API_URL}/profile/latest`, { headers: { Accept: 'application/json' } }),
                     axios.get(`${API_URL}/profile/most-popular`, { headers: { Accept: 'application/json' } }),
                     axios.get(`${API_URL}/forum/recently-commented`),
+                    axios.get(`${API_URL}/profile/top-reviewers`, { headers: { Accept: 'application/json' } }),
                 ];
 
                 if (user) {
@@ -66,7 +68,7 @@ function Home() {
                 const [
                     mostPlayedRes, highestRatedRes, latestSongsRes,
                     latestProfilesRes, popularProfilesRes, recentlyCommentedRes,
-                    followedSongsRes
+                    topReviewersRes, followedSongsRes
                 ] = await Promise.all(requests);
 
                 const normalizeProfiles = (data) => {
@@ -95,6 +97,12 @@ function Home() {
                 setLatestProfiles(normalizeProfiles(latestProfilesRes.data));
                 setPopularProfiles(normalizeProfiles(popularProfilesRes.data));
                 setRecentlyCommentedPosts(recentlyCommentedRes.data.posts || []);
+                setTopReviewers(
+                    (Array.isArray(topReviewersRes.data) ? topReviewersRes.data : []).map(r => ({
+                        ...normalizeProfiles([r])[0],
+                        review_count: Number(r.review_count) || 0,
+                    }))
+                );
                 if (user && followedSongsRes) {
                     setFollowedSongs(shuffleAndLimit(followedSongsRes.data || [], 6));
                 }
@@ -371,7 +379,7 @@ function Home() {
                     <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_340px] gap-8">
 
                         {/* LEFT SIDEBAR */}
-                        <aside className="hidden xl:block xl:sticky xl:top-28 h-fit">
+                        <aside className="hidden xl:block xl:sticky xl:top-28 h-fit max-h-[calc(100vh-9rem)] overflow-y-auto space-y-6">
                             <div className="retro-panel retro-cut p-4">
                                 <h3 className="retro-eyebrow mb-4">// Navigate //</h3>
                                 <div className="space-y-0.5">
@@ -393,6 +401,34 @@ function Home() {
                                     ))}
                                 </div>
                             </div>
+
+                            <section className="retro-panel retro-cut p-4">
+                                <h3 className="retro-eyebrow mb-3">// Message Board //</h3>
+                                {recentlyCommentedPosts.length > 0 ? (
+                                    recentlyCommentedPosts.slice(0, 4).map(post => (
+                                        <Link
+                                            key={post.id}
+                                            to={`/forum/post/${post.id}`}
+                                            className="retro-mono text-lg block py-1 text-gray-300 hover:text-fuchsia-300 truncate"
+                                        >
+                                            &gt; {post.title}
+                                        </Link>
+                                    ))
+                                ) : (
+                                    <p className="retro-mono text-lg text-gray-500">&gt; no recent activity</p>
+                                )}
+                            </section>
+
+                            <section className="retro-panel retro-cut p-4">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <img src={IDJCoinLogo} alt="" className="w-10 h-10" />
+                                    <div className="retro-display text-sm retro-glow-cyan">IDJ Coin</div>
+                                </div>
+                                <Link to="/idj-coin" className="retro-link retro-mono text-lg">
+                                    Learn more &raquo;&raquo;
+                                </Link>
+                            </section>
+
                         </aside>
 
                         {/* CENTER - MAIN CONTENT */}
@@ -446,7 +482,7 @@ function Home() {
                         </div>
 
                         {/* RIGHT SIDEBAR */}
-                        <div className="xl:sticky xl:top-28 h-fit space-y-6">
+                        <div className="xl:sticky xl:top-28 h-fit max-h-[calc(100vh-9rem)] overflow-y-auto space-y-6">
 
                             <section className="retro-panel retro-cut p-4">
                                 <h3 className="retro-eyebrow mb-3">// New Members //</h3>
@@ -458,32 +494,38 @@ function Home() {
                                 {popularProfiles.slice(0, 5).map((p, i) => profileRow(p, i + 1))}
                             </section>
 
-                            <section className="retro-panel retro-cut p-4">
-                                <h3 className="retro-eyebrow mb-3">// Message Board //</h3>
-                                {recentlyCommentedPosts.length > 0 ? (
-                                    recentlyCommentedPosts.slice(0, 4).map(post => (
+                            {topReviewers.length > 0 && (
+                                <section className="retro-panel retro-cut p-4">
+                                    <h3 className="retro-eyebrow mb-3">// Top Reviewers //</h3>
+                                    {topReviewers.slice(0, 5).map((p, i) => (
                                         <Link
-                                            key={post.id}
-                                            to={`/forum/post/${post.id}`}
-                                            className="retro-mono text-lg block py-1 text-gray-300 hover:text-fuchsia-300 truncate"
+                                            key={p.profile_id}
+                                            to={profilePath(p)}
+                                            className="flex items-center gap-3 py-1.5 px-2 hover:bg-cyan-400/10 transition-colors group"
                                         >
-                                            &gt; {post.title}
+                                            <span className="retro-pixel text-[0.5rem] text-fuchsia-400 w-4 shrink-0">
+                                                {String(i + 1).padStart(2, '0')}
+                                            </span>
+                                            <img
+                                                src={p.picture_url || getDefaultAvatar(p.profile_id)}
+                                                alt=""
+                                                className="w-8 h-8 object-cover border border-cyan-400/40 group-hover:border-fuchsia-400 transition-colors"
+                                            />
+                                            <span className="retro-mono text-lg text-gray-200 group-hover:text-cyan-200 truncate flex-1">
+                                                {p.name}
+                                            </span>
+                                            <span
+                                                className="retro-mono text-lg text-cyan-300 tabular-nums shrink-0"
+                                                title={`${p.review_count} review${p.review_count === 1 ? '' : 's'}`}
+                                            >
+                                                {p.review_count}
+                                            </span>
                                         </Link>
-                                    ))
-                                ) : (
-                                    <p className="retro-mono text-lg text-gray-500">&gt; no recent activity</p>
-                                )}
-                            </section>
+                                    ))}
+                                </section>
+                            )}
 
-                            <section className="retro-panel retro-cut p-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <img src={IDJCoinLogo} alt="" className="w-10 h-10" />
-                                    <div className="retro-display text-sm retro-glow-cyan">IDJ Coin</div>
-                                </div>
-                                <Link to="/idj-coin" className="retro-link retro-mono text-lg">
-                                    Learn more &raquo;&raquo;
-                                </Link>
-                            </section>
+
 
                         </div>
                     </div>

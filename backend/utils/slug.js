@@ -15,6 +15,11 @@ const RESERVED_SLUGS = new Set([
     'following', 'search', 'browse', 'discover', 'login', 'logout', 'register',
     'profile', 'song', 'songs', 'tag', 'tags', 'stems', 'projects', 'forum',
     'support', 'help', 'about', 'terms', 'privacy', 'internetdj',
+    // Sibling routes under /api/profile/. Those declared after the slug
+    // handler would otherwise be hijacked by a user claiming the name, and
+    // the ones declared before it would leave that profile unreachable.
+    'latest', 'most-popular', 'top-reviewers', 'top-earners', 'slug-available',
+    'recommended-songs', 'liked-songs', 'followed-songs',
 ]);
 
 const MIN_LENGTH = 3;

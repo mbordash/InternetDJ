@@ -358,3 +358,22 @@ ALTER TABLE sample_library
 -- utf8mb4_general_ci, so uniqueness is already case-insensitive.
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS slug VARCHAR(40) DEFAULT NULL;
 ALTER TABLE profiles ADD UNIQUE KEY IF NOT EXISTS profiles_slug_unique (slug);
+
+-- Expressive reactions on reviews (Steam-style). Deliberately NOT scored:
+-- these counts never feed Top Reviewers or any ranking, so there is nothing
+-- to farm. The UNIQUE key holds one reaction per user per review, which is
+-- what makes switching a replace and re-clicking a removal.
+CREATE TABLE IF NOT EXISTS review_reactions (
+    id INT NOT NULL AUTO_INCREMENT,
+    review_id INT NOT NULL,
+    user_id INT NOT NULL,
+    reaction ENUM('thumbs_up', 'thumbs_down', 'clown') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY review_reactions_one_per_user (review_id, user_id),
+    KEY review_reactions_review (review_id),
+    CONSTRAINT fk_review_reactions_review FOREIGN KEY (review_id)
+        REFERENCES reviews(id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_reactions_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

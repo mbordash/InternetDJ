@@ -484,6 +484,44 @@ router.get('/most-popular', async (req, res) => {
   }
 });
 
+// Reviewers ranked by how many substantive reviews they have written.
+// Counting every row would reward drive-by one-word reviews, so a review has
+// to clear a minimum length to score - the leaderboard should reward effort,
+// not volume. Ties break toward the most recent activity so the board moves.
+const MIN_SCORING_REVIEW_CHARS = 40;
+
+router.get('/top-reviewers', async (req, res) => {
+  try {
+    logger.debug('Hit /profile/top-reviewers endpoint');
+    const rows = await pool.query(`
+      SELECT p.id, p.user_id, p.name, p.slug, p.picture_url,
+             COUNT(r.id) AS review_count,
+             MAX(r.created_at) AS last_reviewed_at
+      FROM reviews r
+             JOIN profiles p ON p.id = r.profile_id
+      WHERE r.review IS NOT NULL
+        AND CHAR_LENGTH(TRIM(r.review)) >= ?
+      GROUP BY p.id, p.user_id, p.name, p.slug, p.picture_url
+      HAVING review_count > 0
+      ORDER BY review_count DESC, last_reviewed_at DESC
+      LIMIT 5
+    `, [MIN_SCORING_REVIEW_CHARS]);
+
+    const sanitizedRows = rows.map((row) => ({
+      user_id: Number(row.user_id),
+      profile_id: Number(row.id),
+      profile_slug: row.slug || null,
+      name: row.name || 'Unknown',
+      review_count: Number(row.review_count) || 0,
+      picture_url: row.picture_url || null,
+    }));
+    res.json(sanitizedRows);
+  } catch (err) {
+    logger.error('Error in GET /profile/top-reviewers:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Is this profile address free? Used by the edit form as you type.
 router.get('/slug-available/:slug', authenticate, async (req, res) => {
   try {

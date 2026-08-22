@@ -10,6 +10,34 @@ import SITE_URL from '../utils/site';
 import {Helmet} from "react-helmet-async";
 import profilePath from '../utils/profilePath';
 
+// A comment typed while logged out (or after a token quietly expired) used to
+// be thrown away on submit: the handler redirected to /login and the text was
+// gone. Keep the draft in localStorage so it survives the round trip, keyed
+// per post so two tabs on different threads don't overwrite each other.
+const draftKey = (postId) => `idj:comment-draft:${postId}`;
+
+function loadDraft(postId) {
+    try {
+        return localStorage.getItem(draftKey(postId)) || '';
+    } catch {
+        return '';   // private mode / storage disabled
+    }
+}
+
+function saveDraft(postId, content) {
+    try {
+        const plain = content.replace(/<(.|\n)*?>/g, '').trim();
+        if (plain) localStorage.setItem(draftKey(postId), content);
+        else localStorage.removeItem(draftKey(postId));
+    } catch { /* storage unavailable - the draft just won't persist */ }
+}
+
+function clearDraft(postId) {
+    try {
+        localStorage.removeItem(draftKey(postId));
+    } catch { /* nothing to do */ }
+}
+
 function Post() {
     const { postId } = useParams();
     const baseUrl = SITE_URL;
@@ -60,13 +88,21 @@ function Post() {
         fetchPost();
     }, [postId]);
 
+    // Bring back anything the user was mid-way through writing.
+    useEffect(() => {
+        const draft = loadDraft(postId);
+        if (draft) setNewComment((prev) => ({ ...prev, content: draft }));
+    }, [postId]);
+
     const handleAddOrUpdateComment = async (e) => {
         e.preventDefault();
         // A second submit can be in flight before React re-renders the disabled
         // button, which is how the same reply reached the database repeatedly.
         if (isSubmitting) return;
         if (!user) {
-            navigate('/login');
+            // Hold the draft and come back to this thread after signing in.
+            saveDraft(postId, newComment.content);
+            navigate(`/login?return=${encodeURIComponent(`/forum/post/${postId}`)}`);
             return;
         }
         const plainContent = newComment.content.replace(/<(.|\n)*?>/g, '').trim();
@@ -113,6 +149,7 @@ function Post() {
             }
 
             setNewComment({ content: '', image: null, parent_comment_id: null });
+            clearDraft(postId);   // it's committed; stop offering it back
             setImagePreview(null);
             setError(null);
             const imageInput = document.getElementById('comment-image-upload');
@@ -180,17 +217,26 @@ function Post() {
         }
     };
 
+    // Logged-out visitors get the sign-in prompt instead of the editor, and the
+    // editor mounts a tick later even when it is shown - so never assume the
+    // node exists at call time.
+    const focusCommentBox = () => {
+        requestAnimationFrame(() => {
+            document.getElementById('comment-content')?.focus();
+        });
+    };
+
     const handleReply = (commentId) => {
         setNewComment((prev) => ({ ...prev, parent_comment_id: commentId }));
         setEditingComment(null);
-        document.getElementById('comment-content').focus();
+        focusCommentBox();
     };
 
     const handleEditComment = (comment) => {
         setEditingComment(comment);
         setNewComment({ content: comment.content, image: null, parent_comment_id: null });
         setImagePreview(null);
-        document.getElementById('comment-content').focus();
+        focusCommentBox();
     };
 
     useEffect(() => {
@@ -271,6 +317,26 @@ function Post() {
     // The comment form follows whoever is being replied to. On a long thread a
     // single form pinned to the bottom means clicking Reply scrolls you away
     // from the comment you were answering.
+    const renderLoginToComment = () => (
+        <section className="retro-panel retro-cut p-6 text-center">
+            <h2 className="retro-display text-lg retro-glow-cyan mb-2">Join the conversation</h2>
+            <p className="retro-mono text-lg text-gray-400 mb-4">
+                You need an account to comment on this thread.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link
+                    to={`/login?return=${encodeURIComponent(`/forum/post/${postId}`)}`}
+                    className="retro-btn retro-btn--hot px-5 py-2 text-[0.6rem]"
+                >
+                    Log in
+                </Link>
+                <Link to="/register" className="retro-btn px-5 py-2 text-[0.6rem]">
+                    Sign up
+                </Link>
+            </div>
+        </section>
+    );
+
     const renderCommentForm = () => (
                     <section>
                         <h2 className="retro-display text-lg retro-glow-magenta mb-4">
@@ -281,7 +347,10 @@ function Post() {
                                 <ReactQuill
                                     id="comment-content"
                                     value={newComment.content}
-                                    onChange={(content) => setNewComment((prev) => ({ ...prev, content }))}
+                                    onChange={(content) => {
+                                        setNewComment((prev) => ({ ...prev, content }));
+                                        if (!editingComment) saveDraft(postId, content);
+                                    }}
                                     modules={quillModules}
                                     placeholder="Your comment..."
                                     className="retro-field"
@@ -420,7 +489,7 @@ function Post() {
                 </div>
                 {(newComment.parent_comment_id === comment.id || editingComment?.id === comment.id) && (
                     <div className="mt-4 border-l-2 border-fuchsia-500/60 pl-4">
-                        {renderCommentForm()}
+                        {user ? renderCommentForm() : renderLoginToComment()}
                     </div>
                 )}
                 {comment.children && comment.children.length > 0 && (
@@ -570,7 +639,9 @@ function Post() {
                     )}
                 </section>
 
-                {!newComment.parent_comment_id && !editingComment && renderCommentForm()}
+                {!newComment.parent_comment_id && !editingComment && (
+                    user ? renderCommentForm() : renderLoginToComment()
+                )}
 
             </div>
         </div>

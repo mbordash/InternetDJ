@@ -49,6 +49,15 @@ function feedbackLabel(score) {
     return 'Excellent';
 }
 
+// Expressive reactions on reviews. These are never summed into a score or
+// fed into Top Reviewers - the point is to let people register an opinion
+// without creating a number worth farming.
+const REVIEW_REACTIONS = [
+    { key: 'thumbs_up', glyph: '\u{1F44D}', label: 'Agree' },
+    { key: 'thumbs_down', glyph: '\u{1F44E}', label: 'Disagree' },
+    { key: 'clown', glyph: '\u{1F921}', label: 'Clown' },
+];
+
 const Song = () => {
     const { songId } = useParams();
     const { user } = useContext(AuthContext);
@@ -117,7 +126,10 @@ const Song = () => {
 
         const fetchReviews = async () => {
             try {
-                const response = await axios.get(`${API_URL}/reviews/${songId}`);
+                const token = localStorage.getItem('token');
+                const response = await axios.get(`${API_URL}/reviews/${songId}`,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+                );
                 setReviews(response.data || []);
             } catch (err) {
                 setReviewError('Failed to load reviews: ' + (err.response?.data?.error || err.message));
@@ -360,6 +372,34 @@ const Song = () => {
             setReviewError(null);
         } catch (err) {
             setReviewError('Failed to submit review: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    const [reactingReviewId, setReactingReviewId] = useState(null);
+
+    const handleReact = async (reviewId, reaction) => {
+        if (!isAuthenticated) {
+            navigate(`/login?return=${encodeURIComponent(`/song/${songId}`)}`);
+            return;
+        }
+        if (reactingReviewId) return;          // one in flight at a time
+        setReactingReviewId(reviewId);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${API_URL}/reviews/${reviewId}/reactions`,
+                { reaction },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setReviews((prev) => prev.map((r) => (
+                r.id === reviewId
+                    ? { ...r, reactions: response.data.reactions, my_reaction: response.data.my_reaction }
+                    : r
+            )));
+        } catch (err) {
+            setReviewError('Could not save your reaction: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setReactingReviewId(null);
         }
     };
 
@@ -869,6 +909,31 @@ const Song = () => {
                                                                     </button>
                                                                 </div>
                                                             )}
+                                                            <div className="mt-3 flex items-center gap-2">
+                                                                {REVIEW_REACTIONS.map(({ key, glyph, label }) => {
+                                                                    const count = review.reactions?.[key] || 0;
+                                                                    const active = review.my_reaction === key;
+                                                                    return (
+                                                                        <button
+                                                                            key={key}
+                                                                            type="button"
+                                                                            onClick={() => handleReact(review.id, key)}
+                                                                            disabled={reactingReviewId === review.id}
+                                                                            aria-pressed={active}
+                                                                            title={active ? `${label} \u2014 click to undo` : label}
+                                                                            className={`retro-chip flex items-center gap-1.5 px-2 py-1 transition-colors disabled:opacity-50 ${
+                                                                                active
+                                                                                    ? 'border-cyan-400 text-cyan-200 bg-cyan-400/10'
+                                                                                    : 'text-gray-400 hover:text-gray-200'
+                                                                            }`}
+                                                                        >
+                                                                            <span aria-hidden="true">{glyph}</span>
+                                                                            <span className="retro-mono text-lg tabular-nums">{count}</span>
+                                                                            <span className="sr-only">{label}</span>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
