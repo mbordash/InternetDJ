@@ -8,6 +8,10 @@ import { AudioPlayerContext, toPlayableUrl } from '../context/AudioPlayerContext
 import { CancelToken } from 'axios';
 import API_URL from '../utils/api';
 
+// Auto-mastering is CPU-heavy on the backend; allow a generous window but
+// never an unbounded one, so the player can always recover.
+const MASTERING_TIMEOUT_MS = 3 * 60 * 1000;
+
 function AudioPlayer({ songId, s3Url, isOwner = false }) {
   const [showMasteringModal, setShowMasteringModal] = useState(false);
   const [masteringType, setMasteringType] = useState(null);
@@ -120,6 +124,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   };
 
   const handleMastering = async (type) => {
+    // Re-entrancy guard: the buttons are disabled while a job runs, but a
+    // second call would otherwise orphan the first request's state updates.
+    if (isMastering) return;
+
     setIsMastering(true);
     setMasteringError(null);
     setMasteringType(type);
@@ -129,18 +137,27 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       const response = await axios.post(
           `${API_URL}/music/master/${songId}`,
           { masteringType: type },
-          { headers: { Authorization: `Bearer ${token}` } }
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            // axios has no default timeout, so a stalled backend left the
+            // player greyed out forever and the only way back was a page
+            // reload. Bound the wait so the UI always recovers on its own.
+            timeout: MASTERING_TIMEOUT_MS,
+          }
       );
 
       setMasteredUrl(response.data.masteredUrl);
-      setIsMastering(false);
     } catch (err) {
       console.error('Error mastering audio:', err);
-      if (err.response?.status === 429) {
+      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+        setMasteringError('Mastering took too long and was cancelled. The track is playable again \u2014 please try again.');
+      } else if (err.response?.status === 429) {
         setMasteringError('Too many mastering jobs running. Please try again later.');
       } else {
         setMasteringError('Failed to master audio. Please try again.');
       }
+    } finally {
+      // Always clears, including on timeout \u2014 this is what unfreezes the track.
       setIsMastering(false);
     }
   };

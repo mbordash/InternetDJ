@@ -189,7 +189,15 @@ router.get('/:projectId', authenticate, async (req, res) => {
                 [projectId]
             );
             if (existingProject.length) {
-                return res.status(403).json({ error: `Project ${projectId} exists but belongs to user ${existingProject[0].user_id}` });
+                // Don't echo the owner's user id back to the caller - that
+                // leaked another account's identity to anyone probing ids.
+                // The detail stays in the server log where it's useful.
+                console.warn('Project access denied', {
+                    projectId,
+                    requestedBy: req.user.id,
+                    ownedBy: existingProject[0].user_id,
+                });
+                return res.status(403).json({ error: 'You do not have access to this project' });
             }
             return res.status(404).json({ error: `Project ${projectId} not found` });
         }

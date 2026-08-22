@@ -11,6 +11,13 @@ const KEYS = [
     'A major', 'A minor', 'A# major', 'A# minor', 'B major', 'B minor',
 ];
 const POLL_INTERVAL_MS = 4000;
+const MAX_TRANSIENT_POLL_FAILURES = 5;
+
+function isTransientPollError(err) {
+    if (!err.response) return true;                    // network drop / connection refused
+    return err.response.status >= 500 || err.response.status === 408;
+}
+
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 // Generate an AI audio stem (same backend as the standalone /ai-stems page) and
@@ -79,6 +86,7 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
             );
             const { stemId } = res.data;
             const startedAt = Date.now();
+            let transientFailures = 0;
 
             pollRef.current = setInterval(async () => {
                 if (!isMountedRef.current) {
@@ -96,6 +104,7 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                         headers: { Authorization: `Bearer ${token}` },
                         withCredentials: true,
                     });
+                    transientFailures = 0;
                     const data = statusRes.data;
                     if (data.status === 'ready') {
                         stopPolling();
@@ -110,6 +119,12 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                         setStatus('idle');
                     }
                 } catch (pollErr) {
+                    // A backend restart (deploy, machine wake) fails the poll
+                    // that lands mid-restart even though the job is healthy.
+                    // Ride out a few before declaring the generation dead.
+                    if (isTransientPollError(pollErr) && ++transientFailures <= MAX_TRANSIENT_POLL_FAILURES) {
+                        return;
+                    }
                     stopPolling();
                     if (!isMountedRef.current) return;
                     setError('Failed to check status: ' + (pollErr.response?.data?.error || pollErr.message));

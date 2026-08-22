@@ -22,6 +22,33 @@ const feedbackCriteria = [
     'Consistency', 'Flow'
 ];
 
+// Detailed feedback used to store one of three labels. It now stores a 0-100
+// number so reviewers can land between them — "somewhere between good and
+// perfect" was the whole point of the request. Reviews written before this
+// change still hold the old strings, so everything that reads a score goes
+// through here and both shapes render on the same scale.
+const LEGACY_FEEDBACK_SCORES = { 'Needs Work': 20, 'Good': 60, 'Perfect': 100 };
+const DEFAULT_FEEDBACK_SCORE = 60;   // matches the old 'Good' default
+
+function feedbackScore(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return Math.min(100, Math.max(0, value));
+    }
+    if (typeof value === 'string' && value in LEGACY_FEEDBACK_SCORES) {
+        return LEGACY_FEEDBACK_SCORES[value];
+    }
+    return null;   // genuinely not rated
+}
+
+// A word for the number, so the scale still reads in the reviewer's language.
+function feedbackLabel(score) {
+    if (score === null) return 'Not rated';
+    if (score < 34) return 'Needs work';
+    if (score < 67) return 'Good';
+    if (score < 90) return 'Very good';
+    return 'Excellent';
+}
+
 const Song = () => {
     const { songId } = useParams();
     const { user } = useContext(AuthContext);
@@ -55,7 +82,7 @@ const Song = () => {
 
     // Initialize feedback state
     const initialFeedback = feedbackCriteria.reduce((acc, criterion) => {
-        acc[criterion] = 'Good'; // Default to 'Good'
+        acc[criterion] = DEFAULT_FEEDBACK_SCORE;
         return acc;
     }, {});
     useEffect(() => {
@@ -541,16 +568,13 @@ const Song = () => {
 
     // Map ratings to bar widths and colors
     const getBarStyle = (rating) => {
-        switch (rating) {
-            case 'Needs Work':
-                return { width: '33%', color: 'bg-red-600' };
-            case 'Good':
-                return { width: '66%', color: 'bg-yellow-600' };
-            case 'Perfect':
-                return { width: '100%', color: 'bg-green-600' };
-            default:
-                return { width: '0%', color: 'bg-gray-300' };
-        }
+        const score = feedbackScore(rating);
+        if (score === null) return { width: '0%', color: 'bg-gray-500' };
+        const color = score < 34 ? 'bg-fuchsia-500'
+            : score < 67 ? 'bg-amber-400'
+            : score < 90 ? 'bg-cyan-400'
+            : 'bg-emerald-400';
+        return { width: `${score}%`, color };
     };
 
     return (
@@ -1104,16 +1128,24 @@ const Song = () => {
                                                     <input
                                                         type="range"
                                                         min="0"
-                                                        max="2"
+                                                        max="100"
                                                         step="1"
-                                                        value={['Needs Work', 'Good', 'Perfect'].indexOf(reviewForm.feedback[criterion])}
-                                                        onChange={(e) => handleFeedbackChange(criterion, ['Needs Work', 'Good', 'Perfect'][e.target.value])}
-                                                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                                        value={feedbackScore(reviewForm.feedback[criterion]) ?? DEFAULT_FEEDBACK_SCORE}
+                                                        onChange={(e) => handleFeedbackChange(criterion, Number(e.target.value))}
+                                                        aria-label={`${criterion} rating`}
+                                                        aria-valuetext={`${feedbackScore(reviewForm.feedback[criterion]) ?? DEFAULT_FEEDBACK_SCORE} out of 100, ${feedbackLabel(feedbackScore(reviewForm.feedback[criterion]) ?? DEFAULT_FEEDBACK_SCORE)}`}
+                                                        className="retro-slider w-full cursor-pointer"
                                                     />
-                                                    <div className="flex justify-between text-xs mt-1 text-gray-400">
-                                                        <span>Needs Work</span>
-                                                        <span>Good</span>
-                                                        <span>Perfect</span>
+                                                    <div className="flex justify-between items-baseline text-xs mt-1 text-gray-500">
+                                                        <span>Needs work</span>
+                                                        <span className="retro-mono text-cyan-300">
+                                                            {feedbackLabel(feedbackScore(reviewForm.feedback[criterion]) ?? DEFAULT_FEEDBACK_SCORE)}
+                                                            {' '}
+                                                            <span className="tabular-nums text-gray-400">
+                                                                {feedbackScore(reviewForm.feedback[criterion]) ?? DEFAULT_FEEDBACK_SCORE}
+                                                            </span>
+                                                        </span>
+                                                        <span>Excellent</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1147,12 +1179,17 @@ const Song = () => {
                                             <div key={criterion} className="flex items-center space-x-4">
                                                 <span className="w-1/3 text-sm font-medium text-gray-300">{criterion}</span>
                                                 <div className="w-2/3">
-                                                    <div className="text-sm text-gray-400 mb-1">
-                                                        {selectedFeedback[criterion] || 'Not rated'}
+                                                    <div className="retro-mono text-lg text-gray-400 mb-1 flex justify-between">
+                                                        <span>{feedbackLabel(feedbackScore(selectedFeedback[criterion]))}</span>
+                                                        {feedbackScore(selectedFeedback[criterion]) !== null && (
+                                                            <span className="text-cyan-300 tabular-nums">
+                                                                {feedbackScore(selectedFeedback[criterion])}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <div className="w-full bg-white/10 rounded-full h-2.5">
+                                                    <div className="w-full bg-white/10 h-2.5">
                                                         <div
-                                                            className={`h-2.5 rounded-full ${getBarStyle(selectedFeedback[criterion]).color}`}
+                                                            className={`h-2.5 ${getBarStyle(selectedFeedback[criterion]).color}`}
                                                             style={{ width: getBarStyle(selectedFeedback[criterion]).width }}
                                                         ></div>
                                                     </div>

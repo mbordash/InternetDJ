@@ -4,6 +4,17 @@ import { AuthContext } from '../context/AuthContext';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
+// A stem job outlives a backend restart, but the poll that happens to land
+// mid-restart does not. Treat "no response" and 5xx as transient and retry a
+// few times before surfacing an error; anything else is a real answer.
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_TRANSIENT_POLL_FAILURES = 5;
+
+function isTransientPollError(err) {
+    if (!err.response) return true;                    // network drop / connection refused
+    return err.response.status >= 500 || err.response.status === 408;
+}
+
 function AIStems() {
     const { user } = useContext(AuthContext);
     const baseUrl = SITE_URL;
@@ -61,11 +72,21 @@ function AIStems() {
             );
             const { stemId } = res.data;
 
+            const startedAt = Date.now();
+            let transientFailures = 0;
+
             const poll = setInterval(async () => {
+                if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+                    clearInterval(poll);
+                    setError('Generation timed out. Check back in a minute \u2014 it may still finish.');
+                    setLoading(false);
+                    return;
+                }
                 try {
                     const statusRes = await axios.get(`${API_URL}/stems/${stemId}`,
                         { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
                     );
+                    transientFailures = 0;
                     const data = statusRes.data;
                     if (data.status === 'ready') {
                         clearInterval(poll);
@@ -79,6 +100,12 @@ function AIStems() {
                         setLoading(false);
                     }
                 } catch (pollErr) {
+                    // A server restart (deploy, machine wake) makes one poll fail
+                    // while the job itself is fine. Killing the poll on the first
+                    // blip threw away good generations, so ride out a few.
+                    if (isTransientPollError(pollErr) && ++transientFailures <= MAX_TRANSIENT_POLL_FAILURES) {
+                        return;
+                    }
                     clearInterval(poll);
                     setError('Failed to check status: ' + (pollErr.response?.data?.error || pollErr.message));
                     setLoading(false);
