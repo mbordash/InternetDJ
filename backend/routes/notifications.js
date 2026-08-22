@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/preferences', authenticate, async (req, res) => {
     try {
         const [row] = await pool.query(
-            'SELECT email_profile_activity_enabled, email_artist_activity_enabled FROM users WHERE id = ? LIMIT 1',
+                'SELECT email_profile_activity_enabled, email_artist_activity_enabled FROM users WHERE id = ? LIMIT 1',
             [req.user.id]
         );
 
