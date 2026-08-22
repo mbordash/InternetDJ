@@ -387,6 +387,7 @@ function Home() {
                                         ['/discover', 'Discover'],
                                         ['/new', 'New Releases'],
                                         ['/browse', 'Browse Artists'],
+                                        ['/crates', 'Crates & Mixtapes'],
                                         ['/stems', 'AI Stems'],
                                         ['/projects', 'Studio / DAW'],
                                         ['/forum', 'Forum'],
@@ -403,7 +404,7 @@ function Home() {
                             </div>
 
                             <section className="retro-panel retro-cut p-4">
-                                <h3 className="retro-eyebrow mb-3">// Message Board //</h3>
+                                <h3 className="retro-eyebrow mb-3">// Forum //</h3>
                                 {recentlyCommentedPosts.length > 0 ? (
                                     recentlyCommentedPosts.slice(0, 4).map(post => (
                                         <Link
@@ -424,6 +425,7 @@ function Home() {
                                     <img src={IDJCoinLogo} alt="" className="w-10 h-10" />
                                     <div className="retro-display text-sm retro-glow-cyan">IDJ Coin</div>
                                 </div>
+                                Airdrop coins available now!
                                 <Link to="/idj-coin" className="retro-link retro-mono text-lg">
                                     Learn more &raquo;&raquo;
                                 </Link>

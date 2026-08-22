@@ -377,3 +377,19 @@ CREATE TABLE IF NOT EXISTS review_reactions (
     CONSTRAINT fk_review_reactions_user FOREIGN KEY (user_id)
         REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Playlists become shareable. Existing rows stay private on purpose: they were
+-- created when every playlist route required auth, so their owners never
+-- agreed to publish them. New ones default to public in the UI instead.
+ALTER TABLE playlists ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- A mixtape is just a playlist made *for* someone. Null here means it is an
+-- ordinary crate, so both kinds live in one table and one set of routes.
+ALTER TABLE playlists ADD COLUMN IF NOT EXISTS dedicated_to_profile_id INT DEFAULT NULL;
+ALTER TABLE playlists ADD COLUMN IF NOT EXISTS dedication_note VARCHAR(280) DEFAULT NULL;
+
+ALTER TABLE playlists ADD CONSTRAINT fk_playlists_dedicated_to
+    FOREIGN KEY (dedicated_to_profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
+
+CREATE INDEX playlists_public_idx ON playlists (is_public, updated_at);
+CREATE INDEX playlists_dedicated_idx ON playlists (dedicated_to_profile_id);

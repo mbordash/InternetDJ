@@ -109,6 +109,11 @@ const Playlists = () => {
     const [playlists, setPlaylists] = useState([]);
     const [expandedPlaylists, setExpandedPlaylists] = useState({});
     const [newPlaylistName, setNewPlaylistName] = useState('');
+    const [makeMixtape, setMakeMixtape] = useState(false);
+    const [mixtapeFor, setMixtapeFor] = useState('');        // profile address or id
+    const [mixtapeNote, setMixtapeNote] = useState('');
+    const [sharingId, setSharingId] = useState(null);
+    const [copiedId, setCopiedId] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     // Modal state
@@ -177,6 +182,64 @@ const Playlists = () => {
         });
     };
 
+
+    // Publishing is per-crate and reversible. Existing crates start private
+    // because they were made when nothing was shareable.
+    const handleToggleShare = async (playlist) => {
+        if (sharingId) return;
+        setSharingId(playlist.id);
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`${API_URL}/playlists/${playlist.id}`,
+                { is_public: !playlist.is_public },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setPlaylists((prev) => prev.map((p) => (
+                p.id === playlist.id ? { ...p, is_public: !playlist.is_public } : p
+            )));
+            setError(null);
+        } catch (err) {
+            setError('Could not change sharing: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setSharingId(null);
+        }
+    };
+
+    const handleCopyLink = async (playlistId) => {
+        const url = `${window.location.origin}/crate/${playlistId}`;
+        try {
+            await navigator.clipboard.writeText(url);
+            setCopiedId(playlistId);
+            setTimeout(() => setCopiedId(null), 2000);
+        } catch {
+            // Clipboard can be blocked; show the URL so it can be copied by hand.
+            setError(`Copy this link: ${url}`);
+        }
+    };
+
+    // A mixtape recipient is typed as a profile address (the vanity slug) or
+    // id; resolve it here so the API only ever receives a real profile id.
+    const buildCreatePayload = async () => {
+        const payload = { name: newPlaylistName.trim(), is_public: true };
+        if (!makeMixtape || !mixtapeFor.trim()) return payload;
+
+        const address = encodeURIComponent(mixtapeFor.trim().toLowerCase());
+        let lookup;
+        try {
+            lookup = await axios.get(`${API_URL}/profile/${address}`, {
+                headers: { Accept: 'application/json' },
+            });
+        } catch {
+            throw new Error(`no member found at "${mixtapeFor.trim()}"`);
+        }
+        const target = lookup.data?.profile?.id ?? lookup.data?.id;
+        if (!target) throw new Error(`no member found at "${mixtapeFor.trim()}"`);
+
+        payload.dedicated_to_profile_id = Number(target);
+        payload.dedication_note = mixtapeNote.trim() || null;
+        return payload;
+    };
+
     const handleCreatePlaylist = async (e) => {
         e.preventDefault();
         if (!newPlaylistName.trim()) {
@@ -188,11 +251,14 @@ const Playlists = () => {
             console.log('[DEBUG] Creating playlist:', newPlaylistName);
             const response = await axios.post(
                 `${API_URL}/playlists`,
-                { name: newPlaylistName.trim() },
+                await buildCreatePayload(),
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
             setPlaylists([response.data.playlist, ...playlists]);
             setNewPlaylistName('');
+            setMakeMixtape(false);
+            setMixtapeFor('');
+            setMixtapeNote('');
             setError(null);
         } catch (err) {
             console.error('[ERROR] Failed to create playlist:', err.response?.data || err.message);
@@ -320,7 +386,16 @@ const Playlists = () => {
                 <p className="retro-mono text-xl text-cyan-200">&gt; loading playlists&hellip;</p>
             ) : (
                 <>
-                    <form onSubmit={handleCreatePlaylist} className="mb-8 flex space-x-2">
+                    <div className="mb-6 flex flex-wrap items-center gap-3">
+                        <Link to="/crates" className="retro-btn px-4 py-2 text-[0.6rem]">
+                            Browse Public Crates
+                        </Link>
+                        <span className="retro-mono text-lg text-gray-500">
+                            &gt; make a crate public below and it shows up there
+                        </span>
+                    </div>
+                    <form onSubmit={handleCreatePlaylist} className="mb-8 space-y-3">
+                        <div className="flex space-x-2">
                         <input
                             type="text"
                             value={newPlaylistName}
@@ -337,6 +412,42 @@ const Playlists = () => {
                             <PlusIcon className="w-5 h-5 mr-2" />
                             Create
                         </button>
+                        </div>
+
+                        <label className="flex items-center gap-2 retro-mono text-lg text-gray-400 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={makeMixtape}
+                                onChange={(e) => setMakeMixtape(e.target.checked)}
+                                className="accent-fuchsia-500"
+                            />
+                            Make this a mixtape for someone
+                        </label>
+
+                        {makeMixtape && (
+                            <div className="space-y-2 border-l-2 border-fuchsia-500/60 pl-4">
+                                <input
+                                    type="text"
+                                    value={mixtapeFor}
+                                    onChange={(e) => setMixtapeFor(e.target.value)}
+                                    placeholder="their profile address, e.g. dj-subspace"
+                                    className="retro-input w-full px-3 py-2"
+                                    aria-label="Mixtape recipient"
+                                />
+                                <input
+                                    type="text"
+                                    value={mixtapeNote}
+                                    onChange={(e) => setMixtapeNote(e.target.value)}
+                                    maxLength={280}
+                                    placeholder="say something on the J-card (optional)"
+                                    className="retro-input w-full px-3 py-2"
+                                    aria-label="Dedication note"
+                                />
+                                <p className="retro-mono text-lg text-gray-500">
+                                    &gt; they get a notification. set it private below to make it a gift only they can see.
+                                </p>
+                            </div>
+                        )}
                     </form>
                     {playlists.length === 0 ? (
                         <p className="retro-mono text-xl text-gray-400">&gt; no playlists yet. create one above.</p>
@@ -357,9 +468,44 @@ const Playlists = () => {
                                                     <ChevronDownIcon className="w-6 h-6 text-gray-400" />
                                                 )}
                                             </button>
-                                            <h2 className="retro-display text-base retro-glow-cyan">{playlist.name}</h2>
+                                            <div>
+                                                <h2 className="retro-display text-base retro-glow-cyan">{playlist.name}</h2>
+                                                {playlist.dedicated_to_name && (
+                                                    <div className="retro-mono text-lg text-fuchsia-300">
+                                                        mixtape for {playlist.dedicated_to_name}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex space-x-4">
+                                        <div className="flex items-center space-x-3">
+                                            {/* The Likes crate is generated, not curated - it is
+                                                surfaced separately and cannot be shared. */}
+                                            {!playlist.is_likes && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleToggleShare(playlist)}
+                                                        disabled={sharingId === playlist.id}
+                                                        title={playlist.is_public ? 'Anyone with the link can see this' : 'Only you can see this'}
+                                                        className={`retro-chip px-3 py-1 retro-mono text-lg disabled:opacity-50 ${
+                                                            playlist.is_public
+                                                                ? 'border-cyan-400 text-cyan-200'
+                                                                : 'text-gray-400'
+                                                        }`}
+                                                    >
+                                                        {sharingId === playlist.id
+                                                            ? '...'
+                                                            : playlist.is_public ? 'Public' : 'Private'}
+                                                    </button>
+                                                    {playlist.is_public && (
+                                                        <button
+                                                            onClick={() => handleCopyLink(playlist.id)}
+                                                            className="retro-chip px-3 py-1 retro-mono text-lg text-gray-400"
+                                                        >
+                                                            {copiedId === playlist.id ? 'Copied' : 'Copy link'}
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
                                             <button
                                                 onClick={() => handlePlayPlaylist(playlist.id)}
                                                 className="retro-action p-2"
