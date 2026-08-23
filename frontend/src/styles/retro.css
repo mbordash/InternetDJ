@@ -69,22 +69,33 @@
     letter-spacing: 0.03em;
 }
 
-/* Liquid-chrome headline, the flyer classic. */
+/* Liquid-chrome headline, the flyer classic.
+   The horizon is a soft band, not a hairline: the old version snapped from
+   #7cc0ff to near-black and back inside 16% of the glyph height, and against
+   the dark page ground that band read as a hole punched through every letter.
+   Here the darkest tone is lifted to a mid-blue and the transition is eased
+   across ~20% of the cap height, so the letterform stays one solid shape. */
 .retro-chrome {
     background: linear-gradient(
         180deg,
         #ffffff 0%,
-        #dceeff 22%,
-        #7cc0ff 42%,
-        #123a72 50%,
-        #7cc0ff 58%,
-        #ffd8f2 78%,
+        #f2fbff 14%,
+        #d3ecff 26%,
+        #a6d1fa 36%,
+        #74abe6 44%,
+        #4a80c1 49%,
+        #3d6fae 51%,
+        #5891cf 55%,
+        #8fc0f0 63%,
+        #cfe6fc 72%,
+        #ffd8f2 86%,
         #ffffff 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
     filter:
+        drop-shadow(0 1px 1px rgba(4, 1, 12, 0.85))
         drop-shadow(0 2px 0 rgba(255, 47, 142, 0.7))
         drop-shadow(0 0 24px rgba(0, 240, 255, 0.45));
 }

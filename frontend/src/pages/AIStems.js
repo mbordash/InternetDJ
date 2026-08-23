@@ -22,7 +22,7 @@ function AIStems() {
     const [prompt, setPrompt] = useState('');
     const [bpm, setBpm] = useState(128);
     const [key, setKey] = useState('C minor');
-    const [duration, setDuration] = useState(3);
+    const [duration, setDuration] = useState(4);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [userStems, setUserStems] = useState([]);
