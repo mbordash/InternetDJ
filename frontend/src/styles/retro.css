@@ -20,7 +20,25 @@
     --retro-display: 'Orbitron', 'Trebuchet MS', system-ui, sans-serif;
     --retro-pixel: 'Press Start 2P', 'Courier New', monospace;
     --retro-mono: 'VT323', 'Courier New', monospace;
+
+    /* Layer scale. One place decides what covers what, so no surface has to
+       invent a z-index and hope. Ascending: page furniture, then the deck,
+       then anything the member opened on purpose. Every fixed-position
+       surface should carry a .retro-layer-* class rather than a bare z-N. */
+    --z-nav: 30;        /* top bar */
+    --z-deck: 100;      /* player deck - above all page content */
+    --z-overlay: 500;   /* modal backdrops and dialogs - above the deck */
+    --z-tool: 1200;     /* draggable tool panels (EQ) - above open dialogs */
+    --z-toast: 1500;    /* transient notifications - above everything */
 }
+
+/* ---------- 0. Layers ----------------------------------------------------- */
+
+.retro-layer-nav { z-index: var(--z-nav); }
+.retro-layer-deck { z-index: var(--z-deck); }
+.retro-layer-overlay { z-index: var(--z-overlay); }
+.retro-layer-tool { z-index: var(--z-tool); }
+.retro-layer-toast { z-index: var(--z-toast); }
 
 /* ---------- 1. Page ground ------------------------------------------------ */
 
@@ -275,6 +293,21 @@
     box-shadow: 0 0 38px rgba(255, 47, 142, 0.75);
     filter: brightness(1.1);
     color: #0b0114;
+}
+
+/* Destructive actions. Stays inside the neon palette - red border and glow,
+   no fill - so it reads as a warning without competing with --hot, which is
+   the primary-action treatment. */
+.retro-btn--danger {
+    border-color: rgba(255, 61, 87, 0.85);
+    color: #ffd9de;
+    background: rgba(255, 61, 87, 0.10);
+}
+
+.retro-btn--danger:hover {
+    background: rgba(255, 61, 87, 0.22);
+    box-shadow: 0 0 22px rgba(255, 61, 87, 0.55);
+    color: #ffffff;
 }
 
 .retro-link {

@@ -333,6 +333,9 @@ function Home() {
                                     <Link to="/projects" className="retro-btn px-5 py-3 text-xs">
                                         Open DAW
                                     </Link>
+                                    <Link to="/playlists" className="retro-btn px-5 py-3 text-xs">
+                                        Create Mixtape
+                                    </Link>
                                     <button
                                         onClick={dismissWelcome}
                                         className="retro-mono text-lg text-gray-400 hover:text-fuchsia-300 underline"
@@ -387,7 +390,7 @@ function Home() {
                                         ['/discover', 'Discover'],
                                         ['/new', 'New Releases'],
                                         ['/browse', 'Browse Artists'],
-                                        ['/crates', 'Crates & Mixtapes'],
+                                        ['/crates', 'Mixtapes'],
                                         ['/stems', 'AI Stems'],
                                         ['/projects', 'Studio / DAW'],
                                         ['/forum', 'Forum'],

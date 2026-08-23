@@ -9,7 +9,7 @@ const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, title, message }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
             <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                 <h3 className="text-lg font-bold mb-4 text-white">{title}</h3>
                 <p className="text-gray-300 mb-6">{message}</p>
@@ -36,7 +36,7 @@ const ConfirmInviteModal = ({ isOpen, onClose, onConfirm, invite }) => {
     if (!isOpen || !invite) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
             <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                 <h3 className="text-lg font-bold mb-4 text-white">Collaboration Invite</h3>
                 <p className="text-gray-300 mb-6">
@@ -70,7 +70,7 @@ const RecordModal = ({ isOpen, onClose, tracks, onStartRecording, onStopRecordin
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
             <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-white">Record Vocal Track</h3>
@@ -1416,7 +1416,7 @@ const CollaborationsManager = () => {
 
             {/* Edit Collaboration Form */}
             {showEditForm && selectedCollaboration && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">Edit Collaboration</h2>
@@ -1487,7 +1487,7 @@ const CollaborationsManager = () => {
 
             {/* Track Upload Form */}
             {showTrackForm && selectedCollaboration && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">Upload Track</h2>
@@ -1560,7 +1560,7 @@ const CollaborationsManager = () => {
 
             {/* Invite Collaborator Form */}
             {showInviteForm && selectedCollaboration && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">Invite Collaborator</h2>

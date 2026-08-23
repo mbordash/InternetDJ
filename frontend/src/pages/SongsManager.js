@@ -1046,7 +1046,7 @@ const SongsManager = () => {
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                         <h2 className="text-xl font-bold mb-4 text-white">Confirm Deletion</h2>
                         <p className="mb-6 text-gray-300">Are you sure you want to delete this song? This action cannot be undone.</p>
@@ -1073,7 +1073,7 @@ const SongsManager = () => {
 
             {/* Stats Modal */}
             {showStatsModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="bg-[#111827] border border-white/10 p-6 rounded-xl shadow-xl max-w-3xl w-full text-gray-100">
                         <h2 className="text-xl font-bold mb-4 text-white">Song Statistics</h2>
                         <div className="mb-4 flex space-x-4">

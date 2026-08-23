@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useContext } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import WaveSurfer from 'wavesurfer.js';
 import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js';
@@ -855,8 +856,8 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
-        {showMasteringModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        {showMasteringModal && createPortal((
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
               <div className="retro-panel retro-cut p-6 w-[400px] max-w-[92vw] text-gray-100">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="retro-display text-sm retro-glow-cyan">Auto Mastering</h3>
@@ -954,10 +955,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                 {saveError && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{saveError}</div>}
               </div>
             </div>
-        )}
+        ), document.body)}
 
-        {showSuccessNotification && newSongId && (
-            <div className="retro-panel retro-cut fixed top-4 right-4 p-4 z-50 flex items-center space-x-2 retro-mono text-lg">
+        {showSuccessNotification && newSongId && createPortal((
+            <div className="retro-panel retro-cut fixed top-4 right-4 p-4 retro-layer-toast flex items-center space-x-2 retro-mono text-lg">
               <span>Mastered track saved successfully!</span>
               <a
                   href={`/song/${newSongId}`}
@@ -972,12 +973,17 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
-        )}
+        ), document.body)}
 
-        {showEQ && (
+        {showEQ && createPortal((
+            /* Portalled to <body> because the player card above is .retro-cut,
+               and clip-path both clips its descendants and opens a stacking
+               context - so a position:fixed child is pinned inside the card and
+               no z-index can lift it out. The layer class only decides ordering
+               once it is out here. */
             <div
                 ref={modalRef}
-                className="retro-panel retro-cut fixed p-4 w-full max-w-[90vw] sm:max-w-[600px] z-50 text-gray-100"
+                className="retro-panel retro-cut fixed p-4 w-full max-w-[90vw] sm:max-w-[600px] retro-layer-tool text-gray-100"
                 style={{
                   top: `${modalPosition.top}px`,
                   left: `${modalPosition.left}px`,
@@ -1055,7 +1061,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
               </div>
               {saveError && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{saveError}</div>}
             </div>
-        )}
+        ), document.body)}
       </div>
   );
 }

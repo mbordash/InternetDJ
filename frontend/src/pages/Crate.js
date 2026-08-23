@@ -14,7 +14,7 @@ const CoverMosaic = ({ art = [], name }) => {
         return (
             <div className="retro-crate__art flex items-center justify-center bg-fuchsia-500/10">
                 <span className="retro-display text-xs retro-glow-magenta px-2 text-center">
-                    {name?.slice(0, 12) || 'CRATE'}
+                    {name?.slice(0, 12) || 'MIXTAPE'}
                 </span>
             </div>
         );
@@ -53,12 +53,12 @@ const Crate = () => {
                 );
                 if (!cancelled) { setCrate(response.data); setError(null); }
             } catch (err) {
-                // The API returns 404 for private crates as well as missing
+                // The API returns 404 for private mixtapes as well as missing
                 // ones, so say the same thing here rather than leaking which.
                 if (!cancelled) {
                     setError(err.response?.status === 404
-                        ? 'This crate is private or no longer exists.'
-                        : 'Could not load this crate: ' + (err.response?.data?.error || err.message));
+                        ? 'This mixtape is private or no longer exists.'
+                        : 'Could not load this mixtape: ' + (err.response?.data?.error || err.message));
                 }
             } finally {
                 if (!cancelled) setIsLoading(false);
@@ -71,7 +71,7 @@ const Crate = () => {
     if (isLoading) {
         return (
             <div className="retro-page container mx-auto px-4 py-16">
-                <p className="retro-mono text-xl text-cyan-300">&gt; loading crate...</p>
+                <p className="retro-mono text-xl text-cyan-300">&gt; loading mixtape...</p>
             </div>
         );
     }
@@ -79,14 +79,14 @@ const Crate = () => {
     if (error) {
         return (
             <div className="retro-page container mx-auto px-4 py-16 text-center">
-                <h1 className="retro-display text-2xl retro-glow-magenta mb-4">Crate Not Found</h1>
+                <h1 className="retro-display text-2xl retro-glow-magenta mb-4">Mixtape Not Found</h1>
                 <p className="retro-mono text-xl text-gray-400 mb-6">{error}</p>
                 <Link to="/browse" className="retro-btn px-5 py-2 text-[0.6rem]">Browse Artists</Link>
             </div>
         );
     }
 
-    const isMixtape = Boolean(crate.dedicated_to);
+    const isDedicated = Boolean(crate.dedicated_to);
     const coverArt = crate.songs.map((s) => s.image_url).filter(Boolean);
 
     return (
@@ -100,9 +100,7 @@ const Crate = () => {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                        <div className="retro-eyebrow mb-2">
-                            {isMixtape ? '// Mixtape //' : '// Crate //'}
-                        </div>
+                        <div className="retro-eyebrow mb-2">// Mixtape //</div>
                         <h1 className="retro-display text-2xl retro-glow-cyan mb-2 break-words">
                             {crate.name}
                         </h1>
@@ -124,14 +122,14 @@ const Crate = () => {
                             disabled={crate.songs.length === 0}
                             className="retro-btn retro-btn--hot px-5 py-2 text-[0.6rem] disabled:opacity-50"
                         >
-                            {crate.songs.length === 0 ? 'Empty Crate' : '▶ Play Crate'}
+                            {crate.songs.length === 0 ? 'Empty Mixtape' : '▶ Play Mixtape'}
                         </button>
                     </div>
                 </div>
 
                 {/* The dedication is the whole point of a mixtape, so it gets
                     its own panel rather than a line of metadata. */}
-                {isMixtape && (
+                {isDedicated && (
                     <div className="mt-6 border-t border-cyan-400/20 pt-5">
                         <div className="flex items-center gap-3 mb-2">
                             <span className="retro-eyebrow">// Made for //</span>

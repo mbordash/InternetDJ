@@ -2211,7 +2211,7 @@ const ProfilePage = () => {
 
                         {crates.length > 0 && (
                             <div className="retro-panel retro-cut p-6">
-                                <h3 className="retro-display text-base retro-glow-cyan mb-4">Crates &amp; Mixtapes</h3>
+                                <h3 className="retro-display text-base retro-glow-cyan mb-4">Mixtapes</h3>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                     {crates.map((crate) => (
                                         <Link key={crate.id} to={`/crate/${crate.id}`} className="retro-crate group">
@@ -2237,7 +2237,7 @@ const ProfilePage = () => {
                                             </div>
                                             <div className="retro-mono text-lg text-gray-500 truncate">
                                                 {crate.dedicated_to_name
-                                                    ? `mixtape for ${crate.dedicated_to_name}`
+                                                    ? `made for ${crate.dedicated_to_name}`
                                                     : `${crate.song_count} track${crate.song_count === 1 ? '' : 's'}`}
                                                 {!crate.is_public && ' · private'}
                                             </div>
@@ -2359,7 +2359,7 @@ const ProfilePage = () => {
             </div>
 
             {isBackgroundModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-lg w-full mx-4 text-gray-100">
                         <h3 className="retro-display text-base retro-glow-cyan mb-4">Choose a Background</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 max-h-[55vh] overflow-y-auto">
@@ -2395,7 +2395,7 @@ const ProfilePage = () => {
             )}
 
             {isShareModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay px-4">
                     <div className="retro-panel retro-cut p-6 max-w-lg w-full text-gray-100">
                         <h2 className="retro-display text-base retro-glow-cyan mb-2">Share Profile</h2>
                         <p className="retro-mono text-lg text-gray-400 mb-4">&gt; copy or open the direct link to this profile.</p>
@@ -2440,7 +2440,7 @@ const ProfilePage = () => {
             )}
 
             {isSendCoinModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-md w-full mx-4 text-gray-100">
                         <h3 className="retro-display text-base retro-glow-cyan mb-4">Pay owed IDJC to {profile.name}</h3>
                         {sendError && (
@@ -2510,7 +2510,7 @@ const ProfilePage = () => {
             )}
 
             {isGiftCoinModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-md w-full mx-4 text-gray-100">
                         <h3 className="retro-display text-base retro-glow-cyan mb-4">Gift IDJ Coin to {profile.name}</h3>
                         {giftError && (

@@ -144,7 +144,7 @@ const Song = () => {
                     });
                     setPlaylists(response.data || []);
                 } catch (err) {
-                    setPlaylistError('Failed to load playlists: ' + (err.response?.data?.error || err.message));
+                    setPlaylistError('Failed to load mixtapes: ' + (err.response?.data?.error || err.message));
                 }
             }
         };
@@ -439,7 +439,7 @@ const Song = () => {
     const handleAddToPlaylist = async (playlistId) => {
         const token = localStorage.getItem('token');
         if (!token) {
-            setPlaylistError('You must be logged in to add to a playlist');
+            setPlaylistError('You must be logged in to add to a mixtape');
             return;
         }
 
@@ -455,7 +455,7 @@ const Song = () => {
             setShowPlaylistModal(false);
             setPlaylistError(null);
         } catch (err) {
-            setPlaylistError('Failed to add song to playlist: ' + (err.response?.data?.error || err.message));
+            setPlaylistError('Failed to add song to mixtape: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -463,11 +463,11 @@ const Song = () => {
         e.preventDefault();
         const token = localStorage.getItem('token');
         if (!token) {
-            setPlaylistError('You must be logged in to create a playlist');
+            setPlaylistError('You must be logged in to create a mixtape');
             return;
         }
         if (!newPlaylistName.trim()) {
-            setPlaylistError('Playlist name is required');
+            setPlaylistError('Mixtape name is required');
             return;
         }
 
@@ -483,7 +483,7 @@ const Song = () => {
             setNewPlaylistName('');
             setPlaylistError(null);
         } catch (err) {
-            setPlaylistError('Failed to create playlist: ' + (err.response?.data?.error || err.message));
+            setPlaylistError('Failed to create mixtape: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -591,7 +591,7 @@ const Song = () => {
                             )}
                         </Fragment>
                     ))}
-                    {crates.length === 1 ? ' crate' : ' crates'}
+                    {crates.length === 1 ? ' mixtape' : ' mixtapes'}
                 </span>
             );
         }
@@ -766,7 +766,7 @@ const Song = () => {
                                         {isAuthenticated && (
                                             <IconActionButton
                                                 icon={PlusIcon}
-                                                label="Add to playlist"
+                                                label="Add to mixtape"
                                                 onClick={() => setShowPlaylistModal(true)}
                                             />
                                         )}
@@ -872,20 +872,20 @@ const Song = () => {
                                                     value={reviewForm.review}
                                                     onChange={handleReviewInputChange}
                                                     rows="4"
-                                                    className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                                    className="retro-field mt-1"
                                                 />
                                             </div>
                                             <div className="flex space-x-4">
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowFeedbackModal(true)}
-                                                    className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                                    className="retro-btn px-5 py-2 text-xs"
                                                 >
                                                     Add Detailed Feedback
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                                                    className="retro-btn retro-btn--hot px-5 py-2 text-xs"
                                                 >
                                                     Submit Review
                                                 </button>
@@ -950,7 +950,7 @@ const Song = () => {
                                                                 <div className="mt-2">
                                                                     <button
                                                                         type="button"
-                                                                        className="px-2 py-1 bg-primary-brand-500 text-white text-xs font-semibold rounded-md shadow-sm hover:bg-primary-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                                                        className="retro-btn px-3 py-1 text-[0.6rem]"
                                                                         onClick={() => handleViewFeedback(review.feedback)}
                                                                     >
                                                                         View Detailed Feedback
@@ -1177,7 +1177,7 @@ const Song = () => {
 
                         {/* Feedback Input Modal */}
                         {showShareModal && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay px-4">
                                 <div className="retro-panel retro-cut p-6 max-w-lg w-full text-gray-100">
                                     <h2 className="retro-display text-base retro-glow-cyan mb-2">Share Song</h2>
                                     <p className="text-sm text-gray-300 mb-4">Copy or open the direct link to this song.</p>
@@ -1186,12 +1186,12 @@ const Song = () => {
                                             type="text"
                                             value={songShareUrl}
                                             readOnly
-                                            className="flex-1 px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none sm:text-sm"
+                                            className="retro-field flex-1"
                                         />
                                         <button
                                             type="button"
                                             onClick={handleCopyShareLink}
-                                            className="py-2 px-4 bg-primary-brand text-white font-semibold rounded-md shadow-sm hover:bg-primary-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Copy Link
                                         </button>
@@ -1202,7 +1202,7 @@ const Song = () => {
                                             href={songShareUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Open Link
                                         </a>
@@ -1212,7 +1212,7 @@ const Song = () => {
                                                 setShowShareModal(false);
                                                 setShareStatus('');
                                             }}
-                                            className="py-2 px-4 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Close
                                         </button>
@@ -1222,7 +1222,7 @@ const Song = () => {
                         )}
 
                         {showFeedbackModal && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                                 <div className="retro-panel retro-cut p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
                                     <h2 className="retro-display text-base retro-glow-cyan mb-4">Detailed Feedback</h2>
                                     <div className="space-y-4">
@@ -1259,13 +1259,13 @@ const Song = () => {
                                     <div className="flex justify-end mt-6 space-x-4">
                                         <button
                                             onClick={() => setShowFeedbackModal(false)}
-                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={() => setShowFeedbackModal(false)}
-                                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-md hover:bg-primary-brand-700"
+                                            className="retro-btn retro-btn--hot px-5 py-2 text-xs"
                                         >
                                             Save Feedback
                                         </button>
@@ -1276,7 +1276,7 @@ const Song = () => {
 
                         {/* Feedback Results Modal */}
                         {showFeedbackResultsModal && selectedFeedback && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                                 <div className="retro-panel retro-cut p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
                                     <h2 className="retro-display text-base retro-glow-cyan mb-4">Detailed Feedback Results</h2>
                                     <div className="space-y-4">
@@ -1305,7 +1305,7 @@ const Song = () => {
                                     <div className="flex justify-end mt-6">
                                         <button
                                             onClick={() => setShowFeedbackResultsModal(false)}
-                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Close
                                         </button>
@@ -1323,32 +1323,32 @@ const Song = () => {
                         )}
 
                         {showPlaylistModal && isAuthenticated && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                                 <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
-                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Add to Playlist</h2>
+                                    <h2 className="retro-display text-base retro-glow-cyan mb-4">Add to Mixtape</h2>
                                     {playlistError && <p className="text-red-400 text-sm mb-4">{playlistError}</p>}
                                     <div className="mb-4">
-                                        <h3 className="retro-eyebrow mb-2">Create New Playlist</h3>
+                                        <h3 className="retro-eyebrow mb-2">New Mixtape</h3>
                                         <form onSubmit={handleCreatePlaylist} className="flex space-x-2">
                                             <input
                                                 type="text"
                                                 value={newPlaylistName}
                                                 onChange={(e) => setNewPlaylistName(e.target.value)}
-                                                placeholder="Playlist name"
-                                                className="flex-1 px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-brand focus:border-primary-brand sm:text-sm"
+                                                placeholder="Mixtape name"
+                                                className="retro-field flex-1"
                                             />
                                             <button
                                                 type="submit"
-                                                className="px-4 py-2 bg-black text-white font-semibold rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-700"
+                                                className="retro-btn retro-btn--hot px-4 py-2 text-xs"
                                             >
                                                 Create
                                             </button>
                                         </form>
                                     </div>
                                     <div>
-                                        <h3 className="retro-eyebrow mb-2">Favorite Playlists</h3>
+                                        <h3 className="retro-eyebrow mb-2">Your Mixtapes</h3>
                                         {playlists.length === 0 ? (
-                                            <p className="text-sm text-gray-300">No playlists found. Create one above.</p>
+                                            <p className="text-sm text-gray-300">No mixtapes yet. Make one above.</p>
                                         ) : (
                                             <ul className="space-y-2">
                                                 {playlists.map((playlist) => (
@@ -1356,7 +1356,7 @@ const Song = () => {
                                                         <span>{playlist.name} ({playlist.song_count} songs)</span>
                                                         <button
                                                             onClick={() => handleAddToPlaylist(playlist.id)}
-                                                            className="px-3 py-1 bg-white/10 text-white rounded-md hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                                                            className="retro-btn px-3 py-1 text-[0.6rem]"
                                                         >
                                                             Add
                                                         </button>
@@ -1368,7 +1368,7 @@ const Song = () => {
                                     <div className="flex justify-end mt-6">
                                         <button
                                             onClick={() => setShowPlaylistModal(false)}
-                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-primary-brand"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Cancel
                                         </button>
@@ -1378,7 +1378,7 @@ const Song = () => {
                         )}
 
                         {showReviewDeleteConfirm && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                                 <div className="retro-panel retro-cut p-6 max-w-md w-full text-gray-100">
                                     <h2 className="retro-display text-base retro-glow-cyan mb-4">Confirm Delete Review</h2>
                                     <p className="mb-6 text-gray-300">
@@ -1390,13 +1390,13 @@ const Song = () => {
                                                 setShowReviewDeleteConfirm(false);
                                                 setReviewToDelete(null);
                                             }}
-                                            className="py-2 px-4 bg-white/10 text-white font-semibold rounded-md hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                                            className="retro-btn px-5 py-2 text-xs"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={confirmDeleteReview}
-                                            className="py-2 px-4 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600"
+                                            className="retro-btn retro-btn--danger px-5 py-2 text-xs"
                                         >
                                             Delete
                                         </button>

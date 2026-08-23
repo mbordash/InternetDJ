@@ -205,7 +205,7 @@ const Footer = () => {
         {currentSong && <div aria-hidden="true" style={{ height: `${deckHeight}px` }} />}
         <footer
             ref={deckRef}
-            className={`retro-deck text-white py-4 w-full ${currentSong ? 'fixed bottom-0 left-0 z-50' : 'static'}`}
+            className={`retro-deck text-white py-4 w-full ${currentSong ? 'fixed bottom-0 left-0 retro-layer-deck' : 'static'}`}
         >
             <div className="container mx-auto px-4">
                 {currentSong ? (

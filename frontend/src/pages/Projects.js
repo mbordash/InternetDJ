@@ -183,7 +183,7 @@ const Projects = () => {
 
             {/* Create Project Modal */}
             {showCreateModal && user && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                     <div className="retro-panel retro-cut p-6 max-w-sm w-full mx-4 text-gray-100">
                         <h3 className="retro-display text-base retro-glow-cyan mb-4">Create New Project</h3>
                         <form onSubmit={handleCreateProject} className="space-y-4">
@@ -267,7 +267,7 @@ const Projects = () => {
 
                     {/* Confirmation Modal */}
                     {deleteProjectId && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
                             <div className="retro-panel retro-cut p-6 max-w-sm w-full mx-4 text-gray-100">
                                 <h3 className="retro-display text-base retro-glow-cyan mb-4">Confirm Delete</h3>
                                 <p className="retro-mono text-xl text-gray-300 mb-6">

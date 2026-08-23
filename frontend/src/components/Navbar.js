@@ -152,7 +152,7 @@ function Navbar() {
         ? [
             { to: profilePath(user), label: 'Profile' },
             { to: `${profilePath(user)}/songs-manager`, label: 'Songs Manager' },
-            { to: '/playlists', label: 'Playlists' },
+            { to: '/playlists', label: 'Mixtapes' },
             { to: `${profilePath(user)}/collaborations`, label: 'Collabs' },
             { to: '/settings', label: 'Settings' },
         ]
@@ -163,7 +163,7 @@ function Navbar() {
         ];
 
     return (
-        <nav className="retro-topbar fixed top-0 left-0 right-0 text-white z-30">
+        <nav className="retro-topbar fixed top-0 left-0 right-0 text-white retro-layer-nav">
             <div className="container mx-auto px-4 py-3">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">

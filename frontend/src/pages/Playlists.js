@@ -58,7 +58,7 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
 
     return (
         <div
-            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center retro-layer-overlay"
             onClick={onClose}
         >
             <div
@@ -131,7 +131,7 @@ const Playlists = () => {
         }
         if (!user) {
             console.log('[DEBUG] Playlists: No user found');
-            setError('You must be logged in to view playlists');
+            setError('You must be logged in to view your mixtapes');
             setLoading(false);
             return;
         }
@@ -147,7 +147,7 @@ const Playlists = () => {
                 setLoading(false);
             } catch (err) {
                 console.error('[ERROR] Failed to fetch playlists:', err.response?.data || err.message);
-                setError('Failed to load playlists: ' + (err.response?.data?.error || err.message));
+                setError('Failed to load mixtapes: ' + (err.response?.data?.error || err.message));
                 setLoading(false);
             }
         };
@@ -168,7 +168,7 @@ const Playlists = () => {
             ));
         } catch (err) {
             console.error('[ERROR] Failed to fetch playlist songs:', err.response?.data || err.message);
-            setError('Failed to load playlist songs: ' + (err.response?.data?.error || err.message));
+            setError('Failed to load mixtape songs: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -183,7 +183,7 @@ const Playlists = () => {
     };
 
 
-    // Publishing is per-crate and reversible. Existing crates start private
+    // Publishing is per-mixtape and reversible. Existing mixtapes start private
     // because they were made when nothing was shareable.
     const handleToggleShare = async (playlist) => {
         if (sharingId) return;
@@ -243,7 +243,7 @@ const Playlists = () => {
     const handleCreatePlaylist = async (e) => {
         e.preventDefault();
         if (!newPlaylistName.trim()) {
-            setError('Playlist name is required');
+            setError('Mixtape name is required');
             return;
         }
 
@@ -262,7 +262,7 @@ const Playlists = () => {
             setError(null);
         } catch (err) {
             console.error('[ERROR] Failed to create playlist:', err.response?.data || err.message);
-            setError('Failed to create playlist: ' + (err.response?.data?.error || err.message));
+            setError('Failed to create mixtape: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -270,8 +270,8 @@ const Playlists = () => {
         // Find playlist name for modal message
         const playlist = playlists.find(p => p.id === playlistId);
         setModalConfig({
-            title: 'Delete Playlist',
-            message: `Are you sure you want to delete the playlist "${playlist?.name}"? This action cannot be undone.`,
+            title: 'Delete Mixtape',
+            message: `Are you sure you want to delete the mixtape "${playlist?.name}"? This action cannot be undone.`,
             onConfirm: async () => {
                 try {
                     console.log('[DEBUG] Deleting playlist:', playlistId);
@@ -287,7 +287,7 @@ const Playlists = () => {
                     setError(null);
                 } catch (err) {
                     console.error('[ERROR] Failed to delete playlist:', err.response?.data || err.message);
-                    setError('Failed to delete playlist: ' + (err.response?.data?.error || err.message));
+                    setError('Failed to delete mixtape: ' + (err.response?.data?.error || err.message));
                 } finally {
                     setIsModalOpen(false);
                 }
@@ -302,7 +302,7 @@ const Playlists = () => {
         const song = playlist?.songs?.find(s => s.id === songId);
         setModalConfig({
             title: 'Remove Song',
-            message: `Are you sure you want to remove "${song?.title}" from the playlist "${playlist?.name}"?`,
+            message: `Are you sure you want to remove "${song?.title}" from the mixtape "${playlist?.name}"?`,
             onConfirm: async () => {
                 try {
                     console.log('[DEBUG] Removing song:', songId, 'from playlist:', playlistId);
@@ -344,11 +344,11 @@ const Playlists = () => {
             if (songs.length > 0) {
                 playPlaylist(songs);
             } else {
-                setError('This playlist is empty');
+                setError('This mixtape is empty');
             }
         } catch (err) {
             console.error('[ERROR] Failed to fetch playlist songs:', err.response?.data || err.message);
-            setError('Failed to play playlist: ' + (err.response?.data?.error || err.message));
+            setError('Failed to play mixtape: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -366,7 +366,7 @@ const Playlists = () => {
                 <div className="retro-panel retro-cut px-8 py-10 text-center">
                     <div className="retro-eyebrow mb-3">// Locked //</div>
                     <p className="retro-mono text-2xl text-gray-300">
-                        &gt; Please <Link to="/login" className="retro-link">log in</Link> to manage your playlists.
+                        &gt; Please <Link to="/login" className="retro-link">log in</Link> to manage your mixtapes.
                     </p>
                 </div>
             </div>
@@ -377,21 +377,21 @@ const Playlists = () => {
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <div className="container mx-auto px-4 py-8">
             <header className="mb-6">
-                <div className="retro-eyebrow mb-3">// Your Crates //</div>
-                <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">Playlists</h1>
+                <div className="retro-eyebrow mb-3">// Your Mixtapes //</div>
+                <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">Mixtapes</h1>
                 <div className="retro-rule mt-4" />
             </header>
             {error && <p className="retro-mono text-xl text-fuchsia-400 mb-4">{error}</p>}
             {loading ? (
-                <p className="retro-mono text-xl text-cyan-200">&gt; loading playlists&hellip;</p>
+                <p className="retro-mono text-xl text-cyan-200">&gt; loading mixtapes&hellip;</p>
             ) : (
                 <>
                     <div className="mb-6 flex flex-wrap items-center gap-3">
                         <Link to="/crates" className="retro-btn px-4 py-2 text-[0.6rem]">
-                            Browse Public Crates
+                            Dig Through the Crates
                         </Link>
                         <span className="retro-mono text-lg text-gray-500">
-                            &gt; make a crate public below and it shows up there
+                            &gt; make a mixtape public below and it shows up there
                         </span>
                     </div>
                     <form onSubmit={handleCreatePlaylist} className="mb-8 space-y-3">
@@ -400,14 +400,14 @@ const Playlists = () => {
                             type="text"
                             value={newPlaylistName}
                             onChange={(e) => setNewPlaylistName(e.target.value)}
-                            placeholder="New playlist name"
+                            placeholder="New mixtape name"
                             className="retro-field flex-1"
-                            aria-label="New playlist name"
+                            aria-label="New mixtape name"
                         />
                         <button
                             type="submit"
                             className="retro-btn retro-btn--hot px-4 py-2 text-xs"
-                            aria-label="Create playlist"
+                            aria-label="Create mixtape"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
                             Create
@@ -421,7 +421,7 @@ const Playlists = () => {
                                 onChange={(e) => setMakeMixtape(e.target.checked)}
                                 className="accent-fuchsia-500"
                             />
-                            Make this a mixtape for someone
+                            Make this one for someone
                         </label>
 
                         {makeMixtape && (
@@ -450,7 +450,7 @@ const Playlists = () => {
                         )}
                     </form>
                     {playlists.length === 0 ? (
-                        <p className="retro-mono text-xl text-gray-400">&gt; no playlists yet. create one above.</p>
+                        <p className="retro-mono text-xl text-gray-400">&gt; no mixtapes yet. make one above.</p>
                     ) : (
                         <div className="space-y-6">
                             {playlists.map((playlist) => (
@@ -460,7 +460,7 @@ const Playlists = () => {
                                             <button
                                                 onClick={() => togglePlaylist(playlist.id)}
                                                 className="focus:outline-none"
-                                                aria-label={expandedPlaylists[playlist.id] ? `Collapse playlist ${playlist.name}` : `Expand playlist ${playlist.name}`}
+                                                aria-label={expandedPlaylists[playlist.id] ? `Collapse mixtape ${playlist.name}` : `Expand mixtape ${playlist.name}`}
                                             >
                                                 {expandedPlaylists[playlist.id] ? (
                                                     <ChevronUpIcon className="w-6 h-6 text-gray-400" />
@@ -472,13 +472,13 @@ const Playlists = () => {
                                                 <h2 className="retro-display text-base retro-glow-cyan">{playlist.name}</h2>
                                                 {playlist.dedicated_to_name && (
                                                     <div className="retro-mono text-lg text-fuchsia-300">
-                                                        mixtape for {playlist.dedicated_to_name}
+                                                        made for {playlist.dedicated_to_name}
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="flex items-center space-x-3">
-                                            {/* The Likes crate is generated, not curated - it is
+                                            {/* The Likes mixtape is generated, not curated - it is
                                                 surfaced separately and cannot be shared. */}
                                             {!playlist.is_likes && (
                                                 <>
@@ -509,14 +509,14 @@ const Playlists = () => {
                                             <button
                                                 onClick={() => handlePlayPlaylist(playlist.id)}
                                                 className="retro-action p-2"
-                                                aria-label={`Play playlist ${playlist.name}`}
+                                                aria-label={`Play mixtape ${playlist.name}`}
                                             >
                                                 <PlayIcon className="w-5 h-5" />
                                             </button>
                                             <button
                                                 onClick={() => handleDeletePlaylist(playlist.id)}
                                                 className="p-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                                                aria-label={`Delete playlist ${playlist.name}`}
+                                                aria-label={`Delete mixtape ${playlist.name}`}
                                             >
                                                 <TrashIcon className="w-5 h-5" />
                                             </button>
@@ -542,7 +542,7 @@ const Playlists = () => {
                                                                 <button
                                                                     onClick={() => handleRemoveSong(playlist.id, song.id)}
                                                                     className="p-1 text-red-400 hover:text-red-500 focus:outline-none"
-                                                                    aria-label={`Remove ${song.title} from playlist`}
+                                                                    aria-label={`Remove ${song.title} from mixtape`}
                                                                 >
                                                                     <TrashIcon className="w-5 h-5" />
                                                                 </button>
@@ -550,7 +550,7 @@ const Playlists = () => {
                                                         ))}
                                                     </ul>
                                                 ) : (
-                                                    <p className="retro-mono text-xl text-gray-400">No songs in this playlist.</p>
+                                                    <p className="retro-mono text-xl text-gray-400">No songs in this mixtape.</p>
                                                 )
                                             ) : (
                                                 <p className="retro-mono text-xl text-gray-400">Loading songs...</p>

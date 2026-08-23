@@ -44,7 +44,7 @@ const CrateCard = ({ crate }) => (
         </div>
         <div className="retro-mono text-lg text-gray-600 truncate">
             {crate.dedicated_to_name
-                ? `mixtape for ${crate.dedicated_to_name}`
+                ? `made for ${crate.dedicated_to_name}`
                 : `${crate.song_count} track${crate.song_count === 1 ? '' : 's'}`}
         </div>
     </Link>
@@ -99,10 +99,10 @@ const Crates = () => {
     return (
         <div className="retro-page container mx-auto px-4 py-10">
 
-            <div className="retro-eyebrow mb-2">// Crates &amp; Mixtapes //</div>
+            <div className="retro-eyebrow mb-2">// Mixtapes //</div>
             <h1 className="retro-display text-2xl retro-glow-cyan mb-2">Dig Through the Crates</h1>
             <p className="retro-mono text-xl text-gray-400 mb-8">
-                &gt; playlists put together by members. make one for someone and it becomes a mixtape.
+                &gt; mixtapes put together by members. make one for someone and it lands in their crate.
             </p>
 
             {madeForMe.length > 0 && (
@@ -155,23 +155,23 @@ const Crates = () => {
                         mixtapesOnly ? 'border-fuchsia-400 text-fuchsia-200' : 'text-gray-400'
                     }`}
                 >
-                    Mixtapes only
+                    Made for someone
                 </button>
             </div>
 
             {isLoading ? (
-                <p className="retro-mono text-xl text-cyan-300">&gt; loading crates...</p>
+                <p className="retro-mono text-xl text-cyan-300">&gt; loading mixtapes...</p>
             ) : error ? (
                 <p className="retro-mono text-xl text-fuchsia-400">{error}</p>
             ) : crates.length === 0 ? (
                 <div className="retro-panel retro-cut p-8 text-center">
                     <p className="retro-mono text-xl text-gray-400 mb-4">
                         {mixtapesOnly
-                            ? '> no public mixtapes yet. be the first to make one for somebody.'
-                            : '> no public crates yet. build one and share it.'}
+                            ? '> nothing made for anybody yet. be the first.'
+                            : '> no public mixtapes yet. make one and share it.'}
                     </p>
                     <Link to="/playlists" className="retro-btn retro-btn--hot px-5 py-2 text-[0.6rem]">
-                        Make a Crate
+                        Make a Mixtape
                     </Link>
                 </div>
             ) : (
