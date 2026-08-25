@@ -8,6 +8,8 @@ const authenticateOptional = require('../middleware/authenticateOptional');
 const { buildPublicFileUrl } = require('../utils/storage');
 const { createNotification, NOTIFICATION_TYPES, sendIdjcTipEmail } = require('../utils/notifications');
 const { slugify, validateSlug } = require('../utils/slug');
+const { ACTIVITY, listenCoinsToAward } = require('../config/coinRewards');
+const { awardCoins, getEarnedForActivityByProfile } = require('../utils/coins');
 const router = express.Router();
 
 // Get recommended songs
@@ -569,7 +571,7 @@ router.get('/:profileId', async (req, res, next) => {
       return res.status(500).json({ error: 'Invalid profile data' });
     }
     const songs = await pool.query(`
-      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, p.user_id, p.name as profile_name, p.slug as profile_slug,
+      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, s.bpm, s.musical_key, s.duration, p.user_id, p.name as profile_name, p.slug as profile_slug,
              (SELECT COUNT(*)
               FROM playlist_songs ps
                      JOIN playlists pl ON ps.playlist_id = pl.id
@@ -593,7 +595,9 @@ router.get('/:profileId', async (req, res, next) => {
     }));
 
     // Calculate total IDJC earned
-    const earnings = await pool.query('SELECT SUM(coins_earned) as total_earned FROM profile_earnings WHERE profile_id = ?', [profileId]);
+    // Coin balances come from the ledger, not profile_earnings: the ledger is
+    // where every activity records its awards, and listens are only the first.
+    const earnings = await pool.query('SELECT COALESCE(SUM(coins), 0) as total_earned FROM coin_events WHERE profile_id = ?', [profileId]);
     const total_idjc_earned = Number(earnings[0].total_earned) || 0;
 
     // Calculate total paid
@@ -1297,35 +1301,66 @@ router.post('/calculate-daily-earnings', async (req, res) => {
 
     const profiles = await pool.query('SELECT id FROM profiles');
 
+    // One query for what every profile has already been granted, rather than
+    // one per profile inside the loop.
+    const grantedByProfile = await getEarnedForActivityByProfile(ACTIVITY.DAILY_LISTENS);
+
     for (const profile of profiles) {
-      const profileId = profile.id;
+      const profileId = Number(profile.id);
 
-      // Skip if already calculated for this date
-      const existing = await pool.query(
-          'SELECT id FROM profile_earnings WHERE profile_id = ? AND earnings_date = ?',
-          [profileId, yesterdayStr]
-      );
-      if (existing.length > 0) continue;
+      try {
+        // Listens on the day itself, which is what the history row records.
+        const dayResult = await pool.query(`
+          SELECT COUNT(*) as listens_count
+          FROM song_plays sp
+                 JOIN songs s ON sp.song_id = s.id
+          WHERE s.profile_id = ?
+            AND DATE(sp.played_at) = ?
+        `, [profileId, yesterdayStr]);
 
-      // Count listens for the day
-      const result = await pool.query(`
-        SELECT COUNT(*) as listens_count
-        FROM song_plays sp
-               JOIN songs s ON sp.song_id = s.id
-        WHERE s.profile_id = ?
-          AND DATE(sp.played_at) = ?
-      `, [profileId, yesterdayStr]);
+        const listens_count = Number(dayResult[0].listens_count) || 0;
 
-      const listens_count = Number(result[0].listens_count) || 0;
-      let coins_earned = Math.floor(listens_count / 10);
-      coins_earned = Math.min(coins_earned, 10);
+        // Lifetime listens through that day, which is what coins accrue
+        // against. Flooring a single day in isolation discarded the remainder
+        // every night; at this site's traffic that meant nearly every profile
+        // earned nothing nearly every day.
+        const lifetimeResult = await pool.query(`
+          SELECT COUNT(*) as lifetime_listens
+          FROM song_plays sp
+                 JOIN songs s ON sp.song_id = s.id
+          WHERE s.profile_id = ?
+            AND DATE(sp.played_at) <= ?
+        `, [profileId, yesterdayStr]);
 
-      // Insert if there were listens
-      if (listens_count > 0) {
-        await pool.query(`
-          INSERT INTO profile_earnings (profile_id, earnings_date, listens_count, coins_earned)
-          VALUES (?, ?, ?, ?)
-        `, [profileId, yesterdayStr, listens_count, coins_earned]);
+        const lifetime_listens = Number(lifetimeResult[0].lifetime_listens) || 0;
+        const coins_earned = listenCoinsToAward(lifetime_listens, grantedByProfile.get(profileId) || 0);
+
+        // No existence fast-path here on purpose. A profile_earnings row left
+        // by the old daily-floor rule would have short-circuited the accrual
+        // above and stranded the remainder it never granted. Idempotency comes
+        // from the unique keys instead: replaying a date awards nothing twice.
+        if (listens_count > 0 || coins_earned > 0) {
+          await pool.query(`
+            INSERT IGNORE INTO profile_earnings (profile_id, earnings_date, listens_count, coins_earned)
+            VALUES (?, ?, ?, ?)
+          `, [profileId, yesterdayStr, listens_count, coins_earned]);
+        }
+
+        await awardCoins({
+          profileId,
+          activityType: ACTIVITY.DAILY_LISTENS,
+          sourceId: yesterdayStr,
+          coins: coins_earned,
+          metadata: { listens_count, lifetime_listens }
+        });
+      } catch (profileErr) {
+        // One bad profile must not take the rest of the night with it. Profiles
+        // iterate in id order, so a throw here used to abort the whole loop and
+        // silently drop every profile after it.
+        logger.error('Failed to calculate daily earnings for profile', {
+          profileId,
+          error: profileErr.message
+        });
       }
     }
 
@@ -1339,9 +1374,9 @@ router.post('/calculate-daily-earnings', async (req, res) => {
 router.get('/top-earners', async (req, res) => {
   try {
     const rows = await pool.query(`
-      SELECT p.id, p.user_id, p.name, p.picture_url, COALESCE(SUM(pe.coins_earned), 0) as total_earned
+      SELECT p.id, p.user_id, p.name, p.picture_url, COALESCE(SUM(ce.coins), 0) as total_earned
       FROM profiles p
-      LEFT JOIN profile_earnings pe ON p.id = pe.profile_id
+      LEFT JOIN coin_events ce ON p.id = ce.profile_id
       GROUP BY p.id, p.user_id, p.name, p.slug, p.picture_url
       ORDER BY total_earned DESC
       LIMIT 5

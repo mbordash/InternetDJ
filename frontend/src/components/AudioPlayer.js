@@ -3,27 +3,13 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import WaveSurfer from 'wavesurfer.js';
 import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js';
-import { SparklesIcon, PlayIcon, PauseIcon, AdjustmentsVerticalIcon, XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
+import { PlayIcon, PauseIcon, AdjustmentsVerticalIcon, XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
 import { AuthContext } from '../context/AuthContext';
 import { AudioPlayerContext, toPlayableUrl } from '../context/AudioPlayerContext';
 import { CancelToken } from 'axios';
 import API_URL from '../utils/api';
 
-// Auto-mastering is CPU-heavy on the backend; allow a generous window but
-// never an unbounded one, so the player can always recover.
-const MASTERING_TIMEOUT_MS = 3 * 60 * 1000;
-
 function AudioPlayer({ songId, s3Url, isOwner = false }) {
-  const [showMasteringModal, setShowMasteringModal] = useState(false);
-  const [masteringType, setMasteringType] = useState(null);
-  const [masteredUrl, setMasteredUrl] = useState(null);
-  const [isMastering, setIsMastering] = useState(false);
-  const [masteringError, setMasteringError] = useState(null);
-  const [songTitle, setSongTitle] = useState('');
-
-  const [showSuccessNotification, setShowSuccessNotification] = useState(false);
-  const [newSongId, setNewSongId] = useState(null);
-
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
   const modalRef = useRef(null);
@@ -31,6 +17,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   const isMountedRef = useRef(true);
   const fetchCancelTokenRef = useRef(null);
   const initializationCountRef = useRef(0);
+  const loadUrlRef = useRef('');
   const mediaListenersRef = useRef([]);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -56,8 +43,20 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
   const { user } = useContext(AuthContext);
   const { audioRef, registerSong, getAudioGraph, hasAudioGraph, currentSong } = useContext(AudioPlayerContext);
-  const currentSongRef = useRef(currentSong);
-  currentSongRef.current = currentSong;
+
+  // This page only takes over the app-wide player when the member actually
+  // presses play here. Until then the waveform runs on its own private audio
+  // element, so opening a song page leaves whatever is in the footer playing.
+  // Arriving at the page of the track that is already playing is the one case
+  // that starts out active, so the waveform tracks live playback.
+  const [isActive, setIsActive] = useState(
+      () => currentSong?.id === Number(songId) && !audioRef.current.paused
+  );
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+  const playOnReadyRef = useRef(false);
+  const resumeAtRef = useRef(0);
+  const songDetailsRef = useRef(null);
   const isAuthenticated = !!user;
   const canPersistPeaks = true;
 
@@ -71,7 +70,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
     const fetchSongDetails = async () => {
       if (!songId) {
         console.warn('No songId provided for fetching details');
-        setSongTitle('Unknown Song');
         return;
       }
 
@@ -82,23 +80,28 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         });
         console.log('Fetched song details:', response.data);
         const songData = response.data?.song || response.data;
-        setSongTitle(songData?.title || 'Untitled Song');
-        // Show this song in the global footer player
-        registerSong({
+        // Held until this page takes over playback. Registering here instead
+        // would put this song in the footer while a different one is still
+        // playing through it.
+        songDetailsRef.current = {
           id: Number(songId),
           title: songData?.title || 'Untitled Song',
           mp3_url: songData?.mp3_url || s3Url,
           image_url: songData?.image_url || null,
           profile_id: songData?.profile_id || null,
           profile_name: songData?.profile_name || null,
-        });
+        };
+        // If this page is already the one driving playback, the footer is
+        // showing a placeholder until these details land.
+        if (isActiveRef.current) {
+          registerSong(songDetailsRef.current);
+        }
       } catch (err) {
         console.error('Error fetching song details:', {
           message: err.message,
           response: err.response?.data,
           status: err.response?.status,
         });
-        setSongTitle('Unknown Song');
       }
     };
     fetchSongDetails();
@@ -121,95 +124,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         response: err.response?.data,
         status: err.response?.status,
       });
-    }
-  };
-
-  const handleMastering = async (type) => {
-    // Re-entrancy guard: the buttons are disabled while a job runs, but a
-    // second call would otherwise orphan the first request's state updates.
-    if (isMastering) return;
-
-    setIsMastering(true);
-    setMasteringError(null);
-    setMasteringType(type);
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-          `${API_URL}/music/master/${songId}`,
-          { masteringType: type },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            // axios has no default timeout, so a stalled backend left the
-            // player greyed out forever and the only way back was a page
-            // reload. Bound the wait so the UI always recovers on its own.
-            timeout: MASTERING_TIMEOUT_MS,
-          }
-      );
-
-      setMasteredUrl(response.data.masteredUrl);
-    } catch (err) {
-      console.error('Error mastering audio:', err);
-      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-        setMasteringError('Mastering took too long and was cancelled. The track is playable again \u2014 please try again.');
-      } else if (err.response?.status === 429) {
-        setMasteringError('Too many mastering jobs running. Please try again later.');
-      } else {
-        setMasteringError('Failed to master audio. Please try again.');
-      }
-    } finally {
-      // Always clears, including on timeout \u2014 this is what unfreezes the track.
-      setIsMastering(false);
-    }
-  };
-
-  const handleSaveMastered = async () => {
-    if (!masteredUrl) return;
-
-    setIsSaving(true);
-    setSaveError(null);
-
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      const title = songTitle || 'Auto Mastered Song';
-      formData.append('title', `${title} (Auto Mastered)`);
-
-      const proxyUrl = `${API_URL}/proxy/audio?url=${encodeURIComponent(masteredUrl)}`;
-      const response = await fetch(proxyUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch mastered audio: ${response.statusText}`);
-      }
-      const blob = await response.blob();
-      formData.append('mp3', blob, `mastered-${Date.now()}.mp3`);
-
-      const uploadResponse = await axios.post(`${API_URL}/music/upload`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      const newSong = uploadResponse.data.song;
-      console.log('New song uploaded:', newSong);
-      setNewSongId(newSong.id);
-
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      setShowSuccessNotification(true);
-      setShowMasteringModal(false);
-      setMasteredUrl(null);
-      setMasteringType(null);
-
-      setTimeout(() => {
-        setShowSuccessNotification(false);
-        setNewSongId(null);
-      }, 5000);
-    } catch (err) {
-      console.error('Error saving mastered song:', err);
-      setSaveError('Failed to save mastered song.');
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -339,6 +253,9 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   // Detach the EQ chain and restore direct output on the persistent graph
   const bypassEQFilters = () => {
     if (!hasAudioGraph()) return;
+    // Nothing of ours is in the chain, so leave it alone: an inactive page
+    // unmounting must not reach into the graph of the track still playing.
+    if (Object.keys(filtersRef.current).length === 0) return;
     try {
       const { ctx, source } = getAudioGraph();
       Object.values(filtersRef.current).forEach((filter) => {
@@ -354,10 +271,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
   const retryAudioLoad = async (attempts = 3, delay = 1000) => {
     if (!isMountedRef.current) return false;
-    const proxyUrl = toPlayableUrl(s3Url);
+    const retryUrl = loadUrlRef.current || toPlayableUrl(s3Url);
     for (let i = 0; i < attempts; i++) {
       try {
-        wavesurferRef.current.load(proxyUrl);
+        wavesurferRef.current.load(retryUrl);
         return true;
       } catch (err) {
         console.error(`Audio load attempt ${i + 1} failed:`, err);
@@ -406,16 +323,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
     if (!s3Url) {
       setIsLoading(false);
       setError('No audio URL provided.');
-      return;
-    }
-
-    // Guard against duplicate or rapid initialization for same songId
-    if (
-        wavesurferRef.current &&
-        waveformRef.currentSongId === songId &&
-        Date.now() - (waveformRef.currentInitTime || 0) < 2000
-    ) {
-      console.log(`[DEBUG] Skipping duplicate initialization for songId: ${songId}, s3Url: ${s3Url}`);
       return;
     }
 
@@ -524,23 +431,47 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         return;
       }
 
-      console.log(`[DEBUG] Creating new WaveSurfer instance for songId: ${songId}`);
-      // Attach WaveSurfer to the app-wide shared audio element so playback
-      // continues in the footer player when navigating away from this page.
+      // The two awaits above each give React a chance to unmount this player
+      // (navigating between song pages remounts it). Without this check the
+      // dead instance still builds a WaveSurfer and points the shared element
+      // at its own, now-stale, track.
+      if (!isMountedRef.current) return;
+
+      console.log(`[DEBUG] Creating new WaveSurfer instance for songId: ${songId}, active: ${isActive}`);
+      // The element reports src as an absolute URL, so resolve ours the same
+      // way before comparing (API_URL is relative in production).
+      const absoluteUrl = new URL(proxyUrl, window.location.href).href;
       const sharedAudio = audioRef.current;
-      const isSameSongLoaded =
-          currentSongRef.current?.id === Number(songId) && !!sharedAudio.src;
-      if (!isSameSongLoaded && sharedAudio.src !== proxyUrl) {
-        sharedAudio.pause();
-        sharedAudio.src = proxyUrl;
+      // Active: drive the app-wide element, so playback carries on in the
+      // footer when the member navigates away. Inactive: let WaveSurfer make
+      // its own element, leaving whatever is in the footer untouched.
+      let wasPlaying = false;
+      if (isActive) {
+        wasPlaying = !sharedAudio.paused && sharedAudio.src === absoluteUrl;
+        if (sharedAudio.src !== absoluteUrl) {
+          sharedAudio.pause();
+          sharedAudio.src = absoluteUrl;
+        }
+        // Falls back to the little we know if the details fetch is still in
+        // flight: taking over the element without registering the song would
+        // leave the footer captioned with the previous track.
+        registerSong(songDetailsRef.current || {
+          id: Number(songId),
+          title: 'Untitled Song',
+          mp3_url: s3Url,
+          image_url: null,
+          profile_id: null,
+          profile_name: null,
+        });
       }
-      // Load with the element's current (absolute) src so WaveSurfer doesn't
-      // reset an already-playing element.
-      const loadUrl = sharedAudio.src || proxyUrl;
+      loadUrlRef.current = isActive ? sharedAudio.src : proxyUrl;
 
       wavesurferRef.current = WaveSurfer.create({
         container: waveformRef.current,
-        media: sharedAudio,
+        // WaveSurfer loads once from these on construction: an external
+        // media element's own src, or `url` when it owns the element.
+        ...(isActive ? { media: sharedAudio } : { url: proxyUrl }),
+        ...(storedPeakChannels ? { peaks: storedPeakChannels } : {}),
         waveColor: '#2f7f96',
         progressColor: '#ff2f8e',
         cursorColor: '#00f0ff',
@@ -562,8 +493,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         ],
       });
 
-      // Reflect the shared element's actual state (it may already be playing)
-      setIsPlaying(!sharedAudio.paused);
+      // Reflect the element's actual state (the shared one may already be playing)
+      setIsPlaying(isActive && !sharedAudio.paused);
+
+      // Repeat is component state, so it has to be re-applied to whichever
+      // element this instance ended up on.
+      const activeMedia = wavesurferRef.current.getMediaElement();
+      if (activeMedia) {
+        activeMedia.loop = isRepeating;
+      }
 
       wavesurferRef.current.on('ready', () => {
         if (!isMountedRef.current) return;
@@ -571,8 +509,24 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         setIsLoading(false);
         setDuration(wavesurferRef.current.getDuration());
 
-        if (!filtersInitialized) {
+        // The EQ graph is wired to the shared element, so it only means
+        // anything once this page is the one driving it.
+        if (isActive && !filtersInitialized) {
           initializeEQFilters();
+        }
+
+        // Loading always pauses the media element, so a page opened for the
+        // track already playing has to pick it back up, and a take-over has
+        // to start it from wherever the member had scrubbed to.
+        if (playOnReadyRef.current || wasPlaying) {
+          playOnReadyRef.current = false;
+          if (resumeAtRef.current > 0) {
+            wavesurferRef.current.setTime(resumeAtRef.current);
+            resumeAtRef.current = 0;
+          }
+          wavesurferRef.current.play().catch((err) => {
+            console.error('Error starting playback:', err);
+          });
         }
 
         if (!storedPeaks && canPersistPeaks) {
@@ -663,18 +617,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
         mediaListenersRef.current.push(() => audioElement.removeEventListener('ended', handleEnded));
       }
 
-      console.log(`[DEBUG] Loading audio for songId: ${songId}`);
-      try {
-        if (storedPeakChannels) {
-          console.log(`[DEBUG] Loading audio with precomputed peaks for songId: ${songId}`);
-          wavesurferRef.current.load(loadUrl, storedPeakChannels);
-        } else {
-          wavesurferRef.current.load(loadUrl);
-        }
-      } catch (err) {
-        console.error('Error loading audio:', err);
-        retryAudioLoad();
-      }
     };
 
     initWaveSurfer();
@@ -698,8 +640,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       }
       if (wavesurferRef.current) {
         try {
-          // Shared media element is external to WaveSurfer, so destroy()
-          // detaches without pausing playback.
+          // When active the media element is the shared one, which WaveSurfer
+          // treats as external and detaches from without pausing -- that is
+          // what keeps the footer playing. When inactive it owns its private
+          // element and tears it down properly.
           wavesurferRef.current.destroy();
         } catch (err) {
           console.error('Error destroying WaveSurfer:', err);
@@ -714,7 +658,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       }
       setFiltersInitialized(false);
     };
-  }, [songId, s3Url]);
+  }, [songId, s3Url, isActive]);
 
   // Update the audio element's loop property when isRepeating changes
   useEffect(() => {
@@ -743,13 +687,22 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
     if (!showEQ && isAuthenticated) {
       fetchEQSettings();
     }
-    if (!filtersInitialized && wavesurferRef.current) {
+    if (isActive && !filtersInitialized && wavesurferRef.current) {
       setEqLoading(true);
       initializeEQFilters();
     }
   };
 
   const togglePlayPause = () => {
+    // Pressing play here is the one thing that moves the app-wide player to
+    // this song. Re-initializing against the shared element picks up from
+    // wherever the member had scrubbed the preview to.
+    if (!isActive) {
+      resumeAtRef.current = wavesurferRef.current?.getCurrentTime() || 0;
+      playOnReadyRef.current = true;
+      setIsActive(true);
+      return;
+    }
     if (wavesurferRef.current) {
       wavesurferRef.current.playPause();
       if (!filtersInitialized) {
@@ -829,21 +782,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           >
             <ArrowPathIcon className="h-6 w-6" />
           </button>
-          {isOwner && (
-              <button
-                  onClick={() => {
-                    if (wavesurferRef.current && isPlaying) {
-                      wavesurferRef.current.pause();
-                    }
-                    setShowMasteringModal(true);
-                  }}
-                  className="retro-action p-2 z-10"
-                  title="Auto Master"
-                  disabled={isLoading || error || !isAuthenticated}
-              >
-                <SparklesIcon className="h-6 w-6" />
-              </button>
-          )}
           <button
               onClick={toggleEQModal}
               className="retro-action p-2 z-10"
@@ -856,125 +794,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
         </div>
-        {showMasteringModal && createPortal((
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center retro-layer-overlay">
-              <div className="retro-panel retro-cut p-6 w-[400px] max-w-[92vw] text-gray-100">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="retro-display text-sm retro-glow-cyan">Auto Mastering</h3>
-                  <button
-                      onClick={() => {
-                        setShowMasteringModal(false);
-                        setMasteredUrl(null);
-                        setMasteringType(null);
-                        setMasteringError(null);
-                      }}
-                      className="p-1 text-gray-400 hover:text-white"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
-
-                {!masteredUrl && (
-                    <div className="space-y-4">
-                      <p className="text-gray-300">Select mastering intensity:</p>
-                      <div className="flex space-x-2">
-                        {['light', 'middle', 'heavy'].map((type) => (
-                            <button
-                                key={type}
-                                onClick={() => handleMastering(type)}
-                                disabled={isMastering}
-                                className={`flex-1 py-2 px-4 rounded-md ${
-                                    isMastering
-                                        ? 'bg-white/10 text-gray-500 cursor-not-allowed'
-                                        : 'bg-primary-brand-500 text-white hover:bg-primary-brand-700'
-                                }`}
-                            >
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </button>
-                        ))}
-                      </div>
-                    </div>
-                )}
-
-                {isMastering && !masteredUrl && (
-                    <div className="flex justify-center">
-                      <svg
-                          className="animate-spin h-6 w-6 text-primary-brand-300"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                      >
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-16 0z" />
-                      </svg>
-                    </div>
-                )}
-
-                {masteredUrl && (
-                    <div className="space-y-4">
-                      <p className="text-gray-300">Preview mastered track:</p>
-                      <audio controls src={masteredUrl} className="w-full" />
-                      <div className="flex space-x-2">
-                        <button
-                            onClick={handleSaveMastered}
-                            disabled={isSaving}
-                            className={`flex-1 py-2 px-4 rounded-md ${
-                                isSaving
-                                    ? 'bg-white/10 text-gray-500 cursor-not-allowed'
-                                    : 'bg-primary-brand-500 text-white hover:bg-primary-brand-700'
-                            }`}
-                        >
-                          {isSaving ? 'Saving...' : 'Save Mastered Track'}
-                        </button>
-                        <button
-                            onClick={() => {
-                              setMasteredUrl(null);
-                              setMasteringType(null);
-                            }}
-                            className="retro-btn flex-1 py-2 px-4 text-[0.6rem]"
-                        >
-                          Try Another
-                        </button>
-                      </div>
-                    </div>
-                )}
-
-                {masteringError && (
-                    <div className="retro-mono text-lg text-fuchsia-400 mt-2">
-                      {masteringError}
-                      {masteringError.includes('Too many') && (
-                          <button
-                              onClick={() => handleMastering(masteringType)}
-                              className="ml-2 text-primary-brand-300 underline hover:text-primary-brand-200"
-                          >
-                            Try Again
-                          </button>
-                      )}
-                    </div>
-                )}
-                {saveError && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{saveError}</div>}
-              </div>
-            </div>
-        ), document.body)}
-
-        {showSuccessNotification && newSongId && createPortal((
-            <div className="retro-panel retro-cut fixed top-4 right-4 p-4 retro-layer-toast flex items-center space-x-2 retro-mono text-lg">
-              <span>Mastered track saved successfully!</span>
-              <a
-                  href={`/song/${newSongId}`}
-                  className="underline hover:text-white"
-              >
-                View Track
-              </a>
-              <button
-                  onClick={() => setShowSuccessNotification(false)}
-                  className="text-white hover:text-gray-200"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-        ), document.body)}
-
         {showEQ && createPortal((
             /* Portalled to <body> because the player card above is .retro-cut,
                and clip-path both clips its descendants and opens a stacking

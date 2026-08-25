@@ -7,6 +7,9 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
 import profilePath from '../utils/profilePath';
+import TrackFilters, {
+    EMPTY_FILTERS, hasActiveFilters, filtersToParams, TrackMetaChips,
+} from '../components/TrackFilters';
 
 function Browse() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -16,6 +19,11 @@ function Browse() {
     const [unreviewedSongs, setUnreviewedSongs] = useState([]);
     const [error, setError] = useState(null);
     const [genreQuery, setGenreQuery] = useState('');
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
+    const [filterResults, setFilterResults] = useState([]);
+    const [filterMissing, setFilterMissing] = useState(null);
+    const [filterBusy, setFilterBusy] = useState(false);
+    const [filterError, setFilterError] = useState(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -55,6 +63,44 @@ function Browse() {
 
         fetchData();
     }, []);
+
+    useEffect(() => {
+        if (!hasActiveFilters(filters)) {
+            setFilterResults([]);
+            setFilterMissing(null);
+            setFilterBusy(false);
+            setFilterError(null);
+            return undefined;
+        }
+
+        // Typing in a BPM box fires on every keystroke, so wait for a pause,
+        // and drop the result if the filters moved on while it was in flight.
+        let cancelled = false;
+        setFilterBusy(true);
+        const timer = setTimeout(async () => {
+            try {
+                const response = await axios.get(`${API_URL}/music/search`, {
+                    params: { ...filtersToParams(filters), limit: 60 },
+                });
+                if (cancelled) return;
+                setFilterResults(response.data.songs || []);
+                setFilterMissing(response.data.missing || null);
+                setFilterError(null);
+            } catch (err) {
+                if (cancelled) return;
+                setFilterError(err.response?.data?.error || err.message);
+                setFilterResults([]);
+                setFilterMissing(null);
+            } finally {
+                if (!cancelled) setFilterBusy(false);
+            }
+        }, 350);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [filters]);
 
     const handleSongPlay = async (song) => {
         const playedKey = `played_${song.id}`;
@@ -265,6 +311,55 @@ function Browse() {
 
                 <div className="flex flex-col lg:flex-row gap-8">
                     <div className="w-full lg:w-3/4 min-w-0">
+                        <div className="mb-8">
+                            <TrackFilters
+                                filters={filters}
+                                onChange={setFilters}
+                                busy={filterBusy}
+                                resultCount={hasActiveFilters(filters) && !filterBusy ? filterResults.length : null}
+                                missing={filterMissing}
+                            />
+
+                            {filterError && (
+                                <p className="retro-mono text-lg text-fuchsia-400 mt-3">
+                                    &gt; {filterError}
+                                </p>
+                            )}
+
+                            {hasActiveFilters(filters) && !filterBusy && filterResults.length > 0 && (
+                                <ul className="mt-4 space-y-3">
+                                    {filterResults.map((song) => (
+                                        <li
+                                            key={song.id}
+                                            className="retro-panel retro-cut p-3 flex items-start gap-3"
+                                        >
+                                            <SongThumb song={song} size="w-14 h-14" iconSize="w-4 h-4" />
+                                            <div className="flex-1 min-w-0">
+                                                <Link
+                                                    to={`/song/${song.id}`}
+                                                    className="retro-display text-sm text-white hover:text-cyan-200 block truncate"
+                                                >
+                                                    {song.title}
+                                                </Link>
+                                                <ArtistLink song={song} className="block" />
+                                                <TrackMetaChips
+                                                    bpm={song.bpm}
+                                                    musicalKey={song.musical_key}
+                                                    className="mt-1"
+                                                />
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+
+                            {hasActiveFilters(filters) && !filterBusy && filterResults.length === 0 && !filterError && (
+                                <p className="retro-mono text-xl text-gray-400 mt-4">
+                                    &gt; nothing matches those settings yet.
+                                </p>
+                            )}
+                        </div>
+
                         <div className="flex flex-wrap items-center gap-3 mb-6">
                             <div className="flex items-stretch flex-1 min-w-[200px]">
                                 <label htmlFor="genre-filter" className="sr-only">Filter genres by name</label>

@@ -6,27 +6,50 @@ import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import profilePath from '../utils/profilePath';
+import TrackFilters, {
+    EMPTY_FILTERS, hasActiveFilters, filtersToParams, TrackMetaChips,
+} from '../components/TrackFilters';
 
 function Search() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
     const [songs, setSongs] = useState([]);
     const [profiles, setProfiles] = useState([]);
     const [error, setError] = useState(null);
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
+    const [missing, setMissing] = useState(null);
+    const [busy, setBusy] = useState(false);
     const location = useLocation();
 
     const query = new URLSearchParams(location.search).get('q') || '';
+    const filtersActive = hasActiveFilters(filters);
 
     useEffect(() => {
-        const fetchData = async () => {
+        // Either half is now enough on its own: a term, a tempo range, a key,
+        // or any combination of them.
+        if (!query.trim() && !filtersActive) {
+            setSongs([]);
+            setProfiles([]);
+            setMissing(null);
+            setBusy(false);
+            return undefined;
+        }
+
+        // Debounced and cancellable, so typing in a BPM box does not fire a
+        // request per keystroke or let a slow reply overwrite a newer one.
+        let cancelled = false;
+        setBusy(true);
+        const timer = setTimeout(async () => {
             try {
-                console.log('API URL:', API_URL);
                 const response = await axios.get(`${API_URL}/music/search`, {
-                    params: { q: query },
+                    params: { q: query, ...filtersToParams(filters), limit: 50 },
                 });
-                console.log('Search API Response:', response.data);
+                if (cancelled) return;
                 setSongs(Array.isArray(response.data.songs) ? response.data.songs : []);
                 setProfiles(Array.isArray(response.data.profiles) ? response.data.profiles : []);
+                setMissing(response.data.missing || null);
+                setError(null);
             } catch (err) {
+                if (cancelled) return;
                 console.error('Fetch error:', {
                     message: err.message,
                     response: err.response?.data,
@@ -34,16 +57,16 @@ function Search() {
                     url: err.config?.url,
                 });
                 setError('Failed to load search results: ' + (err.response?.data?.error || err.message));
+            } finally {
+                if (!cancelled) setBusy(false);
             }
-        };
+        }, 300);
 
-        if (query.trim()) {
-            fetchData();
-        } else {
-            setSongs([]);
-            setProfiles([]);
-        }
-    }, [query]);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [query, filters, filtersActive]);
 
     const handleSongPlay = async (song) => {
         const playedKey = `played_${song.id}`;
@@ -111,13 +134,29 @@ function Search() {
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
             <div className="container mx-auto px-4 py-8">
                 <h1 className="retro-display retro-chrome text-3xl sm:text-4xl mb-8">
-                    Search Results for "{query || 'No query'}"
+                    {query ? `Search Results for "${query}"` : 'Search'}
                 </h1>
+
+                <div className="mb-10">
+                    <TrackFilters
+                        filters={filters}
+                        onChange={setFilters}
+                        busy={busy}
+                        resultCount={filtersActive && !busy ? songs.length : null}
+                        missing={missing}
+                    />
+                </div>
 
                 <section className="mb-12">
                     <h2 className="retro-display text-lg retro-glow-magenta mb-4">Songs</h2>
                     {songs.length === 0 ? (
-                        <p className="retro-mono text-xl text-gray-300">No songs found.</p>
+                        <p className="retro-mono text-xl text-gray-300">
+                            {busy
+                                ? 'Searching\u2026'
+                                : (query.trim() || filtersActive)
+                                    ? 'No songs found.'
+                                    : 'Search for a track, or filter by tempo and key above.'}
+                        </p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full">
@@ -175,6 +214,11 @@ function Search() {
                                                     >
                                                         {song.title}
                                                     </Link>
+                                                    <TrackMetaChips
+                                                        bpm={song.bpm}
+                                                        musicalKey={song.musical_key}
+                                                        className="my-1"
+                                                    />
                                                     <div className="retro-mono text-lg text-gray-400">
                                                         <Link
                                                             to={

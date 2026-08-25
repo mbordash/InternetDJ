@@ -86,6 +86,7 @@ const Song = () => {
     const [activity, setActivity] = useState([]);
     const [isLoadingActivity, setIsLoadingActivity] = useState(false);
     const [similarSongs, setSimilarSongs] = useState([]);
+    const [similarBasis, setSimilarBasis] = useState(null);
     const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
     const [shareStatus, setShareStatus] = useState('');
 
@@ -98,17 +99,23 @@ const Song = () => {
         setReviewForm(prev => ({ ...prev, feedback: initialFeedback }));
     }, []);
 
+    // Navigating between song pages changes songId a render before the new
+    // song arrives, so `song` still holds the previous track. Handing that
+    // stale mp3_url to the player is what loaded the wrong audio under the
+    // new song's page.
+    const isSongLoaded = song?.id === Number(songId);
+
     const audioPlayerProps = useMemo(
         () => ({
             songId,
-            s3Url: song?.mp3_url || '',
+            s3Url: isSongLoaded ? song.mp3_url : '',
             isOwner: Boolean(
                 user?.id &&
                 song?.user_id &&
                 Number(user.id) === Number(song.user_id)
             ),
         }),
-        [songId, song?.mp3_url, song?.user_id, user?.id]
+        [songId, isSongLoaded, song?.mp3_url, song?.user_id, user?.id]
     );
     useEffect(() => {
         const fetchSong = async () => {
@@ -219,6 +226,7 @@ const Song = () => {
             try {
                 const response = await axios.get(`${API_URL}/music/${songId}/similar`);
                 setSimilarSongs(response.data.songs || []);
+                setSimilarBasis(response.data.basis || null);
             } catch (err) {
                 console.error('Failed to fetch similar songs:', err);
             } finally {
@@ -819,7 +827,7 @@ const Song = () => {
                                     </div>
                                     {/* Audio Player */}
                                     <div>
-                                        {isLoadingSong ? (
+                                        {isLoadingSong || !isSongLoaded ? (
                                             <div className="text-center">
                                                 <p className="text-lg">Loading audio...</p>
                                             </div>
@@ -827,6 +835,25 @@ const Song = () => {
                                             <AudioPlayer key={songId} {...audioPlayerProps} />
                                         )}
                                     </div>
+                                    {/* Detected tempo and key. Either can be absent:
+                                        analysis stores nothing when it is not
+                                        confident, which is the right answer for
+                                        beatless or atonal tracks. */}
+                                    {(song?.bpm || song?.musical_key) && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {song?.bpm && (
+                                                <span className="retro-chip" title="Detected tempo">
+                                                    {Math.round(song.bpm)} BPM
+                                                </span>
+                                            )}
+                                            {song?.musical_key && (
+                                                <span className="retro-chip" title="Detected key">
+                                                    {song.musical_key}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* Description and Genre Tags */}
                                     <div className="space-y-2">
                                         {song?.description && (
@@ -1114,7 +1141,21 @@ const Song = () => {
                                 {/* You Might Also Like */}
                                 {(isLoadingSimilar || similarSongs.length > 0) && (
                                     <div className="retro-panel retro-cut p-6">
-                                        <h2 className="retro-display text-lg retro-glow-magenta mb-5">You might also like</h2>
+                                        <h2 className="retro-display text-lg retro-glow-magenta mb-1">You might also like</h2>
+                                        {/* Say what the picks were matched on, so the
+                                            list reads as reasoning rather than as a
+                                            guess. Absent when nothing was detected. */}
+                                        {(similarBasis?.bpm || similarBasis?.camelot) && (
+                                            <p className="retro-mono text-lg text-gray-400 mb-4">
+                                                Matched against{' '}
+                                                {[
+                                                    similarBasis.bpm ? `${Math.round(similarBasis.bpm)} BPM` : null,
+                                                    similarBasis.musical_key
+                                                        ? `${similarBasis.musical_key} (${similarBasis.camelot})`
+                                                        : null,
+                                                ].filter(Boolean).join(' · ')}
+                                            </p>
+                                        )}
                                         {isLoadingSimilar ? (
                                             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                                                 {[...Array(6)].map((_, i) => (
@@ -1156,6 +1197,12 @@ const Song = () => {
                                                         >
                                                             {s.profile_name}
                                                         </Link>
+                                                        {s.match_reasons?.length > 0 && (
+                                                            <p className="retro-mono text-base text-cyan-300/80 truncate mt-0.5"
+                                                               title={s.match_reasons.join(', ')}>
+                                                                {s.match_reasons[0]}
+                                                            </p>
+                                                        )}
                                                         <div className="flex items-center gap-2 mt-1 retro-mono text-base text-gray-400">
                                                             <span className="inline-flex items-center gap-0.5">
                                                                 {Number(s.plays) || 0}

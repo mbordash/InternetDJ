@@ -2,11 +2,13 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { SpeakerWaveIcon, StarIcon, PencilIcon, TrashIcon, ChartBarIcon, XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
+import { SpeakerWaveIcon, StarIcon, PencilIcon, TrashIcon, ChartBarIcon, XMarkIcon, ArrowDownTrayIcon, BoltIcon } from '@heroicons/react/24/solid';
 import API_URL from '../utils/api';
+import { MUSICAL_KEYS } from '../utils/musicalKeys';
 import { Line } from 'react-chartjs-2';
 import Chart from 'chart.js/auto';
 import ErrorBoundary from '../components/ErrorBoundary';
+import AutoMasterModal from '../components/AutoMasterModal';
 import {
     CategoryScale,
     LinearScale,
@@ -27,6 +29,19 @@ Chart.register(
     Legend
 );
 
+// One place to reset the edit form from, so a new field cannot be added to
+// the form and forgotten in one of the three places that clear it.
+const EMPTY_EDIT_FORM = {
+    title: '',
+    description: '',
+    genres: [],
+    genreInput: '',
+    bpm: '',
+    musicalKey: '',
+    mp3: null,
+    image: null,
+};
+
 const SongsManager = () => {
     const { profileId } = useParams();
     const { user } = useContext(AuthContext);
@@ -46,16 +61,12 @@ const SongsManager = () => {
         image: null,
     });
     const [editSongId, setEditSongId] = useState(null);
-    const [editFormData, setEditFormData] = useState({
-        title: '',
-        description: '',
-        genres: [],
-        genreInput: '',
-        mp3: null,
-        image: null,
-    });
+    const [editFormData, setEditFormData] = useState(EMPTY_EDIT_FORM);
+    const [featureNotice, setFeatureNotice] = useState(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [songToDelete, setSongToDelete] = useState(null);
+    const [songToMaster, setSongToMaster] = useState(null);
+    const [masteredNotice, setMasteredNotice] = useState(null);
     const [showStatsModal, setShowStatsModal] = useState(false);
     const [statsSongId, setStatsSongId] = useState(null);
     const [stats, setStats] = useState({ plays: [] });
@@ -428,6 +439,13 @@ const SongsManager = () => {
         setError(null);
     };
 
+    // The toast confirms the save happened; it should not need dismissing.
+    useEffect(() => {
+        if (!featureNotice) return undefined;
+        const timer = setTimeout(() => setFeatureNotice(null), 4000);
+        return () => clearTimeout(timer);
+    }, [featureNotice]);
+
     const handleEditSubmit = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem('token');
@@ -457,6 +475,12 @@ const SongsManager = () => {
         form.append('genre', finalGenres.join(','));
         if (editFormData.mp3) {
             form.append('mp3', editFormData.mp3);
+        } else {
+            // Only sent when the audio is unchanged. Replacing the file makes
+            // the server re-detect both, and sending stale values alongside it
+            // would just race the analysis worker.
+            form.append('bpm', editFormData.bpm.trim());
+            form.append('musical_key', editFormData.musicalKey);
         }
         if (editFormData.image) {
             form.append('image', editFormData.image);
@@ -473,8 +497,13 @@ const SongsManager = () => {
                 song.id === editSongId ? { ...response.data.song, plays: Number(song.plays) || 0 } : song
             ));
             setEditSongId(null);
-            setEditFormData({ title: '', description: '', genres: [], genreInput: '', mp3: null, image: null });
+            setEditFormData(EMPTY_EDIT_FORM);
             setError(null);
+            setFeatureNotice(
+                editFormData.mp3
+                    ? 'Saved. Tempo and key are being re-detected from the new audio.'
+                    : 'Saved.'
+            );
             if (editMp3InputRef.current) editMp3InputRef.current.value = '';
             if (editImageInputRef.current) editImageInputRef.current.value = '';
         } catch (err) {
@@ -512,6 +541,16 @@ const SongsManager = () => {
         } catch (err) {
             setError(`Failed to update download setting: ${err.response?.data?.error || err.message}`);
         }
+    };
+
+    // A mastered track is saved as its own song rather than replacing the
+    // original: reviews and ratings hang off the song row they were left on,
+    // and a new master is meant to gather feedback of its own.
+    const handleMasteredSaved = (newSong) => {
+        if (!newSong) return;
+        setSongs((prevSongs) => [...prevSongs, { ...newSong, plays: Number(newSong.plays) || 0 }]);
+        setMasteredNotice(newSong);
+        setError(null);
     };
 
     const handleDelete = async () => {
@@ -898,15 +937,24 @@ const SongsManager = () => {
                                             <ArrowDownTrayIcon className="w-5 h-5" />
                                         </button>
                                         <button
+                                            onClick={() => setSongToMaster(song)}
+                                            className="p-2 text-cyan-400 hover:text-cyan-300"
+                                            title="Auto Master — save a mastered copy as a new song"
+                                        >
+                                            <BoltIcon className="w-5 h-5" />
+                                        </button>
+                                        <button
                                             onClick={() => {
                                                 setEditSongId(song.id);
                                                 setEditFormData({
+                                                    ...EMPTY_EDIT_FORM,
                                                     title: song.title,
                                                     description: song.description || '',
                                                     genres: song.genre ? song.genre.split(',').map(tag => tag.trim()).slice(0, 3) : [],
-                                                    genreInput: '',
-                                                    mp3: null,
-                                                    image: null,
+                                                    // Numbers arrive as strings from a form; keep them
+                                                    // that way so an empty field means "clear it".
+                                                    bpm: song.bpm != null ? String(Math.round(Number(song.bpm))) : '',
+                                                    musicalKey: song.musical_key || '',
                                                 });
                                             }}
                                             className="p-2 text-blue-600 hover:text-blue-700"
@@ -994,6 +1042,60 @@ const SongsManager = () => {
                                                 className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm"
                                             />
                                         </div>
+                                        {/* Detected on upload, and wrong often
+                                            enough to be worth correcting -- key
+                                            especially, which cannot tell a key
+                                            from its relative major or minor. */}
+                                        <div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="retro-label" htmlFor={`edit-bpm-${editSongId}`}>BPM</label>
+                                                    <input
+                                                        id={`edit-bpm-${editSongId}`}
+                                                        type="number"
+                                                        name="bpm"
+                                                        min="20"
+                                                        max="300"
+                                                        step="1"
+                                                        value={editFormData.bpm}
+                                                        onChange={handleEditInputChange}
+                                                        disabled={!!editFormData.mp3}
+                                                        placeholder="Not set"
+                                                        className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm disabled:opacity-50"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="retro-label" htmlFor={`edit-key-${editSongId}`}>Key</label>
+                                                    <select
+                                                        id={`edit-key-${editSongId}`}
+                                                        name="musicalKey"
+                                                        value={editFormData.musicalKey}
+                                                        onChange={handleEditInputChange}
+                                                        disabled={!!editFormData.mp3}
+                                                        className="mt-1 block w-full px-3 py-2 border border-white/10 rounded-md shadow-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-brand-500 focus:border-primary-brand-500 sm:text-sm disabled:opacity-50"
+                                                    >
+                                                        <option value="">Not set</option>
+                                                        {/* A stored value missing from the list would
+                                                            render as the first option and silently save
+                                                            the wrong key, so carry it through. */}
+                                                        {editFormData.musicalKey
+                                                            && !MUSICAL_KEYS.includes(editFormData.musicalKey) && (
+                                                            <option value={editFormData.musicalKey}>
+                                                                {editFormData.musicalKey}
+                                                            </option>
+                                                        )}
+                                                        {MUSICAL_KEYS.map(key => (
+                                                            <option key={key} value={key}>{key}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <p className="mt-1 text-sm text-gray-400">
+                                                {editFormData.mp3
+                                                    ? 'Both will be re-detected from the new audio file.'
+                                                    : 'Detected automatically. Correct either one, or clear it to show nothing.'}
+                                            </p>
+                                        </div>
                                         <div>
                                             <label className="retro-label">MP3 File (Optional)</label>
                                             <input
@@ -1027,7 +1129,7 @@ const SongsManager = () => {
                                                 type="button"
                                                 onClick={() => {
                                                     setEditSongId(null);
-                                                    setEditFormData({ title: '', description: '', genres: [], genreInput: '', mp3: null, image: null });
+                                                    setEditFormData(EMPTY_EDIT_FORM);
                                                     if (editMp3InputRef.current) editMp3InputRef.current.value = '';
                                                     if (editImageInputRef.current) editImageInputRef.current.value = '';
                                                 }}
@@ -1043,6 +1145,43 @@ const SongsManager = () => {
                     </div>
                 )}
             </div>
+
+            {songToMaster && (
+                <AutoMasterModal
+                    song={songToMaster}
+                    onClose={() => setSongToMaster(null)}
+                    onSaved={handleMasteredSaved}
+                />
+            )}
+
+            {featureNotice && (
+                <div className="retro-panel retro-cut fixed top-4 right-4 p-4 retro-layer-toast flex items-center space-x-3 retro-mono text-lg">
+                    <span>{featureNotice}</span>
+                    <button
+                        onClick={() => setFeatureNotice(null)}
+                        aria-label="Dismiss"
+                        className="text-white hover:text-gray-200"
+                    >
+                        <XMarkIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            )}
+
+            {masteredNotice && (
+                <div className="retro-panel retro-cut fixed top-4 right-4 p-4 retro-layer-toast flex items-center space-x-3 retro-mono text-lg">
+                    <span>Saved &ldquo;{masteredNotice.title}&rdquo; to your songs.</span>
+                    <Link to={`/song/${masteredNotice.id}`} className="retro-link underline">
+                        View
+                    </Link>
+                    <button
+                        onClick={() => setMasteredNotice(null)}
+                        aria-label="Dismiss"
+                        className="text-white hover:text-gray-200"
+                    >
+                        <XMarkIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            )}
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (

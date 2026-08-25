@@ -1,6 +1,26 @@
 app = "your-app-name"
 primary_region = "iad"
 
+# Machine topology (counts are NOT set by this file — see `fly scale count`):
+#   app             2  web, kept warm for the DAW
+#   worker          1  stem separation
+#   masterworker    1  auto-master ffmpeg passes
+#   analysisworker  1  tempo/key detection on upload
+#   cron            1  supercronic; MUST stay at 1
+#
+# The cron group is the one count that is not a tuning choice: every extra cron
+# machine runs the whole crontab again, so a second one duplicates the cleanup
+# jobs and the nightly backup.
+
+# Runs on a temporary machine after the image is built and before the new
+# release takes traffic, so schema the new code depends on exists before any
+# request can hit it. profile.js reads coin_events for balances and the
+# leaderboard, and a deploy-then-migrate ordering would 500 those pages in the
+# gap. The migration is idempotent, so re-running it on every deploy is fine,
+# and a non-zero exit aborts the deploy.
+[deploy]
+  release_command = "node backend/scripts/migrateCoinEvents.js"
+
 [build]
 dockerfile = "dockerfile"
 
@@ -11,30 +31,33 @@ REACT_APP_API_URL = "/api"
 [http_service]
 internal_port = 5000
 force_https = true
-auto_stop_machines = "stop"
+auto_stop_machines = "off"
 auto_start_machines = true
-min_machines_running = 1
+min_machines_running = 2
 processes = ["app"]
 
 [processes]
 app = "node backend/server.js"
 worker = "node backend/workers/stemWorker.js"
+# Auto-master runs several full ffmpeg passes per job. It gets its own
+# process so its CPU load stays off the web machines and so it can be
+# scaled on its own when mastering is worth paying more for.
+masterworker = "node backend/workers/masterWorker.js"
+# Tempo/key detection on upload. Its own process for the same reason as
+# mastering: it is CPU work that should not land on a web machine. Note that
+# defining [processes] at all means fly ignores the dockerfile CMD, so a worker
+# that is not listed here simply never runs.
+analysisworker = "node backend/workers/analysisWorker.js"
 cron = "supercronic /app/crontab"
 
-[[services]]
-processes = ["worker"]
-min_machines_running = 1
-auto_stop_machines = false
-auto_start_machines = false  # Workers don't need auto-start
-
-[[services]]
-processes = ["cron"]
-min_machines_running = 1
-auto_stop_machines = false
-auto_start_machines = false  # Same for cron
+# The worker and cron groups deliberately have no [[services]] block. They take
+# no inbound traffic, so there is nothing for the proxy to route and nothing to
+# autostop against: a portless service block reads like it controls scale, but
+# it does not. Their machine counts come from `fly scale count`, and they are
+# left running because a queue worker with no inbound connections would never
+# get an autostart trigger to wake it back up.
 
 [[vm]]
 memory = "1gb"
 cpu_kind = "shared"
 cpus = 1
-

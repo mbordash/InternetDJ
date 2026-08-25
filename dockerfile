@@ -65,4 +65,4 @@ RUN cd backend && npm ci --production
 EXPOSE 5000
 
 # Start Supercronic, worker, and server (removed redis-server start)
-CMD ["sh", "-c", "supercronic /app/crontab & node backend/workers/stemWorker.js & node backend/server.js"]
+CMD ["sh", "-c", "supercronic /app/crontab & node backend/workers/stemWorker.js & node backend/workers/masterWorker.js & node backend/workers/analysisWorker.js & node backend/server.js"]

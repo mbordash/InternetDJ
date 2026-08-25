@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import API_URL from '../utils/api';
+import { MUSICAL_KEYS } from '../utils/musicalKeys';
 import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
 // A stem job outlives a backend restart, but the poll that happens to land
@@ -9,6 +10,12 @@ import { Helmet } from "react-helmet-async";
 // few times before surfacing an error; anything else is a real answer.
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_TRANSIENT_POLL_FAILURES = 5;
+
+// The default BPM has to be one of these. A <select> whose value matches no
+// option renders as if the first option were chosen, so a default outside the
+// list silently sends a tempo the user never picked.
+const BPM_OPTIONS = Array.from({ length: 13 }, (_, i) => 60 + i * 10);
+const DEFAULT_BPM = 120;
 
 function isTransientPollError(err) {
     if (!err.response) return true;                    // network drop / connection refused
@@ -20,7 +27,7 @@ function AIStems() {
     const baseUrl = SITE_URL;
     const [type, setType] = useState('bass');
     const [prompt, setPrompt] = useState('');
-    const [bpm, setBpm] = useState(128);
+    const [bpm, setBpm] = useState(DEFAULT_BPM);
     const [key, setKey] = useState('C minor');
     const [duration, setDuration] = useState(4);
     const [loading, setLoading] = useState(false);
@@ -220,10 +227,10 @@ function AIStems() {
                                 <select
                                     id="bpm"
                                     value={bpm}
-                                    onChange={(e) => setBpm(e.target.value)}
+                                    onChange={(e) => setBpm(Number(e.target.value))}
                                     className="retro-field p-3"
                                 >
-                                    {Array.from({length: 13}, (_, i) => 60 + i * 10).map(b => (
+                                    {BPM_OPTIONS.map(b => (
                                         <option key={b} value={b}>{b}</option>
                                     ))}
                                 </select>
@@ -236,7 +243,7 @@ function AIStems() {
                                     onChange={(e) => setKey(e.target.value)}
                                     className="retro-field p-3"
                                 >
-                                    {['C major', 'C minor', 'C# major', 'C# minor', 'D major', 'D minor', 'D# major', 'D# minor', 'E major', 'E minor', 'F major', 'F minor', 'F# major', 'F# minor', 'G major', 'G minor', 'G# major', 'G# minor', 'A major', 'A minor', 'A# major', 'A# minor', 'B major', 'B minor'].map(k => (
+                                    {MUSICAL_KEYS.map(k => (
                                         <option key={k} value={k}>{k}</option>
                                     ))}
                                 </select>

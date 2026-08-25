@@ -7,6 +7,7 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import {Helmet} from "react-helmet-async";
 import profilePath from '../utils/profilePath';
+import genreTags from '../utils/genreTags';
 
 function New() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -183,12 +184,20 @@ function New() {
                                         </div>
                                     </td>
                                     <td className="px-4 py-2">
-                                        <Link
-                                            to={`/tag/${encodeURIComponent(song.genre)}`}
-                                            className="retro-link capitalize"
-                                        >
-                                            {song.genre}
-                                        </Link>
+                                        {/* genre is free-form and may hold several comma-separated
+                                            tags, so each one links to its own tag page rather than
+                                            the whole string linking to a single dead tag. */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {genreTags(song.genre).map((genre) => (
+                                                <Link
+                                                    key={genre}
+                                                    to={`/tag/${encodeURIComponent(genre)}`}
+                                                    className="retro-link capitalize"
+                                                >
+                                                    {genre}
+                                                </Link>
+                                            ))}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-2">
                                             <span className="inline-flex items-center">
@@ -266,9 +275,22 @@ function New() {
                                                     {song.profile_name}
                                                 </Link>
                                             </div>
-                                            <div className="retro-mono text-lg text-gray-400 mt-1">
-                                                Genre: <Link to={`/tag/${encodeURIComponent(song.genre)}`} className="retro-link capitalize">{song.genre}</Link>
-                                            </div>
+                                            {genreTags(song.genre).length > 0 && (
+                                                <div className="retro-mono text-lg text-gray-400 mt-1">
+                                                    Genre:{' '}
+                                                    <span className="inline-flex flex-wrap gap-2 align-bottom">
+                                                        {genreTags(song.genre).map((genre) => (
+                                                            <Link
+                                                                key={genre}
+                                                                to={`/tag/${encodeURIComponent(genre)}`}
+                                                                className="retro-link capitalize"
+                                                            >
+                                                                {genre}
+                                                            </Link>
+                                                        ))}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="retro-mono text-lg text-gray-400 mt-1">
                                                 Plays: {Number(song.plays) || 0}
                                                 <SpeakerWaveIcon className="w-4 h-4 text-gray-300 inline ml-1" />

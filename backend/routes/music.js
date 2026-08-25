@@ -47,6 +47,11 @@ const buildDownloadFilename = (title) => {
 };
 
 const { getRunningJobs, incrementRunningJobs, decrementRunningJobs } = require('../utils/concurrency');
+const { randomUUID } = require('crypto');
+const { getQueue, estimateWait, ACTIVE_STATUSES } = require('../utils/masteringQueue');
+const { enqueueSongAnalysis } = require('../utils/analysisQueue');
+const { parseEditableBpm, parseEditableKey, compatibleKeys, camelotOf, isMusicalKey } = require('../utils/musicalKeys');
+const { rankCandidates, TEMPO_LOOSE } = require('../utils/trackMatching');
 
 router.get('/user-songs', authenticate, async (req, res) => {
     try {
@@ -166,63 +171,125 @@ router.get('/:songId/similar', async (req, res) => {
     const songId = parseInt(req.params.songId);
     if (!songId) return res.status(400).json({ error: 'Invalid song ID' });
 
+    // Wide enough that ranking, not SQL, decides what is actually close.
+    const CANDIDATE_POOL = 200;
+
+    const shape = (row, reasons = []) => ({
+        id: Number(row.id),
+        title: row.title,
+        image_url: row.image_url,
+        plays: Number(row.plays) || 0,
+        genre: row.genre,
+        bpm: row.bpm == null ? null : Number(row.bpm),
+        musical_key: row.musical_key || null,
+        camelot: row.musical_key ? camelotOf(row.musical_key) : null,
+        profile_id: Number(row.profile_id),
+        profile_name: row.profile_name || 'Unknown',
+        profile_slug: row.profile_slug || null,
+        likes_count: Number(row.likes_count) || 0,
+        // Why this track is here, in the order it should be read.
+        match_reasons: reasons,
+    });
+
+    const SELECT_FIELDS = `
+        s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
+        s.bpm, s.musical_key,
+        p.name AS profile_name, p.slug AS profile_slug,
+        (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
+         WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count`;
+
     try {
-        // Fetch the current song's genre and profile_id
-        const songRows = await pool.query('SELECT genre, profile_id FROM songs WHERE id = ?', [songId]);
+        const songRows = await pool.query(
+            'SELECT genre, profile_id, bpm, musical_key FROM songs WHERE id = ?',
+            [songId]
+        );
         if (!songRows || songRows.length === 0) {
             return res.status(404).json({ error: 'Song not found' });
         }
 
-        const { genre, profile_id } = songRows[0];
-        const tags = genre ? genre.split(',').map(t => t.trim()).filter(Boolean) : [];
+        const base = songRows[0];
+        const profile_id = base.profile_id;
+        const baseBpm = base.bpm == null ? null : Number(base.bpm);
+        const baseKey = base.musical_key || null;
+        const tags = base.genre ? base.genre.split(',').map(t => t.trim()).filter(Boolean) : [];
 
-        if (tags.length === 0) {
-            // No genres – fall back to most-played songs by other artists
-            const fallback = await pool.query(`
-                SELECT s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
-                       p.name AS profile_name, p.slug AS profile_slug,
-                       (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
-                        WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
-                FROM songs s
-                LEFT JOIN profiles p ON s.profile_id = p.id
-                WHERE s.id != ? AND s.profile_id != ?
-                ORDER BY s.plays DESC
-                LIMIT 6
-            `, [songId, profile_id]);
+        // Gather anything that shares a genre, a compatible key, or a mixable
+        // tempo, then let rankCandidates decide the order. Pulling a wide pool
+        // and ranking in JS keeps the scoring rules in one readable place
+        // instead of spread across a CASE expression.
+        const orClauses = [];
+        const orParams = [];
 
-            return res.json({ songs: fallback.map(r => ({ ...r, id: Number(r.id), profile_id: Number(r.profile_id), plays: Number(r.plays) || 0, likes_count: Number(r.likes_count) || 0 })) });
+        if (tags.length) {
+            orClauses.push(`(${tags.map(() => 's.genre LIKE ?').join(' OR ')})`);
+            orParams.push(...tags.map(t => `%${t}%`));
+        }
+        if (baseKey) {
+            const keys = compatibleKeys(baseKey);
+            if (keys.length) {
+                orClauses.push(`s.musical_key IN (${keys.map(() => '?').join(', ')})`);
+                orParams.push(...keys);
+            }
+        }
+        if (baseBpm) {
+            // The tempo itself plus half and double time, each with tolerance.
+            for (const target of [baseBpm, baseBpm * 2, baseBpm / 2]) {
+                orClauses.push('s.bpm BETWEEN ? AND ?');
+                orParams.push(target * (1 - TEMPO_LOOSE), target * (1 + TEMPO_LOOSE));
+            }
         }
 
-        // Build a LIKE condition per tag so partial genre strings still match
-        const likeConditions = tags.map(() => 's.genre LIKE ?').join(' OR ');
-        const likeParams = tags.map(t => `%${t}%`);
+        let ranked = [];
+        if (orClauses.length) {
+            const rows = await pool.query(`
+                SELECT ${SELECT_FIELDS}
+                FROM songs s
+                LEFT JOIN profiles p ON s.profile_id = p.id
+                WHERE s.id != ?
+                  AND s.profile_id != ?
+                  AND (${orClauses.join(' OR ')})
+                ORDER BY s.plays DESC
+                LIMIT ${CANDIDATE_POOL}
+            `, [songId, profile_id, ...orParams]);
 
-        const rows = await pool.query(`
-            SELECT s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
-                   p.name AS profile_name, p.slug AS profile_slug,
-                   (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
-                    WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+            ranked = rankCandidates(base, rows, 8);
+        }
+
+        if (ranked.length) {
+            return res.json({
+                songs: ranked.map(entry => shape(entry.candidate, entry.reasons)),
+                // What the ranking had to work with, so the page can say why -
+                // and so a wheel drawn later has its anchor.
+                basis: {
+                    bpm: baseBpm,
+                    musical_key: baseKey,
+                    camelot: baseKey ? camelotOf(baseKey) : null,
+                    compatible_keys: baseKey ? compatibleKeys(baseKey) : [],
+                    tags,
+                },
+            });
+        }
+
+        // Nothing in common with anything: fall back to most-played by other
+        // artists, which is what this endpoint always did for untagged songs.
+        const fallback = await pool.query(`
+            SELECT ${SELECT_FIELDS}
             FROM songs s
             LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.id != ?
-              AND s.profile_id != ?
-              AND (${likeConditions})
-            ORDER BY s.plays DESC, likes_count DESC
-            LIMIT 8
-        `, [songId, profile_id, ...likeParams]);
+            WHERE s.id != ? AND s.profile_id != ?
+            ORDER BY s.plays DESC
+            LIMIT 6
+        `, [songId, profile_id]);
 
         res.json({
-            songs: rows.map(r => ({
-                id: Number(r.id),
-                title: r.title,
-                image_url: r.image_url,
-                plays: Number(r.plays) || 0,
-                genre: r.genre,
-                profile_id: Number(r.profile_id),
-                profile_name: r.profile_name || 'Unknown',
-                profile_slug: r.profile_slug || null,
-                likes_count: Number(r.likes_count) || 0,
-            }))
+            songs: fallback.map(row => shape(row)),
+            basis: {
+                bpm: baseBpm,
+                musical_key: baseKey,
+                camelot: baseKey ? camelotOf(baseKey) : null,
+                compatible_keys: baseKey ? compatibleKeys(baseKey) : [],
+                tags,
+            },
         });
     } catch (err) {
         logger.error('Error in GET /music/:songId/similar:', err);
@@ -465,24 +532,83 @@ router.get('/unreviewed', async (req, res) => {
 
 router.get('/search', async (req, res) => {
     try {
-        const query = req.query.q ? `%${req.query.q}%` : '%%';
-        if (!req.query.q || req.query.q.trim() === '') {
-            return res.json({ songs: [], profiles: [] });
+        const term = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+        const query = `%${term}%`;
+
+        // Tempo and key filters, usable on their own so the browse page can
+        // ask "what mixes with this" without any search term at all.
+        const bpmMin = parseEditableBpm(req.query.bpmMin);
+        const bpmMax = parseEditableBpm(req.query.bpmMax);
+        if (!bpmMin.ok || !bpmMax.ok) {
+            return res.status(400).json({ error: (bpmMin.ok ? bpmMax : bpmMin).error });
         }
+        const hasBpmFilter = bpmMin.value != null || bpmMax.value != null;
+
+        const keyFilter = typeof req.query.key === 'string' && isMusicalKey(req.query.key.trim())
+            ? req.query.key.trim()
+            : null;
+        // Harmonic by default: a track read as the relative of the key you
+        // asked for still mixes with it, and detection confuses exactly those
+        // two. Exact is available for when you mean one key and only that one.
+        const exactKey = req.query.keyMode === 'exact';
+        const keySet = keyFilter ? (exactKey ? [keyFilter] : compatibleKeys(keyFilter)) : [];
+
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+        if (!term && !hasBpmFilter && !keyFilter) {
+            return res.json({ songs: [], profiles: [], missing: { bpm: 0, key: 0 }, matchedKeys: [] });
+        }
+
+        // Assembled in pieces because any combination of the three may be absent.
+        const termClause = term ? '(s.title LIKE ? OR s.description LIKE ? OR s.genre LIKE ?)' : null;
+        const termParams = term ? [query, query, query] : [];
+
+        const bpmClauses = [];
+        const bpmParams = [];
+        if (bpmMin.value != null) { bpmClauses.push('s.bpm >= ?'); bpmParams.push(bpmMin.value); }
+        if (bpmMax.value != null) { bpmClauses.push('s.bpm <= ?'); bpmParams.push(bpmMax.value); }
+        const bpmClause = bpmClauses.length ? bpmClauses.join(' AND ') : null;
+
+        // One placeholder per key: the mariadb driver does not expand arrays.
+        const keyClause = keySet.length
+            ? `s.musical_key IN (${keySet.map(() => '?').join(', ')})`
+            : null;
+        const keyParams = keySet;
+
+        const where = [termClause, bpmClause, keyClause].filter(Boolean).join(' AND ');
+        const params = [...termParams, ...bpmParams, ...keyParams];
 
         // Search songs
         const songRows = await pool.query(`
-            SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre, p.name AS profile_name, p.slug AS profile_slug,
+            SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre,
+                   s.bpm, s.musical_key, s.duration,
+                   p.name AS profile_name, p.slug AS profile_slug,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.title LIKE ? OR s.description LIKE ? OR s.genre LIKE ?
+            WHERE ${where}
             ORDER BY s.plays DESC
-                LIMIT 20
-        `, [query, query, query]);
+                LIMIT ${limit}
+        `, params);
+
+        // How many tracks the filter had to leave out because nothing has been
+        // detected for them yet. Without this the catalogue looks smaller than
+        // it is, and the honest answer is "not analysed", not "no match".
+        const countMissing = async (column, otherClause, otherParams) => {
+            const clauses = [termClause, otherClause, `s.${column} IS NULL`].filter(Boolean);
+            const rows = await pool.query(
+                `SELECT COUNT(*) AS count FROM songs s WHERE ${clauses.join(' AND ')}`,
+                [...termParams, ...otherParams]
+            );
+            return Number(rows[0].count) || 0;
+        };
+        const missing = {
+            bpm: hasBpmFilter ? await countMissing('bpm', keyClause, keyParams) : 0,
+            key: keyFilter ? await countMissing('musical_key', bpmClause, bpmParams) : 0,
+        };
 
         const songs = songRows.map((row) => ({
             id: Number(row.id),
@@ -492,13 +618,18 @@ router.get('/search', async (req, res) => {
             image_url: row.image_url,
             plays: Number(row.plays) || 0,
             genre: row.genre,
+            bpm: row.bpm == null ? null : Number(row.bpm),
+            musical_key: row.musical_key || null,
+            camelot: row.musical_key ? camelotOf(row.musical_key) : null,
+            duration: row.duration == null ? null : Number(row.duration),
             profile_name: row.profile_name || 'Unknown',
             profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
         }));
 
-        // Search profiles
-        const profileRows = await pool.query(`
+        // Search profiles. Only meaningful for a text term - a profile has no
+        // tempo or key of its own to filter on.
+        const profileRows = !term ? [] : await pool.query(`
             SELECT p.id, p.user_id, p.name, p.slug, p.genre, p.picture_url, p.created_at,
                    COALESCE(SUM(s.plays), 0) AS total_plays
             FROM profiles p
@@ -519,7 +650,14 @@ router.get('/search', async (req, res) => {
             total_plays: Number(row.total_plays) || 0,
         }));
 
-        res.json({ songs, profiles });
+        res.json({
+            songs,
+            profiles,
+            missing,
+            // What "compatible" expanded to, so the UI can show its working.
+            matchedKeys: keySet,
+            camelot: keyFilter ? camelotOf(keyFilter) : null,
+        });
     } catch (err) {
         logger.error('Error in GET /music/search:', err);
         res.status(500).json({ error: 'Failed to perform search' });
@@ -978,10 +1116,21 @@ router.post('/upload', authenticate, async (req, res) => {
             'INSERT INTO songs (profile_id, title, mp3_url, image_url, description, genre, stems_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [profileId, title, mp3Url, imageUrl, description || '', genre || '', stems_url || null]
         );
+        const songId = Number(result.insertId);
+
+        // Detect tempo and key in the background. The row stays 'pending' if
+        // this fails, which is what the backfill sweep looks for, so a Redis
+        // blip delays the reading rather than losing it.
+        if (await enqueueSongAnalysis(songId)) {
+            await pool.query(
+                "UPDATE songs SET analysis_status = 'queued' WHERE id = ?",
+                [songId]
+            ).catch(() => {});
+        }
 
         // Response
         const song = {
-            id: Number(result.insertId),
+            id: songId,
             profile_id: profileId,
             title,
             mp3_url: mp3Url,
@@ -1251,6 +1400,17 @@ router.put('/:songId', authenticate, async (req, res) => {
     const mp3 = req.files?.mp3;
     const image = req.files?.image;
     try {
+        // Artist corrections to the detected tempo and key. Undefined means
+        // "not part of this edit", null means "clear it".
+        const bpmField = parseEditableBpm(req.body.bpm);
+        if (!bpmField.ok) {
+            return res.status(400).json({ error: bpmField.error });
+        }
+        const keyField = parseEditableKey(req.body.musical_key);
+        if (!keyField.ok) {
+            return res.status(400).json({ error: keyField.error });
+        }
+
         const songId = parseInt(req.params.songId);
         if (isNaN(songId)) {
             return res.status(400).json({ error: 'Invalid song ID' });
@@ -1327,6 +1487,43 @@ router.put('/:songId', authenticate, async (req, res) => {
             allow_download !== undefined ? parseBooleanFlag(allow_download) : Boolean(songs[0].allow_download),
             songId
         ]);
+
+        if (mp3) {
+            // New audio: the stored tempo, key and duration describe a file
+            // that is no longer there. Clear them and re-detect rather than
+            // leaving a confident reading of the wrong track. Any bpm/key sent
+            // in this same request is ignored on purpose - the edit form
+            // disables those inputs once a replacement file is chosen.
+            await pool.query(
+                `UPDATE songs
+                 SET bpm = NULL, musical_key = NULL, duration = NULL,
+                     analysis_status = 'pending'
+                 WHERE id = ?`,
+                [songId]
+            );
+            if (await enqueueSongAnalysis(songId)) {
+                await pool.query(
+                    "UPDATE songs SET analysis_status = 'queued' WHERE id = ?",
+                    [songId]
+                ).catch(() => {});
+            }
+        } else if (bpmField.value !== undefined || keyField.value !== undefined) {
+            const fields = [];
+            const values = [];
+            if (bpmField.value !== undefined) {
+                fields.push('bpm = ?');
+                values.push(bpmField.value);
+            }
+            if (keyField.value !== undefined) {
+                fields.push('musical_key = ?');
+                values.push(keyField.value);
+            }
+            // Mark it settled so a later backfill sweep, which looks for
+            // 'pending' and 'failed', cannot overwrite the artist's own answer.
+            fields.push("analysis_status = 'done'");
+            values.push(songId);
+            await pool.query(`UPDATE songs SET ${fields.join(', ')} WHERE id = ?`, values);
+        }
 
         const updatedSongs = await pool.query('SELECT * FROM songs WHERE id = ?', [songId]);
         const song = {
@@ -1539,11 +1736,43 @@ router.post('/play/:songId', async (req, res) => {
     }
 });
 
+// Static ffmpeg chains. These are presets, not analysis of the source, so the
+// three levels differ only in how hard they push the same three stages.
+const MASTERING_PARAMS = {
+    light: {
+        equalizer: ['bass=f=100:g=2', 'treble=f=8000:g=1'],
+        compressor: 'acompressor=threshold=-10dB:ratio=2:attack=0.3:release=0.8',
+        volume: 'volume=2dB',
+    },
+    middle: {
+        equalizer: ['bass=f=100:g=3', 'treble=f=8000:g=2'],
+        compressor: 'acompressor=threshold=-20dB:ratio=3:attack=0.3:release=0.8',
+        volume: 'volume=3dB',
+    },
+    heavy: {
+        equalizer: ['bass=f=100:g=4', 'treble=f=8000:g=3'],
+        compressor: 'acompressor=threshold=-30dB:ratio=4:attack=0.3:release=0.8',
+        volume: 'volume=4dB',
+    },
+};
+
+// Returns the mastered audio as bytes rather than persisting it. Previews used
+// to be written to the bucket on every run, which orphaned an object for every
+// intensity the user auditioned and discarded. The client holds the result as a
+// blob and only POSTs it to /music/upload if the user decides to keep it.
 router.post('/master/:songId', authenticate, async (req, res) => {
     const { songId } = req.params;
     const { masteringType } = req.body;
     const userId = req.user.id;
     const CONCURRENCY_LIMIT = parseInt(process.env.FFMPEG_CONCURRENCY_LIMIT, 10) || 1;
+
+    // Only the paths below that actually incremented the counter may decrement
+    // it. The previous version decremented in a finally that every early return
+    // also passed through, so a handful of rejected requests drove the count
+    // negative and the concurrency limit stopped applying at all.
+    let jobStarted = false;
+    let inputFile = null;
+    let outputFile = null;
 
     try {
         if (getRunningJobs() >= CONCURRENCY_LIMIT) {
@@ -1551,7 +1780,7 @@ router.post('/master/:songId', authenticate, async (req, res) => {
             return res.status(429).json({ error: 'Too many mastering jobs running. Please try again later.' });
         }
 
-        if (!['light', 'middle', 'heavy'].includes(masteringType)) {
+        if (!MASTERING_PARAMS[masteringType]) {
             return res.status(400).json({ error: 'Invalid mastering type' });
         }
 
@@ -1561,18 +1790,30 @@ router.post('/master/:songId', authenticate, async (req, res) => {
         }
 
         logger.debug(`Processing mastering job for song ID: ${parsedSongId}, user ID: ${userId}`);
-        const songs = await pool.query('SELECT mp3_url FROM songs WHERE id = ?', [parsedSongId]);
+
+        // Ownership is enforced here, not just in the UI. Hiding the button for
+        // non-owners left the endpoint open to mastering any song by id.
+        const songs = await pool.query(`
+            SELECT s.mp3_url, p.user_id
+            FROM songs s
+                     JOIN profiles p ON s.profile_id = p.id
+            WHERE s.id = ?
+        `, [parsedSongId]);
         if (!songs.length) {
             return res.status(404).json({ error: 'Song not found' });
         }
+        if (Number(songs[0].user_id) !== Number(userId)) {
+            logger.debug(`Unauthorized mastering attempt on song ${parsedSongId} by user ${userId}`);
+            return res.status(403).json({ error: 'Unauthorized to master this song' });
+        }
 
-        const mp3Url = songs[0].mp3_url;
-        const s3Key = extractObjectKey(mp3Url);
+        const s3Key = extractObjectKey(songs[0].mp3_url);
         if (!s3Key) {
             return res.status(400).json({ error: 'Invalid S3 URL format' });
         }
 
         incrementRunningJobs();
+        jobStarted = true;
         logger.debug(`Starting FFmpeg job, running jobs: ${getRunningJobs()}`);
 
         const getObjectCommand = new GetObjectCommand({
@@ -1581,8 +1822,10 @@ router.post('/master/:songId', authenticate, async (req, res) => {
         });
         const { Body } = await s3Client.send(getObjectCommand);
 
-        const inputFile = tmp.fileSync({ postfix: '.mp3' });
-        const outputFile = tmp.fileSync({ postfix: '.mp3' });
+        // discardDescriptor keeps tmp from holding an fd open for the whole job;
+        // both files are opened by name below.
+        inputFile = tmp.fileSync({ postfix: '.mp3', discardDescriptor: true });
+        outputFile = tmp.fileSync({ postfix: '.mp3', discardDescriptor: true });
 
         const inputStream = fs.createWriteStream(inputFile.name);
         await new Promise((resolve, reject) => {
@@ -1591,29 +1834,11 @@ router.post('/master/:songId', authenticate, async (req, res) => {
                 .on('error', reject);
         });
 
-        const masteringParams = {
-            light: {
-                equalizer: ['bass=f=100:g=2', 'treble=f=8000:g=1'],
-                compressor: 'acompressor=threshold=-10dB:ratio=2:attack=0.3:release=0.8',
-                volume: 'volume=2dB',
-            },
-            middle: {
-                equalizer: ['bass=f=100:g=3', 'treble=f=8000:g=2'],
-                compressor: 'acompressor=threshold=-20dB:ratio=3:attack=0.3:release=0.8',
-                volume: 'volume=3dB',
-            },
-            heavy: {
-                equalizer: ['bass=f=100:g=4', 'treble=f=8000:g=3'],
-                compressor: 'acompressor=threshold=-30dB:ratio=4:attack=0.3:release=0.8',
-                volume: 'volume=4dB',
-            },
-        };
-
         await new Promise((resolve, reject) => {
             const filters = [
-                ...masteringParams[masteringType].equalizer,
-                masteringParams[masteringType].compressor,
-                masteringParams[masteringType].volume,
+                ...MASTERING_PARAMS[masteringType].equalizer,
+                MASTERING_PARAMS[masteringType].compressor,
+                MASTERING_PARAMS[masteringType].volume,
             ];
             logger.debug(`FFmpeg filters for song ID ${parsedSongId}:`, filters);
             ffmpeg(inputFile.name)
@@ -1630,28 +1855,159 @@ router.post('/master/:songId', authenticate, async (req, res) => {
                 .run();
         });
 
-        const masteredKey = `music/mastered-${userId}-${Date.now()}.mp3`;
-        const uploadParams = {
-            Bucket: process.env.BUCKET_NAME,
-            Key: masteredKey,
-            Body: fs.createReadStream(outputFile.name),
-            ContentType: 'audio/mpeg',
-        };
-        await s3Client.send(new PutObjectCommand(uploadParams));
-
-        inputFile.removeCallback();
-        outputFile.removeCallback();
+        const mastered = fs.readFileSync(outputFile.name);
 
         logger.debug(`Mastering job completed for song ID: ${parsedSongId}`);
-        res.status(200).json({
-            masteredUrl: buildPublicFileUrl(masteredKey),
-        });
+        res.set('Content-Type', 'audio/mpeg');
+        res.set('Content-Length', String(mastered.length));
+        res.status(200).send(mastered);
     } catch (err) {
         logger.error('Error in POST /music/master:', err);
         res.status(500).json({ error: 'Failed to master audio' });
     } finally {
-        decrementRunningJobs();
-        logger.debug(`Finished FFmpeg job, running jobs: ${getRunningJobs()}`);
+        // Previously only the success path cleaned these up, so an ffmpeg
+        // failure left both tmp files on disk.
+        for (const file of [inputFile, outputFile]) {
+            if (!file) continue;
+            try {
+                file.removeCallback();
+            } catch (cleanupErr) {
+                logger.error('Failed to remove mastering tmp file:', cleanupErr);
+            }
+        }
+        if (jobStarted) {
+            decrementRunningJobs();
+            logger.debug(`Finished FFmpeg job, running jobs: ${getRunningJobs()}`);
+        }
+    }
+});
+
+/* ------------------------------------------------------------------------- *
+ * Analyzed auto-mastering.
+ *
+ * The three presets above are a fixed chain and finish fast enough to answer
+ * on the request. This path measures the track first and decides its own
+ * settings, which is two or three full ffmpeg passes - far too long to hold a
+ * connection open, so it goes through the queue and the client polls.
+ * ------------------------------------------------------------------------- */
+
+// Reuses the ownership shape the rest of this file uses: songs join profiles,
+// and the profile's user_id is the owner.
+const loadOwnedSong = async (songId, userId) => {
+    const parsedSongId = parseInt(songId, 10);
+    if (isNaN(parsedSongId)) return { error: { status: 400, message: 'Invalid song ID' } };
+
+    const songs = await pool.query(`
+        SELECT s.id, s.mp3_url, s.title, s.genre, p.user_id
+        FROM songs s
+                 JOIN profiles p ON s.profile_id = p.id
+        WHERE s.id = ?
+    `, [parsedSongId]);
+
+    if (!songs.length) return { error: { status: 404, message: 'Song not found' } };
+    if (Number(songs[0].user_id) !== Number(userId)) {
+        return { error: { status: 403, message: 'Unauthorized to master this song' } };
+    }
+    return { song: songs[0], songId: parsedSongId };
+};
+
+const serializeJob = async (row) => {
+    const job = {
+        id: row.id,
+        songId: row.song_id,
+        status: row.status,
+        resultUrl: row.result_url || null,
+        error: row.error || null,
+        createdAt: row.created_at,
+    };
+
+    if (row.analysis) {
+        try { job.analysis = JSON.parse(row.analysis); } catch (err) { job.analysis = null; }
+    }
+    if (row.plan) {
+        try { job.plan = JSON.parse(row.plan); } catch (err) { job.plan = null; }
+    }
+
+    if (ACTIVE_STATUSES.includes(row.status)) {
+        Object.assign(job, await estimateWait(pool, row));
+    }
+
+    return job;
+};
+
+router.post('/master/analyze/:songId', authenticate, async (req, res) => {
+    const userId = req.user.id;
+
+    try {
+        const { song, songId, error } = await loadOwnedSong(req.params.songId, userId);
+        if (error) return res.status(error.status).json({ error: error.message });
+
+        // One job per song at a time. Without this, impatient double-clicks
+        // put the same track through the queue twice and the second render
+        // wins for no reason.
+        const existing = await pool.query(
+            `SELECT * FROM mastering_jobs
+             WHERE song_id = ? AND user_id = ? AND status IN (?, ?, ?)
+             ORDER BY created_at DESC LIMIT 1`,
+            [songId, userId, ...ACTIVE_STATUSES]
+        );
+        if (existing.length) {
+            return res.status(200).json({ job: await serializeJob(existing[0]), reused: true });
+        }
+
+        const jobId = randomUUID();
+        await pool.query(
+            'INSERT INTO mastering_jobs (id, song_id, user_id, status) VALUES (?, ?, ?, ?)',
+            [jobId, songId, userId, 'queued']
+        );
+
+        await getQueue().add('master-song', { jobId, songId, userId });
+        logger.info('Queued analyzed mastering job', { jobId, songId, userId });
+
+        const rows = await pool.query('SELECT * FROM mastering_jobs WHERE id = ?', [jobId]);
+        res.status(202).json({ job: await serializeJob(rows[0]) });
+    } catch (err) {
+        logger.error('Error in POST /music/master/analyze:', err);
+        res.status(500).json({ error: 'Failed to queue mastering job' });
+    }
+});
+
+router.get('/master/job/:jobId', authenticate, async (req, res) => {
+    try {
+        const rows = await pool.query(
+            'SELECT * FROM mastering_jobs WHERE id = ? AND user_id = ?',
+            [req.params.jobId, req.user.id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Mastering job not found' });
+        res.json({ job: await serializeJob(rows[0]) });
+    } catch (err) {
+        logger.error('Error in GET /music/master/job:', err);
+        res.status(500).json({ error: 'Failed to fetch mastering job' });
+    }
+});
+
+// Lets the artist abandon a queued job rather than leaving it to occupy the
+// single worker slot ahead of everyone else.
+router.delete('/master/job/:jobId', authenticate, async (req, res) => {
+    try {
+        const rows = await pool.query(
+            'SELECT * FROM mastering_jobs WHERE id = ? AND user_id = ?',
+            [req.params.jobId, req.user.id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Mastering job not found' });
+        if (!ACTIVE_STATUSES.includes(rows[0].status)) {
+            return res.status(409).json({ error: 'This job has already finished' });
+        }
+
+        await pool.query(
+            `UPDATE mastering_jobs SET status = 'failed', error = 'Cancelled', finished_at = NOW()
+             WHERE id = ?`,
+            [req.params.jobId]
+        );
+        res.json({ cancelled: true });
+    } catch (err) {
+        logger.error('Error in DELETE /music/master/job:', err);
+        res.status(500).json({ error: 'Failed to cancel mastering job' });
     }
 });
 

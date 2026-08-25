@@ -3,6 +3,8 @@ const Redis = require('ioredis');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
 const pool = require('../config/database');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require('../config/tigris');
@@ -28,6 +30,24 @@ const redisConnection = new Redis(redisUrl, {
 
 logger.info('Worker started with Redis connection:', redisUrl); // Log on startup
 
+ffmpeg.setFfmpegPath(ffmpegStatic);
+
+// MusicGen is unreliable at the two-to-four-second lengths this page offers:
+// short takes often come back as a lead-in artifact and little else. Generate
+// a longer, settled clip and trim it back to the length the member asked for,
+// keeping the downbeat at the start.
+const MIN_GENERATION_SECONDS = 8;
+
+const trimToLength = (inputPath, outputPath, seconds) => new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+        .setDuration(seconds)
+        .audioCodec('pcm_s16le')
+        .toFormat('wav')
+        .on('error', reject)
+        .on('end', resolve)
+        .save(outputPath);
+});
+
 logger.info('Initializing stem worker...'); // Log startup
 
 const worker = new Worker('stem-gen', async (job) => {
@@ -39,9 +59,15 @@ const worker = new Worker('stem-gen', async (job) => {
     logger.info('Updated stem status to generating', { stemId });
 
     const outputPath = path.join(__dirname, '..', 'temp', `${stemId}.wav`);
+    const rawPath = path.join(__dirname, '..', 'temp', `${stemId}-raw.wav`);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-    logger.info('Calling Replicate for stem generation', { stemId, fullPrompt, duration });
+    const requestedDuration = Number(duration) || MIN_GENERATION_SECONDS;
+    const generateDuration = Math.max(requestedDuration, MIN_GENERATION_SECONDS);
+
+    logger.info('Calling Replicate for stem generation', {
+        stemId, fullPrompt, requestedDuration, generateDuration,
+    });
 
     try {
         // Create prediction
@@ -49,10 +75,19 @@ const worker = new Worker('stem-gen', async (job) => {
             version: '671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb', // Latest MusicGen version
             input: {
                 prompt: fullPrompt,
-                duration: duration,
+                duration: generateDuration,
                 model_version: 'stereo-large',
                 output_format: 'wav',
-                normalization_strategy: 'peak'
+                // Peak normalization scales a quiet take up until its loudest
+                // sample hits full scale, which turns a near-silent generation
+                // into a wall of amplified noise. Loudness normalization (the
+                // model's own default) keeps quiet takes quiet.
+                normalization_strategy: 'loudness',
+                // Replicate's default is 3. Higher values weight the prompt
+                // more heavily against the model's own habits, which is what
+                // a request for a specific genre needs -- at 3 a "jazz drum
+                // track" came back as a generic funk groove.
+                classifier_free_guidance: 5
             }
         }, {
             headers: { Authorization: `Token ${process.env.REPLICATE_API_TOKEN}` }
@@ -75,10 +110,27 @@ const worker = new Worker('stem-gen', async (job) => {
         }
 
         // Download the output WAV
-        const audioRes = await axios.get(prediction.output, { responseType: 'arraybuffer' });
-        fs.writeFileSync(outputPath, audioRes.data);
+        const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+        if (!outputUrl) {
+            throw new Error('Replicate prediction succeeded with no audio output');
+        }
+        const audioRes = await axios.get(outputUrl, { responseType: 'arraybuffer' });
+        fs.writeFileSync(rawPath, audioRes.data);
 
         logger.info('Stem generated and downloaded from Replicate', { stemId });
+
+        if (generateDuration > requestedDuration) {
+            try {
+                await trimToLength(rawPath, outputPath, requestedDuration);
+                logger.info('Trimmed stem to requested length', { stemId, requestedDuration });
+            } catch (trimErr) {
+                // A longer stem beats no stem: fall back to the untrimmed take.
+                logger.error('Failed to trim stem, using full generation', { stemId, err: trimErr.message });
+                fs.copyFileSync(rawPath, outputPath);
+            }
+        } else {
+            fs.copyFileSync(rawPath, outputPath);
+        }
 
         // Upload to S3
         const audioBuffer = fs.readFileSync(outputPath);
@@ -94,11 +146,20 @@ const worker = new Worker('stem-gen', async (job) => {
         await pool.query('UPDATE stems SET status = ?, url = ? WHERE id = ?', ['ready', s3Url, stemId]);
         logger.info('Stem uploaded to S3 and status updated to ready', { stemId, s3Url });
 
-        fs.unlinkSync(outputPath); // Cleanup
     } catch (err) {
         await pool.query('UPDATE stems SET status = ? WHERE id = ?', ['failed', stemId]);
         logger.error('Error generating stem with Replicate', err);
         throw err;
+    } finally {
+        // Cleanup runs on failure too, so a failed job doesn't leave a
+        // half-written WAV behind in temp.
+        [rawPath, outputPath].forEach((file) => {
+            try {
+                if (fs.existsSync(file)) fs.unlinkSync(file);
+            } catch (cleanupErr) {
+                logger.error('Failed to clean up temp stem file', { file, err: cleanupErr.message });
+            }
+        });
     }
 }, { connection: redisConnection });
 

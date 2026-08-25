@@ -1,23 +1,39 @@
 #!/usr/bin/env node
-
+/**
+ * Rebuilds daily-listen earnings from song_plays.
+ *
+ * Coins accrue against a profile's *lifetime* listens, not each day in
+ * isolation, so this walks dates in ascending order and carries the running
+ * totals forward. That is also why it recovers coins the old daily-floor rule
+ * discarded: a profile that played 9 listens a day for a week earned nothing
+ * under the old rule and earns 6 coins under this one.
+ *
+ * Both writes are idempotent. profile_earnings is keyed on
+ * (profile_id, earnings_date) and the ledger on
+ * (profile_id, activity_type, source_id), so re-running awards nothing twice.
+ *
+ * Dry run by default; --commit writes. The dry run simulates the same accrual
+ * the commit would perform, so its numbers are real projections rather than
+ * the structural zeros this script used to print.
+ *
+ * There is deliberately no --recompute. Rewriting historical coin amounts
+ * would desynchronise them from the append-only ledger that now holds the
+ * balances.
+ */
 require('dotenv').config();
 const pool = require('../config/database');
+const { ACTIVITY, listenCoinsToAward } = require('../config/coinRewards');
+const { awardCoins, getEarnedForActivityByProfile } = require('../utils/coins');
 
 const parseArgs = () => {
     const args = process.argv.slice(2);
-    const opts = {
-        from: null,
-        to: null,
-        commit: false,
-        recompute: false,
-    };
+    const opts = { from: null, to: null, commit: false };
 
     for (let i = 0; i < args.length; i += 1) {
         const arg = args[i];
         if (arg === '--from') opts.from = args[i + 1];
         if (arg === '--to') opts.to = args[i + 1];
         if (arg === '--commit') opts.commit = true;
-        if (arg === '--recompute') opts.recompute = true;
     }
 
     return opts;
@@ -63,6 +79,30 @@ const getDateBounds = async (fromArg, toArg) => {
     };
 };
 
+/**
+ * Listens each profile accumulated strictly before the window starts. Zero for
+ * a full-history run, but a --from run has to start from the real lifetime
+ * total or it would re-grant coins the profile already holds.
+ */
+const getListensBefore = async (from) => {
+    const rows = await pool.query(
+        `
+        SELECT s.profile_id, COUNT(*) AS listens_count
+        FROM song_plays sp
+        JOIN songs s ON s.id = sp.song_id
+        WHERE DATE(sp.played_at) < ?
+        GROUP BY s.profile_id
+        `,
+        [from]
+    );
+
+    const byProfile = new Map();
+    for (const row of rows) {
+        byProfile.set(Number(row.profile_id), Number(row.listens_count) || 0);
+    }
+    return byProfile;
+};
+
 const run = async () => {
     const opts = parseArgs();
     const { from, to } = await getDateBounds(opts.from, opts.to);
@@ -87,15 +127,20 @@ const run = async () => {
         return;
     }
 
+    const lifetimeByProfile = await getListensBefore(from);
+    const grantedByProfile = await getEarnedForActivityByProfile(ACTIVITY.DAILY_LISTENS);
+    const alreadyGranted = [...grantedByProfile.values()].reduce((sum, n) => sum + n, 0);
+
     console.log(`Processing ${dateRows.length} day(s), from ${from} to ${to}.`);
+    console.log(`Coins already granted for listens: ${alreadyGranted}`);
     if (!opts.commit) {
         console.log('Dry run mode. Re-run with --commit to write results.');
     }
 
-    let rowsInserted = 0;
-    let rowsUpdated = 0;
-    let rowsSkipped = 0;
-    let totalCoins = 0;
+    let coinsAwarded = 0;
+    let ledgerRows = 0;
+    let historyRows = 0;
+    const profilesTouched = new Set();
 
     for (const row of dateRows) {
         const earningsDate = toDateString(row.earnings_date);
@@ -114,57 +159,51 @@ const run = async () => {
         for (const profileRow of profileListenRows) {
             const profileId = Number(profileRow.profile_id);
             const listensCount = Number(profileRow.listens_count) || 0;
-            const coinsEarned = Math.min(Math.floor(listensCount / 10), 10);
+            if (listensCount <= 0) continue;
 
-            if (coinsEarned <= 0) {
-                rowsSkipped += 1;
-                continue;
-            }
+            const lifetimeListens = (lifetimeByProfile.get(profileId) || 0) + listensCount;
+            lifetimeByProfile.set(profileId, lifetimeListens);
 
-            totalCoins += coinsEarned;
+            const granted = grantedByProfile.get(profileId) || 0;
+            const coinsEarned = listenCoinsToAward(lifetimeListens, granted);
+
+            profilesTouched.add(profileId);
+            coinsAwarded += coinsEarned;
+            // Track the simulated grant either way, so a dry run projects the
+            // same accrual a commit would produce.
+            grantedByProfile.set(profileId, granted + coinsEarned);
 
             if (!opts.commit) {
                 continue;
             }
 
-            if (opts.recompute) {
-                const result = await pool.query(
-                    `
-                    INSERT INTO profile_earnings (profile_id, earnings_date, listens_count, coins_earned)
-                    VALUES (?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        listens_count = VALUES(listens_count),
-                        coins_earned = VALUES(coins_earned)
-                    `,
-                    [profileId, earningsDate, listensCount, coinsEarned]
-                );
+            const historyResult = await pool.query(
+                `
+                INSERT IGNORE INTO profile_earnings (profile_id, earnings_date, listens_count, coins_earned)
+                VALUES (?, ?, ?, ?)
+                `,
+                [profileId, earningsDate, listensCount, coinsEarned]
+            );
+            if (historyResult.affectedRows === 1) historyRows += 1;
 
-                // MariaDB driver returns affectedRows=2 for update via upsert.
-                if (result.affectedRows === 1) rowsInserted += 1;
-                if (result.affectedRows === 2) rowsUpdated += 1;
-            } else {
-                const result = await pool.query(
-                    `
-                    INSERT IGNORE INTO profile_earnings (profile_id, earnings_date, listens_count, coins_earned)
-                    VALUES (?, ?, ?, ?)
-                    `,
-                    [profileId, earningsDate, listensCount, coinsEarned]
-                );
-
-                if (result.affectedRows === 1) {
-                    rowsInserted += 1;
-                } else {
-                    rowsSkipped += 1;
-                }
-            }
+            const inserted = await awardCoins({
+                profileId,
+                activityType: ACTIVITY.DAILY_LISTENS,
+                sourceId: earningsDate,
+                coins: coinsEarned,
+                metadata: { listens_count: listensCount, lifetime_listens: lifetimeListens, backfilled: true },
+            });
+            if (inserted) ledgerRows += 1;
         }
     }
 
-    console.log('Backfill complete.');
-    console.log(`Estimated coins from scanned records: ${totalCoins}`);
-    console.log(`Inserted rows: ${rowsInserted}`);
-    if (opts.recompute) console.log(`Updated rows: ${rowsUpdated}`);
-    console.log(`Skipped rows: ${rowsSkipped}`);
+    console.log(opts.commit ? 'Backfill complete.' : 'Dry run complete.');
+    console.log(`Profiles affected: ${profilesTouched.size}`);
+    console.log(`Coins ${opts.commit ? 'awarded' : 'that would be awarded'}: ${coinsAwarded}`);
+    if (opts.commit) {
+        console.log(`Ledger rows inserted: ${ledgerRows}`);
+        console.log(`Listen history rows inserted: ${historyRows}`);
+    }
 };
 
 run()
@@ -175,4 +214,3 @@ run()
     .finally(async () => {
         await pool.end();
     });
-

@@ -158,6 +158,24 @@ CREATE TABLE profile_earnings (
                                   UNIQUE KEY (profile_id, earnings_date),
                                   FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
 );
+-- Every coin a profile earns is one row here. The unique key makes awards
+-- idempotent: replaying a night or re-running a backfill converges on the same
+-- balance instead of double-granting. source_id is whatever makes the award
+-- unique for that activity -- an earnings date for daily listens, a review id
+-- for a review -- so it is a string rather than an int.
+CREATE TABLE coin_events (
+                                  id INT AUTO_INCREMENT PRIMARY KEY,
+                                  profile_id INT NOT NULL,
+                                  activity_type VARCHAR(50) NOT NULL,
+                                  source_id VARCHAR(100) NOT NULL,
+                                  coins INT NOT NULL,
+                                  metadata TEXT DEFAULT NULL,
+                                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                  UNIQUE KEY uniq_profile_activity_source (profile_id, activity_type, source_id),
+                                  KEY idx_profile (profile_id),
+                                  KEY idx_activity (activity_type),
+                                  FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
 CREATE TABLE idjc_payments (
                                id INT AUTO_INCREMENT PRIMARY KEY,
                                profile_id INT NOT NULL,
@@ -279,6 +297,17 @@ ALTER TABLE songs ADD COLUMN is_featured BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE songs ADD COLUMN IF NOT EXISTS allow_download BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Tempo/key/duration, detected on upload by backend/workers/analysisWorker.js.
+-- `musical_key` rather than `key` because KEY is reserved in MySQL/MariaDB.
+-- Both bpm and musical_key are suggestions the artist can correct, and stay
+-- NULL when detection was not confident enough to be worth showing.
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS bpm DECIMAL(6,2) DEFAULT NULL;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS musical_key VARCHAR(20) DEFAULT NULL;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS duration FLOAT DEFAULT NULL;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS analysis_status
+    ENUM('pending','queued','analyzing','done','failed') NOT NULL DEFAULT 'pending';
+ALTER TABLE songs ADD INDEX IF NOT EXISTS analysis_status_idx (analysis_status);
+
 ALTER TABLE forum_posts ADD COLUMN image_url VARCHAR(255) DEFAULT NULL;
 ALTER TABLE forum_comments ADD COLUMN image_url VARCHAR(255) DEFAULT NULL;
 
@@ -393,3 +422,34 @@ ALTER TABLE playlists ADD CONSTRAINT fk_playlists_dedicated_to
 
 CREATE INDEX playlists_public_idx ON playlists (is_public, updated_at);
 CREATE INDEX playlists_dedicated_idx ON playlists (dedicated_to_profile_id);
+
+CREATE TABLE IF NOT EXISTS mastering_jobs (
+    id VARCHAR(36) NOT NULL,
+    song_id INT NOT NULL,
+    user_id INT NOT NULL,
+    status ENUM('queued','analyzing','rendering','ready','failed') NOT NULL DEFAULT 'queued',
+    analysis MEDIUMTEXT,
+    plan MEDIUMTEXT,
+    result_url VARCHAR(255),
+    error TEXT,
+    audio_duration_sec DECIMAL(10,2),
+    started_at TIMESTAMP NULL DEFAULT NULL,
+    finished_at TIMESTAMP NULL DEFAULT NULL,
+    duration_ms INT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY song_id (song_id),
+    KEY user_id (user_id),
+    KEY status_created (status, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Analysis is the expensive half of auto-mastering and the source never
+-- changes, so it is cached against the exact mp3_url it was measured from.
+-- Re-uploading the audio changes the url and invalidates the row on its own.
+CREATE TABLE IF NOT EXISTS song_analysis (
+    song_id INT NOT NULL,
+    mp3_url VARCHAR(255) NOT NULL,
+    analysis MEDIUMTEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (song_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

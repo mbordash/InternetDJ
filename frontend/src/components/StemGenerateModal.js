@@ -2,14 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import axios from 'axios';
 import API_URL from '../utils/api';
+import { MUSICAL_KEYS as KEYS } from '../utils/musicalKeys';
 
 const STEM_TYPES = ['bass', 'synth', 'effects', 'drums'];
-const KEYS = [
-    'C major', 'C minor', 'C# major', 'C# minor', 'D major', 'D minor',
-    'D# major', 'D# minor', 'E major', 'E minor', 'F major', 'F minor',
-    'F# major', 'F# minor', 'G major', 'G minor', 'G# major', 'G# minor',
-    'A major', 'A minor', 'A# major', 'A# minor', 'B major', 'B minor',
-];
 const POLL_INTERVAL_MS = 4000;
 const MAX_TRANSIENT_POLL_FAILURES = 5;
 

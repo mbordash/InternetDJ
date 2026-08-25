@@ -428,7 +428,7 @@ function Home() {
                                     <img src={IDJCoinLogo} alt="" className="w-10 h-10" />
                                     <div className="retro-display text-sm retro-glow-cyan">IDJ Coin</div>
                                 </div>
-                                Airdrop coins available now!
+                                <div className="space-y-0.5">Airdrop coins available now!</div>
                                 <Link to="/idj-coin" className="retro-link retro-mono text-lg">
                                     Learn more &raquo;&raquo;
                                 </Link>

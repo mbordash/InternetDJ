@@ -1,3 +1,16 @@
-# Run daily at 1:30 AM
-30 1 * * * curl -s -X POST http://127.0.0.1:5000/api/profile/calculate-daily-earnings -H "Content-Type: application/json" -d '{}' >> /app/cron.log 2>&1
+# Daily earnings roll-up at 1:30 AM.
+# This crontab runs on the `cron` machine, which starts supercronic only — it
+# does not run backend/server.js — so 127.0.0.1:5000 has nothing listening on
+# it. The job has to address the web process group over 6PN instead. Plain
+# `internetdj.internal` would round-robin across worker machines that don't
+# listen on 5000, so target the process group directly.
+30 1 * * * curl -sS --fail -X POST http://app.process.internetdj.internal:5000/api/profile/calculate-daily-earnings -H "Content-Type: application/json" -d '{}' >> /app/cron.log 2>&1
+
+# Nightly database backup, offset a couple of hours after the earnings job so
+# the dump captures its writes. Writes to the private BACKUP_BUCKET_NAME
+# bucket, never the public asset bucket. Requires mariadb-client, which the
+# dockerfile installs.
+15 3 * * * node backend/scripts/backupDatabase.js >> /app/cron.log 2>&1
+
 */5 * * * * node backend/scripts/cleanupStems.js
+*/15 * * * * node backend/scripts/cleanupMasteringPreviews.js
