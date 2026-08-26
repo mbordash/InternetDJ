@@ -12,6 +12,7 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import profilePath from '../utils/profilePath';
+import genreTags, { tagHref } from '../utils/genreTags';
 
 // Feedback criteria
 const feedbackCriteria = [
@@ -697,26 +698,11 @@ const Song = () => {
                 <meta name="twitter:description" content={cleanDescription} />
                 <meta name="twitter:image" content={song?.image_url || `${baseUrl}/default-song-image.jpg`} />
                 <meta name="twitter:site" content="@internetdjco" />
-                <script type="application/ld+json">
-                    {JSON.stringify({
-                        "@context": "https://schema.org",
-                        "@type": "MusicRecording",  // Reverted to "MusicRecording" as "Song" is not a valid schema.org type
-                        "name": song?.title || "Song",
-                        "byArtist": {
-                            "@type": "MusicGroup",
-                            "name": song?.profile_name || "Artist",
-                            "url": song?.profile_id ? `${baseUrl}${profilePath(song)}` : undefined
-                        },
-                        "description": cleanDescription, // Use the sanitized description
-                        "url": `${baseUrl}/song/${songId}`,
-                        "image": song?.image_url || `${baseUrl}/default-song-image.jpg`,
-                        "audio": {
-                            "@type": "AudioObject",
-                            "contentUrl": song?.mp3_url || `${baseUrl}/default-audio.mp3`
-                        },
-                        "genre": song?.genre || "Unknown"
-                    })}
-                </script>
+                {/* Structured data is emitted server-side in
+                    backend/middleware/ogMetaTags.js. Doing it here as well gave
+                    Googlebot — which renders JS — two MusicRecording entities
+                    for one track. The server version is authoritative because
+                    it also reaches crawlers that never run JavaScript. */}
             </Helmet>
 
             <div
@@ -861,20 +847,17 @@ const Song = () => {
                                                 {sanitizeHtml(song.description, { allowedTags: [], allowedAttributes: {} })}
                                             </p>
                                         )}
-                                        {song?.genre ? (
+                                        {genreTags(song?.genre).length > 0 ? (
                                             <div className="flex flex-wrap gap-2">
-                                                {song.genre
-                                                    .split(',')
-                                                    .filter(genre => genre.trim())
-                                                    .map((genre, index) => (
-                                                        <Link
-                                                            key={index}
-                                                            to={`/tag/${genre.trim()}`}
-                                                            className="retro-chip"
-                                                        >
-                                                            {genre.trim()}
-                                                        </Link>
-                                                    ))}
+                                                {genreTags(song.genre).map((genre) => (
+                                                    <Link
+                                                        key={genre}
+                                                        to={tagHref(genre)}
+                                                        className="retro-chip"
+                                                    >
+                                                        {genre}
+                                                    </Link>
+                                                ))}
                                             </div>
                                         ) : (
                                             <p className="text-sm text-gray-300">No genres specified</p>

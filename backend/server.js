@@ -20,11 +20,12 @@ const sampleLibraryRouter = require('./routes/sampleLibrary');
 const stemsRouter = require('./routes/stems');
 const idjcRouter = require('./routes/idjc');
 const notificationsRouter = require('./routes/notifications');
+const sitemapRouter = require('./routes/sitemap');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const initializeSocket = require('./socket');
-const { isCrawler, extractMetadata, fetchSongMetadata, fetchProfileMetadata, injectOGMetaTags } = require('./middleware/ogMetaTags');
+const { isCrawler, extractMetadata, fetchMetadata, injectOGMetaTags } = require('./middleware/ogMetaTags');
 require('dotenv').config();
 
 const app = express();
@@ -162,6 +163,10 @@ app.use('/api/stems', stemsRouter);
 app.use('/api/idjc', idjcRouter);
 app.use('/api/notifications', notificationsRouter);
 
+// robots.txt and sitemap.xml are generated from the database, so they must be
+// matched before express.static and before the SPA catch-all below.
+app.use('/', sitemapRouter);
+
 // Serve frontend
 const staticPath = path.join(__dirname, '../frontend/build');
 logger.debug('Serving static files from:', staticPath);
@@ -187,12 +192,7 @@ app.get(/(.*)/, async (req, res) => {
         if (metadata) {
             logger.debug(`Crawler detected: ${userAgent}, extracting metadata for ${metadata.type}/${metadata.id}`);
             
-            let ogMetadata = null;
-            if (metadata.type === 'song') {
-                ogMetadata = await fetchSongMetadata(metadata.id);
-            } else if (metadata.type === 'profile') {
-                ogMetadata = await fetchProfileMetadata(metadata.id);
-            }
+            const ogMetadata = await fetchMetadata(metadata);
             
             if (ogMetadata) {
                 // Read the HTML file and inject OG tags

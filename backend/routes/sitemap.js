@@ -1,0 +1,406 @@
+/**
+ * robots.txt and sitemap.xml.
+ *
+ * InternetDJ is a client-rendered SPA, so a crawler that lands on the homepage
+ * sees one <div id="root"> and no links. Without a sitemap every song, artist,
+ * genre and thread is unreachable to search — the pages exist, but nothing
+ * points a crawler at them. This route is that map.
+ *
+ * It is served from Express rather than a static file in frontend/public
+ * because the URL set is the database: new songs need to appear without a
+ * redeploy.
+ *
+ * The output is a sitemap index pointing at one child sitemap per content type.
+ * A single flat sitemap would work today, but the format caps a file at 50,000
+ * URLs, and songs are the one set guaranteed to grow past that. Splitting up
+ * front means the cap becomes a chunk boundary later instead of a rewrite.
+ */
+
+const express = require('express');
+const logger = require('../utils/logger');
+const pool = require('../config/database');
+const { expandGenreString, isLikelyJunkGenre } = require('../utils/genres');
+
+const router = express.Router();
+
+// The spec's ceiling is 50,000 URLs per file. Sitting under it leaves room for
+// a section to grow between the moment a chunk count is computed and the moment
+// the last chunk is actually fetched.
+const MAX_URLS_PER_CHUNK = 45000;
+
+// Generating a section means a full table scan, and crawlers refetch sitemaps
+// far more often than the content changes. An hour is well inside the window
+// Google re-crawls on, and it keeps a burst of bots from becoming a burst of
+// queries.
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
+// A genre page listing one song is thin content: it duplicates the song page
+// and gives a searcher nothing extra. Those pages get crawled, judged weak, and
+// drag on the domain. Three is the smallest count that reads as a real page.
+const MIN_SONGS_PER_TAG = 3;
+
+// Keyed by section, holding the in-flight promise rather than the resolved
+// value. Googlebot fetches the index and then every child sitemap at once, so
+// several requests for the same section overlap. Caching only the settled value
+// means each of those overlapping requests misses and runs its own query — a
+// cache stampede that turned one crawl into 19 generations and saturated the
+// five-connection pool. Storing the promise makes concurrent callers share one
+// generation.
+const cache = new Map();
+
+const cached = (key, produce) => {
+    const hit = cache.get(key);
+    if (hit && hit.expires > Date.now()) return hit.promise;
+
+    const promise = produce();
+    cache.set(key, { promise, expires: Date.now() + CACHE_TTL_MS });
+
+    // A failure must not be cached for the hour: the next crawl should retry
+    // rather than be handed the same rejection. Evict on rejection, but only if
+    // this entry is still the current one.
+    promise.catch(() => {
+        const current = cache.get(key);
+        if (current && current.promise === promise) cache.delete(key);
+    });
+
+    return promise;
+};
+
+const escapeXml = (value) => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+// Sitemaps must carry absolute URLs, and the host differs between local dev,
+// the fly.dev hostname and the custom domain.
+const baseUrlFor = (req) => {
+    const configured = process.env.FRONTEND_URL_PROD || process.env.FRONTEND_URL || process.env.CLIENT_URL;
+    if (configured && process.env.NODE_ENV === 'production') return configured.replace(/\/+$/, '');
+    return `${req.protocol}://${req.get('host')}`;
+};
+
+const toW3CDate = (value) => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString().slice(0, 10);
+};
+
+const urlEntry = ({ loc, lastmod, changefreq, priority }) => {
+    const parts = [`    <loc>${escapeXml(loc)}</loc>`];
+    if (lastmod) parts.push(`    <lastmod>${lastmod}</lastmod>`);
+    if (changefreq) parts.push(`    <changefreq>${changefreq}</changefreq>`);
+    if (priority) parts.push(`    <priority>${priority}</priority>`);
+    return `  <url>\n${parts.join('\n')}\n  </url>`;
+};
+
+const sendXml = (res, xml) => {
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    // Matches the generation cache, so a proxy or CDN in front does not serve
+    // a copy older than the one Express would rebuild.
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(xml);
+};
+
+/**
+ * The sections. Each returns a flat array of URL descriptors; chunking, XML
+ * rendering and caching are handled by the shared code below, so adding a
+ * content type later means adding one entry here.
+ */
+const SECTIONS = {
+    // Hand-written pages. Everything auth-shaped (login, settings, password
+    // reset) and the DAW are deliberately absent — see the robots.txt block.
+    static: {
+        urls: async (base) => ([
+        { loc: `${base}/`, changefreq: 'daily', priority: '1.0' },
+        { loc: `${base}/discover`, changefreq: 'daily', priority: '0.9' },
+        { loc: `${base}/browse`, changefreq: 'daily', priority: '0.9' },
+        { loc: `${base}/new`, changefreq: 'hourly', priority: '0.9' },
+        { loc: `${base}/crates`, changefreq: 'daily', priority: '0.7' },
+        { loc: `${base}/forum`, changefreq: 'daily', priority: '0.7' },
+        { loc: `${base}/collabs`, changefreq: 'weekly', priority: '0.6' },
+        { loc: `${base}/idj-coin`, changefreq: 'monthly', priority: '0.5' },
+        { loc: `${base}/about`, changefreq: 'monthly', priority: '0.5' },
+        { loc: `${base}/privacy`, changefreq: 'yearly', priority: '0.2' },
+        { loc: `${base}/terms`, changefreq: 'yearly', priority: '0.2' },
+        ]),
+        // Hand-written and tiny; no query needed to know it fits one chunk.
+        count: async () => 1,
+    },
+
+    // Songs carry no visibility flag — uploading one publishes it — so every
+    // row belongs in the map.
+    songs: {
+        count: async () => scalar('SELECT COUNT(*) AS n FROM songs'),
+        urls: async (base) => {
+        const rows = await pool.query(`
+            SELECT s.id, s.created_at
+            FROM songs s
+            ORDER BY s.plays DESC, s.id DESC
+        `);
+        return rows.map(row => ({
+            loc: `${base}/song/${row.id}`,
+            lastmod: toW3CDate(row.created_at),
+            changefreq: 'weekly',
+            priority: '0.8',
+        }));
+        },
+    },
+
+    // An artist with no tracks has an empty page, which is thin content in the
+    // same way a one-song genre is.
+    profiles: {
+        count: async () => scalar(
+            'SELECT COUNT(*) AS n FROM profiles p WHERE EXISTS (SELECT 1 FROM songs s WHERE s.profile_id = p.id)'),
+        urls: async (base) => {
+        const rows = await pool.query(`
+            SELECT p.id, p.created_at
+            FROM profiles p
+            WHERE EXISTS (SELECT 1 FROM songs s WHERE s.profile_id = p.id)
+            ORDER BY p.id DESC
+        `);
+        return rows.map(row => ({
+            loc: `${base}/profile/${row.id}`,
+            lastmod: toW3CDate(row.created_at),
+            changefreq: 'weekly',
+            priority: '0.7',
+        }));
+        },
+    },
+
+    // Genres are comma-separated free text in a VARCHAR, so the tag set has to
+    // be reduced in JS — the same way /music/by-tags builds the Browse
+    // directory. Reusing normalizeGenre keeps sitemap URLs identical to the
+    // ones the Browse page links to, instead of introducing a second spelling
+    // of the same page for crawlers to treat as a duplicate.
+    tags: {
+        // The distinct-tag count only exists after the JS reduction below, so
+        // there is no COUNT for it. But the index does not need the count —
+        // only the number of chunks — and every tag comes from a song's genre
+        // field, so the number of distinct tags can never exceed the number of
+        // songs. While the catalogue fits in one chunk, so does the tag list,
+        // and that is answerable with a cheap COUNT. Past that the real set is
+        // generated, which is correct if slower and is a problem this site will
+        // not have for a long time.
+        count: async () => {
+            const songs = await scalar('SELECT COUNT(*) AS n FROM songs WHERE genre IS NOT NULL AND genre != \'\'');
+            return songs === 0 ? 0 : Math.min(songs, MAX_URLS_PER_CHUNK);
+        },
+        urls: async (base) => {
+        const rows = await pool.query(`
+            SELECT s.genre
+            FROM songs s
+            WHERE s.genre IS NOT NULL AND s.genre != ''
+        `);
+
+        const counts = {};
+        rows.forEach(row => {
+            expandGenreString(row.genre).forEach(({ key }) => {
+                if (!key) return;
+                counts[key] = (counts[key] || 0) + 1;
+            });
+        });
+
+        return Object.keys(counts)
+            .filter(tag => counts[tag] >= MIN_SONGS_PER_TAG && !isLikelyJunkGenre(tag, counts[tag]))
+            .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
+            .map(tag => ({
+                loc: `${base}/tag/${encodeURIComponent(tag)}`,
+                changefreq: 'weekly',
+                priority: '0.6',
+            }));
+        },
+    },
+
+    // Only public crates. Rows predating the is_public column stay false on
+    // purpose — their owners never agreed to publish them — and a sitemap is
+    // the last place that decision should be quietly reversed. Empty crates are
+    // excluded for the thin-content reason above.
+    crates: {
+        count: async () => scalar(
+            'SELECT COUNT(*) AS n FROM playlists pl WHERE pl.is_public = TRUE '
+            + 'AND EXISTS (SELECT 1 FROM playlist_songs ps WHERE ps.playlist_id = pl.id)'),
+        urls: async (base) => {
+        const rows = await pool.query(`
+            SELECT pl.id, pl.updated_at
+            FROM playlists pl
+            WHERE pl.is_public = TRUE
+              AND EXISTS (SELECT 1 FROM playlist_songs ps WHERE ps.playlist_id = pl.id)
+            ORDER BY pl.updated_at DESC
+        `);
+        return rows.map(row => ({
+            loc: `${base}/crate/${row.id}`,
+            lastmod: toW3CDate(row.updated_at),
+            changefreq: 'weekly',
+            priority: '0.6',
+        }));
+        },
+    },
+
+    forum: {
+        count: async () => scalar('SELECT COUNT(*) AS n FROM forum_posts'),
+        urls: async (base) => {
+        const rows = await pool.query(`
+            SELECT fp.id, fp.updated_at
+            FROM forum_posts fp
+            ORDER BY fp.updated_at DESC
+        `);
+        return rows.map(row => ({
+            loc: `${base}/forum/post/${row.id}`,
+            lastmod: toW3CDate(row.updated_at),
+            changefreq: 'weekly',
+            priority: '0.5',
+        }));
+        },
+    },
+};
+
+// COUNT(*) arrives from the MariaDB driver as a BigInt, which throws on
+// arithmetic against a plain number.
+const scalar = async (sql) => {
+    const rows = await pool.query(sql);
+    return rows && rows[0] ? Number(rows[0].n) : 0;
+};
+
+const sectionUrls = (name, base) => cached(`${name}:${base}`, () => SECTIONS[name].urls(base));
+
+/**
+ * How many chunks a section needs, without building it.
+ *
+ * The index is the first thing a crawler fetches, and it used to answer by
+ * generating all six sections and awaiting them one after another — so the
+ * cheapest document on the site took the sum of every expensive query. A COUNT
+ * gives the same answer for a fraction of the work; sections that cannot be
+ * counted cheaply fall back to generating, which the cache then hands straight
+ * to the child request.
+ */
+const sectionChunks = async (name, base) => {
+    const section = SECTIONS[name];
+    if (section.count) {
+        const total = await section.count();
+        return total === 0 ? 0 : Math.ceil(total / MAX_URLS_PER_CHUNK);
+    }
+    const urls = await sectionUrls(name, base);
+    return urls.length === 0 ? 0 : Math.ceil(urls.length / MAX_URLS_PER_CHUNK);
+};
+
+/**
+ * The index. Every section is generated to learn how many chunks it needs,
+ * which is why the per-section results are cached: the child sitemap request
+ * that follows reuses the work rather than repeating the scan.
+ */
+router.get('/sitemap.xml', async (req, res) => {
+    try {
+        const base = baseUrlFor(req);
+        const today = toW3CDate(new Date());
+
+        // In parallel: serially awaiting six sections made the index take the
+        // sum of every query rather than the slowest one.
+        const names = Object.keys(SECTIONS);
+        const chunkCounts = await Promise.all(names.map(name => sectionChunks(name, base)));
+
+        const entries = [];
+        names.forEach((name, idx) => {
+            const chunks = chunkCounts[idx];
+            for (let i = 1; i <= chunks; i += 1) {
+                const loc = chunks === 1
+                    ? `${base}/sitemap-${name}.xml`
+                    : `${base}/sitemap-${name}-${i}.xml`;
+                entries.push(`  <sitemap>\n    <loc>${escapeXml(loc)}</loc>\n    <lastmod>${today}</lastmod>\n  </sitemap>`);
+            }
+        });
+
+        sendXml(res, `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.join('\n')}
+</sitemapindex>`);
+    } catch (err) {
+        logger.error('Sitemap: failed to build index:', err);
+        res.status(500).type('text/plain').send('Failed to build sitemap');
+    }
+});
+
+// Matches both /sitemap-songs.xml and the chunked /sitemap-songs-2.xml.
+router.get(/^\/sitemap-([a-z]+?)(?:-(\d+))?\.xml$/, async (req, res) => {
+    const name = req.params[0];
+    const chunk = req.params[1] ? parseInt(req.params[1], 10) : 1;
+
+    if (!Object.prototype.hasOwnProperty.call(SECTIONS, name)) {
+        return res.status(404).type('text/plain').send('Unknown sitemap section');
+    }
+
+    try {
+        const base = baseUrlFor(req);
+        const urls = await sectionUrls(name, base);
+        const slice = urls.slice((chunk - 1) * MAX_URLS_PER_CHUNK, chunk * MAX_URLS_PER_CHUNK);
+
+        // A listed section must always answer 200, even when it turns out
+        // empty: the index decides what to list from a COUNT, and for tags that
+        // count is a deliberate over-approximation (every tag comes from a
+        // song, but songs whose genres are all junk or below the minimum
+        // contribute none). A 404 on a URL the index advertises is reported as
+        // "Couldn't fetch" — an empty urlset is valid and simply discovers
+        // nothing. Chunks past the first are a different case: nothing links to
+        // them, so a request for one is genuinely wrong.
+        if (!slice.length && chunk > 1) {
+            return res.status(404).type('text/plain').send('Sitemap chunk out of range');
+        }
+
+        sendXml(res, `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${slice.map(urlEntry).join('\n')}
+</urlset>`);
+    } catch (err) {
+        logger.error(`Sitemap: failed to build section ${name}:`, err);
+        res.status(500).type('text/plain').send('Failed to build sitemap');
+    }
+});
+
+/**
+ * robots.txt.
+ *
+ * The Disallow list is not about hiding anything — it is about not spending
+ * crawl budget on pages that can never rank. Auth screens render the same shell
+ * for everyone, owner-only management screens redirect, and the DAW and its
+ * project routes are a tool rather than a page anyone would search for.
+ */
+router.get('/robots.txt', (req, res) => {
+    const base = baseUrlFor(req);
+
+    res.type('text/plain');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(`User-agent: *
+Allow: /
+
+# Auth and account screens: identical shell for every visitor, nothing to index.
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-google-relink
+Disallow: /settings
+
+# Owner-only management views behind the public pages they manage.
+Disallow: /profile/*/songs-manager
+Disallow: /profile/*/collaborations
+Disallow: /collabs/invite/
+
+# The multitrack sampler is a tool, not a document.
+Disallow: /projects
+Disallow: /projects/
+Disallow: /public/
+Disallow: /stems
+
+# Search result pages: infinite URL space, duplicate content.
+Disallow: /search
+
+Disallow: /api/
+
+Sitemap: ${base}/sitemap.xml
+`);
+});
+
+module.exports = router;

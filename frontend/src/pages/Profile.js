@@ -33,6 +33,7 @@ import IconActionButton from '../components/IconActionButton';
 import sanitizeHtml from 'sanitize-html';
 import {Helmet} from "react-helmet-async";
 import profilePath from '../utils/profilePath';
+import genreTags, { tagHref } from '../utils/genreTags';
 
 window.Buffer = window.Buffer || Buffer;
 
@@ -1158,7 +1159,7 @@ const ProfilePage = () => {
     const artistGenres = useMemo(() => {
         const seen = new Map();
         songs.forEach(song => {
-            (song.genre || '').split(',').map(part => part.trim()).filter(Boolean).forEach(raw => {
+            genreTags(song.genre).forEach(raw => {
                 const key = raw.toLowerCase();
                 const entry = seen.get(key) || { label: raw, count: 0 };
                 entry.count += 1;
@@ -1775,7 +1776,7 @@ const ProfilePage = () => {
                         {artistGenres.map((genre) => (
                             <Link
                                 key={genre.label}
-                                to={`/tag/${encodeURIComponent(genre.label)}`}
+                                to={tagHref(genre.label)}
                                 className="retro-chip capitalize"
                             >
                                 {genre.label} <span className="text-cyan-300/60">{genre.count}</span>

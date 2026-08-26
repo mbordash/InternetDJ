@@ -180,6 +180,42 @@ function About() {
                     </div>
                 </section>
 
+                {/* The AGPL's section 13 requires that anyone interacting with this
+                    service over a network be offered its source, so this link is a
+                    licence obligation rather than a nicety — it needs to stay
+                    reachable, and it needs to point at the running version. */}
+                <section className="mt-12 pt-6 border-t border-white/10">
+                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Open Source</h2>
+                    <p className="retro-mono text-xl text-gray-400 mb-4">
+                        InternetDJ is free software, licensed under the{' '}
+                        <a
+                            href="https://www.gnu.org/licenses/agpl-3.0.html"
+                            target="_blank"
+                            rel="noopener noreferrer license"
+                            className="text-primary-brand-500 hover:text-primary-brand-700 underline font-semibold"
+                            aria-label="Read the GNU Affero General Public License version 3"
+                        >
+                            GNU Affero General Public License v3
+                        </a>
+                        . You are free to read it, run it, change it and share it. If you
+                        run a modified version as a public service, the licence asks that
+                        you offer your users its source in turn.
+                    </p>
+                    <p className="retro-mono text-xl text-gray-400">
+                        The complete source for this site lives at{' '}
+                        <a
+                            href="https://github.com/mbordash/InternetDJ"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary-brand-500 hover:text-primary-brand-700 underline font-semibold"
+                            aria-label="Browse the InternetDJ source code on GitHub"
+                        >
+                            github.com/mbordash/InternetDJ
+                        </a>
+                        .
+                    </p>
+                </section>
+
                 <section className="mt-12 pt-6 border-t border-white/10">
                     <h2 className="retro-display text-lg retro-glow-magenta mb-4">Copyright &amp; Music Ownership</h2>
                     <p className="retro-mono text-xl text-gray-400 mb-4">

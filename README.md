@@ -21,7 +21,19 @@ Live site: [https://InternetDJ.co](https://InternetDJ.co)
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See `LICENSE` for details.
+Copyright (C) 2026 Michael Bordash.
+
+This project is licensed under the GNU Affero General Public License v3.0 or
+later. See `LICENSE` for the full text.
+
+The AGPL is the GPL plus one additional obligation, in section 13: because
+InternetDJ is software people use over a network rather than software they
+download, anyone who runs a modified version of it as a public service must
+offer that service's users the corresponding source. Under the plain GPL,
+running a modified copy on a server is not "distribution", so a modified
+InternetDJ could be operated publicly with no obligation to share anything
+back. Section 13 closes that gap, which is the reason this project uses the
+AGPL rather than the GPL.
 
 ## Local development
 

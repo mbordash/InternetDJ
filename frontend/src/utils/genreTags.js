@@ -37,4 +37,25 @@ const genreTags = (genre) => {
     return tags;
 };
 
+/**
+ * The URL for a tag page.
+ *
+ * Genres are free-form, so the same genre reaches these links spelled several
+ * ways — "Techno", "techno", " TECHNO ". Left alone, each spelling becomes its
+ * own /tag/ URL serving identical content, which splits a page's ranking across
+ * duplicates and spends crawl budget three times to index one page.
+ *
+ * Lowercasing and trimming here collapses that. It is deliberately not the
+ * backend's full normalizeGenre(): that resolves genuine abbreviations via an
+ * alias table ("dnb" -> "drum bass"), and duplicating a 200-line table across
+ * the stack would drift. Those alias-level variants are consolidated instead by
+ * the canonical URL the tag page declares, which comes from the server and so
+ * cannot disagree with it.
+ *
+ * The displayed text stays the spelling the artist typed — the taxonomy is
+ * theirs. Only the href is normalised.
+ */
+const tagHref = (tag) => `/tag/${encodeURIComponent(String(tag ?? '').trim().toLowerCase())}`;
+
 export default genreTags;
+export { tagHref };

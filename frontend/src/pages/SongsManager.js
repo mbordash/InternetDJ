@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import { SpeakerWaveIcon, StarIcon, PencilIcon, TrashIcon, ChartBarIcon, XMarkIcon, ArrowDownTrayIcon, BoltIcon } from '@heroicons/react/24/solid';
 import API_URL from '../utils/api';
 import { MUSICAL_KEYS } from '../utils/musicalKeys';
+import genreTags from '../utils/genreTags';
 import { Line } from 'react-chartjs-2';
 import Chart from 'chart.js/auto';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -881,14 +882,14 @@ const SongsManager = () => {
                                             {song.title}
                                         </Link>
                                         <div className="text-sm text-gray-300 flex items-center gap-x-2">
-                                            {song.genre ? (
+                                            {genreTags(song.genre).length > 0 ? (
                                                 <div className="flex flex-wrap gap-1">
-                                                    {song.genre.split(',').slice(0, 3).map((tag, index) => (
+                                                    {genreTags(song.genre).slice(0, 3).map((tag) => (
                                                         <span
-                                                            key={index}
+                                                            key={tag}
                                                             className="retro-chip inline-flex items-center px-2 py-0.5"
                                                         >
-                                                            {tag.trim()}
+                                                            {tag}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -950,7 +951,7 @@ const SongsManager = () => {
                                                     ...EMPTY_EDIT_FORM,
                                                     title: song.title,
                                                     description: song.description || '',
-                                                    genres: song.genre ? song.genre.split(',').map(tag => tag.trim()).slice(0, 3) : [],
+                                                    genres: genreTags(song.genre).slice(0, 3),
                                                     // Numbers arrive as strings from a form; keep them
                                                     // that way so an empty field means "clear it".
                                                     bpm: song.bpm != null ? String(Math.round(Number(song.bpm))) : '',

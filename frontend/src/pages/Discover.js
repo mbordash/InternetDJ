@@ -7,6 +7,7 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { Helmet } from 'react-helmet-async';
 import profilePath from '../utils/profilePath';
+import genreTags, { tagHref } from '../utils/genreTags';
 
 function Discover() {
     const { user } = useContext(AuthContext);
@@ -447,20 +448,17 @@ function Discover() {
                         </Link>
 
                         <div className="mt-3">
-                            {selectedSong?.genre ? (
+                            {genreTags(selectedSong?.genre).length > 0 ? (
                                 <div className="flex flex-wrap gap-2 justify-center">
-                                    {selectedSong.genre
-                                        .split(',')
-                                        .filter(genre => genre.trim())
-                                        .map((genre, index) => (
-                                            <Link
-                                                key={index}
-                                                to={`/tag/${genre.trim()}`}
-                                                className="retro-chip"
-                                            >
-                                                {genre.trim()}
-                                            </Link>
-                                        ))}
+                                    {genreTags(selectedSong.genre).map((genre) => (
+                                        <Link
+                                            key={genre}
+                                            to={tagHref(genre)}
+                                            className="retro-chip"
+                                        >
+                                            {genre}
+                                        </Link>
+                                    ))}
                                 </div>
                             ) : (
                                 <p className="retro-mono text-lg text-gray-500">&gt; no genres specified</p>

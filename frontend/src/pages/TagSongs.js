@@ -8,6 +8,7 @@ import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import profilePath from '../utils/profilePath';
+import { tagHref } from '../utils/genreTags';
 
 const SORTS = [
     { id: 'random', label: 'Shuffle' },
@@ -42,6 +43,15 @@ function TagSongs() {
     const baseUrl = SITE_URL;
     const decodedTag = decodeURIComponent(tag);
     const title = overview?.label || decodedTag;
+
+    /* One genre is reachable under every spelling artists use — /tag/DnB,
+       /tag/dnb, /tag/drum%20bass all render this page. The canonical URL is
+       what tells search engines they are one page rather than three competing
+       ones, so it has to be the same string whichever spelling was requested.
+       overview.tag is the server's normalised key, which is also what the
+       sitemap emits; before it loads, fall back to normalising the requested
+       spelling ourselves so the tag is never self-referential. */
+    const canonicalUrl = `${baseUrl}${tagHref(overview?.tag || decodedTag)}`;
 
     const fetchSongs = async (newSort = sort, reset = false) => {
         setLoading(true);
@@ -211,10 +221,10 @@ function TagSongs() {
             <Helmet>
                 <title>Browse {title} Music</title>
                 <meta name="description" content={`Browse ${title} Music on InternetDJ`} />
-                <link rel="canonical" href={`${baseUrl}/tag/${decodedTag}`} />
+                <link rel="canonical" href={canonicalUrl} />
                 <meta property="og:title" content={`Browse ${title} Music`} />
                 <meta property="og:description" content={`Browse ${title} Music on InternetDJ`} />
-                <meta property="og:url" content={`${baseUrl}/tag/${decodedTag}`} />
+                <meta property="og:url" content={canonicalUrl} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
                 <meta name="twitter:title" content={`Browse ${title} Music`} />
@@ -304,7 +314,7 @@ function TagSongs() {
                         {overview.related.map(neighbour => (
                             <Link
                                 key={neighbour.tag}
-                                to={`/tag/${encodeURIComponent(neighbour.tag)}`}
+                                to={tagHref(neighbour.tag)}
                                 className="retro-chip capitalize"
                             >
                                 {neighbour.label} <span className="text-cyan-300/60">{neighbour.count}</span>

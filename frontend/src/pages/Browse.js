@@ -10,6 +10,7 @@ import profilePath from '../utils/profilePath';
 import TrackFilters, {
     EMPTY_FILTERS, hasActiveFilters, filtersToParams, TrackMetaChips,
 } from '../components/TrackFilters';
+import { tagHref } from '../utils/genreTags';
 
 function Browse() {
     const { playSong, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
@@ -230,7 +231,7 @@ function Browse() {
     // A genre tile: three covers from the genre's top tracks, then name + count.
     const GenreCard = ({ genre }) => (
         <Link
-            to={`/tag/${encodeURIComponent(genre.tag)}`}
+            to={tagHref(genre.tag)}
             className="retro-card retro-cut p-3 flex flex-col gap-3 group"
             aria-label={`Browse ${genre.label} \u2014 ${genre.count} tracks`}
         >

@@ -1327,33 +1327,98 @@ router.get('/latest', async (req, res) => {
     }
 });
 
-router.get('/this-month', async (req, res) => {
+/* The /new page. Three sections rather than one date-windowed list.
+
+   The old handler asked for "everything uploaded in the last INTERVAL", which
+   forced the window to keep widening as uploads slowed, until a page titled
+   "new" was mostly a year old with no dates shown to admit it. Just-added now
+   takes the newest N uploads whatever their age and reports how old they are,
+   so the window never has to be tuned again. The other two sections keep the
+   page worth revisiting during a quiet stretch: what people are actually
+   playing right now, and a rotating pull from the back catalogue. */
+const LIKES_SUBQUERY = `
+    (SELECT COUNT(*)
+     FROM playlist_songs ps
+              JOIN playlists pl ON ps.playlist_id = pl.id
+     WHERE pl.name = 'Likes' AND ps.song_id = s.id)
+`;
+
+const sanitizeSongRow = (row) => ({
+    ...row,
+    id: Number(row.id),
+    profile_id: Number(row.profile_id),
+    plays: Number(row.plays) || 0,
+    genre: row.genre || '',
+    profile_name: row.profile_name || 'Unknown',
+    profile_slug: row.profile_slug || null,
+    likes_count: Number(row.likes_count) || 0,
+    recent_plays: row.recent_plays === undefined ? undefined : Number(row.recent_plays) || 0,
+});
+
+router.get('/recent', async (req, res) => {
     try {
-        const rows = await pool.query(`
+        const JUST_ADDED_LIMIT = 20;
+        const PLAYED_LATELY_LIMIT = 10;
+        const ARCHIVE_LIMIT = 10;
+        const PLAYED_LATELY_DAYS = 30;
+
+        const justAdded = await pool.query(`
             SELECT s.*, p.name AS profile_name, p.slug AS profile_slug,
-                   (SELECT COUNT(*)
-                    FROM playlist_songs ps
-                             JOIN playlists pl ON ps.playlist_id = pl.id
-                    WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+                   ${LIKES_SUBQUERY} AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR)
             ORDER BY s.created_at DESC
-        `);
-        const sanitizedRows = rows.map((row) => ({
-            ...row,
-            id: Number(row.id),
-            profile_id: Number(row.profile_id),
-            plays: Number(row.plays) || 0,
-            genre: row.genre || 'Unknown',
-            profile_name: row.profile_name || 'Unknown',
-            profile_slug: row.profile_slug || null,
-            likes_count: Number(row.likes_count) || 0,
-        }));
-        res.json(Array.isArray(sanitizedRows) ? sanitizedRows : []);
+            LIMIT ?
+        `, [JUST_ADDED_LIMIT]);
+
+        /* Lifetime songs.plays would just rank the all-time favourites forever.
+           Counting song_plays rows inside the window is what makes this section
+           move week to week. */
+        /* The window is aggregated on its own before anything is joined to it.
+           Grouping song_plays alone keeps every selected column either grouped
+           or aggregated, so the query is valid whatever ONLY_FULL_GROUP_BY is
+           set to on the server. */
+        const playedLately = await pool.query(`
+            SELECT s.*, p.name AS profile_name, p.slug AS profile_slug,
+                   ${LIKES_SUBQUERY} AS likes_count,
+                   recent.recent_plays
+            FROM (
+                     SELECT sp.song_id, COUNT(*) AS recent_plays
+                     FROM song_plays sp
+                     WHERE sp.played_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                     GROUP BY sp.song_id
+                     ORDER BY recent_plays DESC
+                     LIMIT ?
+                 ) recent
+                     JOIN songs s ON s.id = recent.song_id
+                     LEFT JOIN profiles p ON s.profile_id = p.id
+            ORDER BY recent.recent_plays DESC, s.created_at DESC
+        `, [PLAYED_LATELY_DAYS, PLAYED_LATELY_LIMIT]);
+
+        /* Anything already on the page is excluded so the archive block never
+           echoes the two sections above it. */
+        const shownIds = [...justAdded, ...playedLately].map((row) => Number(row.id));
+        const placeholders = shownIds.length ? shownIds.map(() => '?').join(',') : null;
+
+        const fromArchive = await pool.query(`
+            SELECT s.*, p.name AS profile_name, p.slug AS profile_slug,
+                   ${LIKES_SUBQUERY} AS likes_count
+            FROM songs s
+                     LEFT JOIN profiles p ON s.profile_id = p.id
+            ${placeholders ? `WHERE s.id NOT IN (${placeholders})` : ''}
+            ORDER BY RAND()
+            LIMIT ?
+        `, placeholders ? [...shownIds, ARCHIVE_LIMIT] : [ARCHIVE_LIMIT]);
+
+        res.json({
+            justAdded: justAdded.map(sanitizeSongRow),
+            playedLately: playedLately.map(sanitizeSongRow),
+            fromArchive: fromArchive.map(sanitizeSongRow),
+            playedLatelyDays: PLAYED_LATELY_DAYS,
+        });
     } catch (err) {
-        logger.error('Error in GET /music/this-month:', err);
-        res.status(500).json({ error: 'Failed to fetch recently uploaded songs' });
+        logger.error('Error in GET /music/recent:', err);
+        res.status(500).json({ error: 'Failed to fetch recent activity' });
     }
 });
 
