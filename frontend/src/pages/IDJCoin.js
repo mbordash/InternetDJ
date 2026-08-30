@@ -160,64 +160,65 @@ function IDJCoin() {
                     content="Earn Solana IDJ Coin for your music"
                 />
                 <link rel="canonical" href={`${baseUrl}/idj-coin`} />
-                <meta property="og:title" content="IDJ Solana Coin - Earn<" />
+                <meta property="og:title" content="IDJ Solana Coin - Earn" />
                 <meta property="og:description" content="Earn Solana IDJ Coin for your music" />
                 <meta property="og:url" content={`${baseUrl}/idj-coin`} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content="IDJ Solana Coin - Earn<" />
+                <meta name="twitter:title" content="IDJ Solana Coin - Earn" />
                 <meta name="twitter:description" content="Earn Solana IDJ Coin for your music" />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
-            <div className="container mx-auto px-4 py-8 flex gap-8">
+            <div className="container mx-auto px-4 py-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-8">
                 {/* Main Content - Left Column */}
-                <div className="w-3/4">
+                <div>
                     <section className="mb-12">
-                        <div className="flex items-start space-x-6">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-6">
                             <img
                                 src={IDJCoinLogo}
                                 alt="IDJ Coin"
-                                className="w-64 h-64 flex-shrink-0"
+                                className="w-40 h-40 sm:w-64 sm:h-64 shrink-0"
                                 onError={(e) => {
                                     console.error('Failed to load IDJ Coin logo');
                                     e.target.style.display = 'none';
                                 }}
                             />
                             <div className="flex-1">
-                                    <h1 className="retro-display retro-chrome text-3xl mb-6">IDJ Coin - Liquidity & Allocation</h1>
-                                        <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">Overview</h2>
-                                        <p className="text-gray-300 mb-4">
+                                    <h1 className="retro-display retro-chrome text-2xl sm:text-3xl mb-6">IDJ Coin - Liquidity &amp; Allocation</h1>
+                                    <div className="retro-eyebrow mb-2">// Overview //</div>
+                                    <p className="retro-mono text-lg text-gray-300 mb-4">
                                     IDJ Coin (symbol: iDJc) is the backbone of the InternetDJ ecosystem, enabling decentralized rewards, community growth, and platform sustainability. By buying and holding IDJ Coin, you directly support musicians on InternetDJ, helping fund artist grants, platform development, and creative initiatives. With a total initial supply of 1 billion coins, IDJ Coin is strategically allocated to support founders, liquidity, ownership, and future development.
                                 </p>
                                 <a
                                     href={RAYDIUM_SWAP_URL}
-                                    className="inline-block bg-primary-brand-500 text-white px-6 py-3 rounded-full hover:bg-primary-brand-700 transition-colors font-semibold"
+                                    className="retro-btn retro-btn--hot px-6 py-3 text-sm"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
                                     Trade IDJ Coin on Raydium
                                 </a>
-                                <p className="text-sm text-gray-300 mt-3">
-                                    Mint Address: <span className="font-mono break-all">{IDJ_COIN_MINT}</span>
+                                <p className="retro-mono text-sm text-gray-400 mt-3">
+                                    Mint Address: <span className="break-all">{IDJ_COIN_MINT}</span>
                                 </p>
                             </div>
                         </div>
                     </section>
 
-                    <section className="mb-12 retro-panel retro-cut border border-white/10 rounded-xl p-6">
-                        <h2 className="text-2xl font-bold mb-3 text-white tracking-tight">Limited-Time IDJC Claim</h2>
-                        <p className="text-gray-300 mb-2">
+                    <section className="mb-12 retro-panel retro-cut p-6">
+                        <div className="retro-eyebrow mb-2">// Claim //</div>
+                        <h2 className="retro-display text-xl sm:text-2xl retro-glow-magenta mb-3">Limited-Time IDJC Claim</h2>
+                        <p className="retro-mono text-lg text-gray-300 mb-2">
                             {claimCampaignText}
                         </p>
-                        <p className="text-gray-300 mb-4">
-                            You can use IDJC and send some to your favorite artists on internetdj.co, or keep it in your wallet as an investment in InternetDJ&apos;s future.
+                        <p className="retro-mono text-lg text-gray-300 mb-4">
+                            You can use IDJC and send some to your favorite artists on InternetDJ, or keep it in your wallet.
                         </p>
                         <div className="flex flex-wrap gap-3">
                             <button
                                 type="button"
                                 onClick={() => handleClaim()}
                                 disabled={claimStatus === 'processing' || claimStatus === 'claimed'}
-                                className="inline-block bg-primary-brand-500 text-white px-6 py-3 rounded-full hover:bg-primary-brand-700 transition-colors font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="retro-btn retro-btn--hot px-6 py-3 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {claimStatus === 'processing'
                                     ? 'Processing Claim...'
@@ -228,7 +229,7 @@ function IDJCoin() {
                             {claimStatus === 'needs_wallet' && user?.profile_id && (
                                 <Link
                                     to={profilePath(user)}
-                                    className="inline-block bg-white/10 text-white border border-white/10 px-6 py-3 rounded-full hover:bg-white/15 transition-colors font-semibold"
+                                    className="retro-btn px-6 py-3 text-sm"
                                 >
                                     Add Solana Wallet in Profile
                                 </Link>
@@ -237,24 +238,25 @@ function IDJCoin() {
                                 <button
                                     type="button"
                                     onClick={() => navigate(`/login?return=${encodeURIComponent('/idj-coin?claim=1')}`)}
-                                    className="inline-block bg-white/10 text-white border border-white/10 px-6 py-3 rounded-full hover:bg-white/15 transition-colors font-semibold"
+                                    className="retro-btn px-6 py-3 text-sm"
                                 >
                                     Login to Claim
                                 </button>
                             )}
                         </div>
-                        {claimMessage && (
-                            <p className="text-sm text-gray-300 mt-3">{claimMessage}</p>
-                        )}
+                        <p className="retro-mono text-sm text-gray-300 mt-3" role="status" aria-live="polite">
+                            {claimMessage}
+                        </p>
                         {claimSignature && (
-                            <p className="text-xs text-gray-400 mt-2 break-all">
+                            <p className="retro-mono text-xs text-gray-400 mt-2 break-all">
                                 Transaction Signature: {claimSignature}
                             </p>
                         )}
                     </section>
 
                     <section className="mb-12">
-                        <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">Token Allocation</h2>
+                        <div className="retro-eyebrow mb-2">// Supply //</div>
+                        <h2 className="retro-display text-xl sm:text-2xl retro-glow-cyan mb-4">Token Allocation</h2>
                         <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li>
                                 <strong>Founders Grant (200M coins):</strong> 20 initial InternetDJ members each receive 10,000,000 coins, vested monthly over time to align with long-term commitment.
@@ -275,7 +277,8 @@ function IDJCoin() {
                     </section>
 
                     <section className="mb-12">
-                        <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">How IDJC Earnings Work</h2>
+                        <div className="retro-eyebrow mb-2">// Earning //</div>
+                        <h2 className="retro-display text-xl sm:text-2xl retro-glow-magenta mb-4">How IDJC Earnings Work</h2>
                         <ul className="list-disc list-inside retro-mono text-xl text-gray-300 space-y-2">
                             <li><strong>Listen-based rewards:</strong> Artists earn from counted song listens.</li>
                             <li><strong>Daily formula:</strong> 1 IDJC per 10 listens, calculated per profile each day.</li>
@@ -285,20 +288,21 @@ function IDJCoin() {
                     </section>
 
                     <section>
-                        <h2 className="text-2xl font-bold mb-4 text-white tracking-tight">Get Involved</h2>
-                        <p className="text-gray-300 mb-4">
+                        <div className="retro-eyebrow mb-2">// Community //</div>
+                        <h2 className="retro-display text-xl sm:text-2xl retro-glow-cyan mb-4">Get Involved</h2>
+                        <p className="retro-mono text-lg text-gray-300 mb-4">
                             Join the InternetDJ community to learn more about IDJ Coin and how it powers our ecosystem. Explore our platform or join our Discord for details.
                         </p>
-                        <div className="flex space-x-4">
+                        <div className="flex flex-wrap gap-3">
                             <Link
                                 to="/browse"
-                                className="inline-block bg-primary-brand-500 text-white px-6 py-3 rounded-full hover:bg-primary-brand-700 transition-colors font-semibold"
+                                className="retro-btn retro-btn--hot px-6 py-3 text-sm"
                             >
                                 Explore Music
                             </Link>
                             <a
                                 href="https://discord.gg/AbebAd3yS8"
-                                className="inline-block bg-primary-brand-500 text-white px-6 py-3 rounded-full hover:bg-primary-brand-700 transition-colors font-semibold"
+                                className="retro-btn px-6 py-3 text-sm"
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
@@ -309,15 +313,15 @@ function IDJCoin() {
                 </div>
 
                 {/* Right Column: Top 10 Profile Earners */}
-                <div className="w-1/4 retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md">
-                    <h2 className="text-2xl font-bold mb-4 text-white">Top 10 Earners</h2>
+                <div className="retro-panel retro-cut p-6 h-fit xl:sticky xl:top-28">
+                    <div className="retro-eyebrow mb-4">// Top 10 Earners //</div>
                     {topEarners.length === 0 ? (
                         <p className="retro-mono text-xl text-gray-300">No top earners found.</p>
                     ) : (
                         <div className="space-y-4">
                             {topEarners.map((earner) => (
                                 <Link key={earner.id} to={profilePath(earner)} className="block">
-                                    <div className="flex items-center space-x-4 p-2 bg-white/5 border border-white/10 rounded-md shadow-sm hover:bg-white/10 transition-colors">
+                                    <div className="flex items-center gap-4 p-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
                                         <img
                                             src={earner.picture_url || getDefaultAvatar(earner.id || earner.name)}
                                             alt={earner.name}
@@ -327,7 +331,7 @@ function IDJCoin() {
                                             }}
                                         />
                                         <div>
-                                            <p className="font-semibold text-white">{earner.name}</p>
+                                            <p className="retro-mono font-semibold text-white">{earner.name}</p>
                                             <p className="retro-mono text-lg text-gray-400">{earner.total_earned} IDJC Earned</p>
                                         </div>
                                     </div>

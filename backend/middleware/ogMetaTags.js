@@ -20,7 +20,15 @@ const logger = require('../utils/logger');
 const pool = require('../config/database');
 const { normalizeGenre, expandGenreString } = require('../utils/genres');
 
-const FALLBACK_IMAGE = '/idj-coin-200-nobg.png';
+// The og:image every page falls back to when it has no picture of its own.
+// Wide on purpose: twitter:card is summary_large_image below, and X crops a
+// square to 1.91:1, which would slice the top and bottom off the coin.
+const FALLBACK_IMAGE = '/idj-share-card.png';
+
+// schema.org Organization.logo wants the mark by itself, not a banner, so it
+// deliberately does NOT use FALLBACK_IMAGE. Both are written by
+// backend/scripts/generateCoinArt.js.
+const LOGO_IMAGE = '/idj-coin-512.png';
 const { articleCoverPath, usableHeroImage, shareSafeImage } = require('../utils/articleCover');
 
 /**
@@ -238,7 +246,7 @@ const STATIC_PAGES = {
                     '@id': `${base}/#organization`,
                     name: 'InternetDJ',
                     url: base,
-                    logo: `${base}${FALLBACK_IMAGE}`,
+                    logo: `${base}${LOGO_IMAGE}`,
                     foundingDate: '1997',
                     description: 'A community for independent electronic music producers to publish '
                         + 'their tracks and get written feedback from other producers.',
@@ -1120,7 +1128,7 @@ const fetchArticleMetadata = async (slug) => {
                     '@type': 'Organization',
                     name: 'InternetDJ',
                     url: base,
-                    logo: `${base}${FALLBACK_IMAGE}`,
+                    logo: `${base}${LOGO_IMAGE}`,
                 },
                 isPartOf: { '@type': 'WebSite', name: 'InternetDJ', url: base },
             }),

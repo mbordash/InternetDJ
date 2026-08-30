@@ -431,7 +431,11 @@ function Home() {
                                         Publish your music on InternetDJ for free and get written
                                         feedback from other producers, not just a play count.
                                         No upload limit, no submission fee, and you keep every right
-                                        to your work.
+                                        to your work. Your plays also earn{' '}
+                                        <Link to="/idj-coin" className="retro-link underline">
+                                            IDJC Coin
+                                        </Link>
+                                        , the site&rsquo;s Solana token.
                                     </p>
                                 </div>
                                 <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
