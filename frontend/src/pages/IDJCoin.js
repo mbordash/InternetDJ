@@ -154,19 +154,19 @@ function IDJCoin() {
     return (
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
-                <title>IDJ Solana Coin - Earn</title>
+                <title>IDJC - Earn Solana Coin for Your Music</title>
                 <meta
                     name="description"
-                    content="Earn Solana IDJ Coin for your music"
+                    content="Earn IDJC, the InternetDJ Solana coin, for your music"
                 />
                 <link rel="canonical" href={`${baseUrl}/idj-coin`} />
-                <meta property="og:title" content="IDJ Solana Coin - Earn" />
-                <meta property="og:description" content="Earn Solana IDJ Coin for your music" />
+                <meta property="og:title" content="IDJC - Earn Solana Coin for Your Music" />
+                <meta property="og:description" content="Earn IDJC, the InternetDJ Solana coin, for your music" />
                 <meta property="og:url" content={`${baseUrl}/idj-coin`} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content="IDJ Solana Coin - Earn" />
-                <meta name="twitter:description" content="Earn Solana IDJ Coin for your music" />
+                <meta name="twitter:title" content="IDJC - Earn Solana Coin for Your Music" />
+                <meta name="twitter:description" content="Earn IDJC, the InternetDJ Solana coin, for your music" />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-8">
@@ -176,18 +176,18 @@ function IDJCoin() {
                         <div className="flex flex-col sm:flex-row sm:items-start gap-6">
                             <img
                                 src={IDJCoinLogo}
-                                alt="IDJ Coin"
+                                alt="IDJC"
                                 className="w-40 h-40 sm:w-64 sm:h-64 shrink-0"
                                 onError={(e) => {
-                                    console.error('Failed to load IDJ Coin logo');
+                                    console.error('Failed to load IDJC logo');
                                     e.target.style.display = 'none';
                                 }}
                             />
                             <div className="flex-1">
-                                    <h1 className="retro-display retro-chrome text-2xl sm:text-3xl mb-6">IDJ Coin - Liquidity &amp; Allocation</h1>
+                                    <h1 className="retro-display retro-chrome text-2xl sm:text-3xl mb-6">IDJC - Liquidity &amp; Allocation</h1>
                                     <div className="retro-eyebrow mb-2">// Overview //</div>
                                     <p className="retro-mono text-lg text-gray-300 mb-4">
-                                    IDJ Coin (symbol: iDJc) is the backbone of the InternetDJ ecosystem, enabling decentralized rewards, community growth, and platform sustainability. By buying and holding IDJ Coin, you directly support musicians on InternetDJ, helping fund artist grants, platform development, and creative initiatives. With a total initial supply of 1 billion coins, IDJ Coin is strategically allocated to support founders, liquidity, ownership, and future development.
+                                    IDJC is the backbone of the InternetDJ ecosystem, enabling decentralized rewards, community growth, and platform sustainability. By buying and holding IDJC, you directly support musicians on InternetDJ, helping fund artist grants, platform development, and creative initiatives. With a total initial supply of 1 billion coins, IDJC is strategically allocated to support founders, liquidity, ownership, and future development.
                                 </p>
                                 <a
                                     href={RAYDIUM_SWAP_URL}
@@ -195,7 +195,7 @@ function IDJCoin() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    Trade IDJ Coin on Raydium
+                                    Trade IDJC on Raydium
                                 </a>
                                 <p className="retro-mono text-sm text-gray-400 mt-3">
                                     Mint Address: <span className="break-all">{IDJ_COIN_MINT}</span>
@@ -291,7 +291,7 @@ function IDJCoin() {
                         <div className="retro-eyebrow mb-2">// Community //</div>
                         <h2 className="retro-display text-xl sm:text-2xl retro-glow-cyan mb-4">Get Involved</h2>
                         <p className="retro-mono text-lg text-gray-300 mb-4">
-                            Join the InternetDJ community to learn more about IDJ Coin and how it powers our ecosystem. Explore our platform or join our Discord for details.
+                            Join the InternetDJ community to learn more about IDJC and how it powers our ecosystem. Explore our platform or join our Discord for details.
                         </p>
                         <div className="flex flex-wrap gap-3">
                             <Link

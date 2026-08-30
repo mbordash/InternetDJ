@@ -56,11 +56,25 @@ const NEON = {
     sunTop: '#ffd166',   // .retro-sun gradient stop 1
 };
 
+// Everything printed on the coin. The face is hot now, so the marks are dark
+// ink on it rather than neon on a dark ground; cyan tools would vanish.
+const INK = '#2b0838';
+
 const SIZE = 1024;               // drawn once, downsampled per output
 const C = SIZE / 2;              // centre
 const R_EDGE = 502;              // outer rim
 const R_FACE = 470;              // the struck face inside the rim
-const HORIZON = 640;             // where the grid meets the sun
+const BAND_FLOOR = 762;          // dissolve stops here, above the arc legend
+
+// The arc legend. Kept together because the three values are coupled: more
+// characters need more sweep, more sweep pushes the ends of the arc higher up
+// the sides, and the ends must still clear BAND_FLOOR or they cross the
+// dissolve bands and stop being readable.
+// internetdj.com is a DEAD domain (it is where all the legacy article images
+// used to live). The coin travels to places with no navigation around it -- a
+// Discord embed, a share card, a wallet -- so the legend is the only address
+// the viewer gets, and "INTERNETDJ" alone invites them to type the dead one.
+const LEGEND = { text: 'INTERNETDJ.CO', size: 62, sweep: 100, radius: 406 };
 
 const CARD_W = 1200;             // matches backend/utils/articleCover.js
 const CARD_H = 675;
@@ -74,248 +88,12 @@ const OUT = [
 const deg = (d) => (d * Math.PI) / 180;
 const r2 = (n) => Math.round(n * 100) / 100;
 
-/* ----------------------------------------------------------------- defs -- */
-const defs = () => `
-<defs>
-  <radialGradient id="face" cx="42%" cy="34%" r="78%">
-    <stop offset="0%"   stop-color="#2a1152"/>
-    <stop offset="55%"  stop-color="#160833"/>
-    <stop offset="100%" stop-color="#07020f"/>
-  </radialGradient>
-
-  <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%"   stop-color="${NEON.cyan}"/>
-    <stop offset="38%"  stop-color="#bff8ff"/>
-    <stop offset="62%"  stop-color="${NEON.purple}"/>
-    <stop offset="100%" stop-color="${NEON.magenta}"/>
-  </linearGradient>
-
-  <!-- The .retro-sun gradient, top to bottom. -->
-  <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%"   stop-color="${NEON.sunTop}"/>
-    <stop offset="55%"  stop-color="${NEON.pink}"/>
-    <stop offset="100%" stop-color="${NEON.magenta}"/>
-  </linearGradient>
-
-  <!-- Struck metal: light band, hard shadow turn, light band again. -->
-  <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%"   stop-color="#ffffff"/>
-    <stop offset="26%"  stop-color="#d7f2ff"/>
-    <stop offset="47%"  stop-color="#6f8fa8"/>
-    <stop offset="53%"  stop-color="#ffffff"/>
-    <stop offset="74%"  stop-color="#cfe7f5"/>
-    <stop offset="100%" stop-color="#7d99ad"/>
-  </linearGradient>
-
-  <linearGradient id="solana" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%"   stop-color="${NEON.cyan}"/>
-    <stop offset="100%" stop-color="${NEON.purple}"/>
-  </linearGradient>
-
-  <!-- Grid fades out before it reaches the rim, so the arc text stays legible. -->
-  <linearGradient id="gridFade" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%"   stop-color="#fff" stop-opacity="0.9"/>
-    <stop offset="55%"  stop-color="#fff" stop-opacity="0.28"/>
-    <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-  </linearGradient>
-  <mask id="gridMask">
-    <rect x="0" y="${HORIZON}" width="${SIZE}" height="${216}" fill="url(#gridFade)"/>
-  </mask>
-
-  <clipPath id="faceClip">
-    <circle cx="${C}" cy="${C}" r="${R_FACE}"/>
-  </clipPath>
-</defs>`;
-
-/* ------------------------------------------------------------------ sun -- */
-// A disc cut by horizontal bands. The CSS masks the real thing with
-// repeating-linear-gradient; here the bands are drawn as gaps in the disc,
-// widening downward the way the mask does below its 52% solid line.
-const sun = () => {
-    const cx = C;
-    const cy = HORIZON - 40;
-    const r = 232;
-    const bands = [];
-    // Solid to just past the middle, then progressively fatter gaps.
-    let y = cy + 6;
-    let gap = 7;
-    while (y < cy + r) {
-        bands.push(`<rect x="${cx - r - 4}" y="${r2(y)}" width="${r * 2 + 8}" height="${r2(gap)}" fill="#0d0320"/>`);
-        y += gap + Math.max(9, gap * 1.5);
-        gap += 2.4;
-    }
-    return `
-  <g>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#sun)" opacity="0.95"/>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${NEON.sunTop}" stroke-width="2" opacity="0.5"/>
-    ${bands.join('\n    ')}
-  </g>`;
-};
-
-/* ----------------------------------------------------------------- grid -- */
-// Perspective floor. Verticals converge on a vanishing point at the horizon;
-// horizontals bunch up toward it. Same two colours as .retro-horizon.
-const grid = () => {
-    const vp = { x: C, y: HORIZON };
-    const lines = [];
-
-    for (let i = -9; i <= 9; i += 1) {
-        const x = C + i * 118;
-        lines.push(`<line x1="${vp.x}" y1="${vp.y}" x2="${r2(x)}" y2="${SIZE}" stroke="${NEON.cyan}" stroke-width="2.2"/>`);
-    }
-    let step = 7;
-    let y = HORIZON + step;
-    while (y < SIZE) {
-        lines.push(`<line x1="0" y1="${r2(y)}" x2="${SIZE}" y2="${r2(y)}" stroke="${NEON.magenta}" stroke-width="2.2"/>`);
-        step *= 1.42;
-        y += step;
-    }
-
-    return `
-  <g mask="url(#gridMask)" opacity="0.75">
-    ${lines.join('\n    ')}
-  </g>
-  <line x1="${C - 470}" y1="${HORIZON}" x2="${C + 470}" y2="${HORIZON}"
-        stroke="${NEON.cyan}" stroke-width="3" opacity="0.85"/>`;
-};
-
-/* --------------------------------------------------------------- solana -- */
-// The three slanted bars, kept from the original coin because it is the one
-// mark on there that means something specific: this is an SPL token.
-const solanaMark = (cx, cy, w = 132, barH = 22, gap = 13, skew = 20) => {
-    const bars = [0, 1, 2].map((i) => {
-        const y = cy - (barH * 3 + gap * 2) / 2 + i * (barH + gap);
-        // Outer bars lean one way, the middle bar the other.
-        const lean = i === 1 ? -skew : skew;
-        const x0 = cx - w / 2;
-        const x1 = cx + w / 2;
-        return `<path d="M ${r2(x0 + Math.max(0, lean))} ${r2(y)} H ${r2(x1)} L ${r2(x1 - Math.max(0, lean))} ${r2(y + barH)} H ${r2(x0)} Z"
-          fill="url(#solana)" opacity="0.95"/>`;
-    });
-    return `<g>${bars.join('')}</g>`;
-};
-
-/* ---------------------------------------------------------------- tools -- */
-// Faders, knobs and a scope. These are why the coin reads as a music token
-// rather than a generic crypto disc, so they are kept from the original.
-const faders = (x, y) => {
-    const out = [];
-    [0, 1, 2].forEach((i) => {
-        const fx = x + i * 52;
-        const capAt = y + [64, 30, 82][i];
-        out.push(`<line x1="${fx}" y1="${y}" x2="${fx}" y2="${y + 124}" stroke="${NEON.cyan}" stroke-width="4" opacity="0.55"/>`);
-        out.push(`<rect x="${fx - 15}" y="${capAt}" width="30" height="15" rx="2" fill="${NEON.pink}" opacity="0.95"/>`);
-    });
-    return `<g>${out.join('')}</g>`;
-};
-
-const knobs = (x, y) => {
-    const out = [];
-    [0, 1, 2].forEach((i) => {
-        const kx = x + i * 52;
-        const a = deg([-125, -40, 55][i]);
-        out.push(`<circle cx="${kx}" cy="${y}" r="17" fill="none" stroke="${NEON.cyan}" stroke-width="3.5" opacity="0.8"/>`);
-        out.push(`<line x1="${kx}" y1="${y}" x2="${r2(kx + Math.cos(a) * 15)}" y2="${r2(y + Math.sin(a) * 15)}" stroke="${NEON.magenta}" stroke-width="3.5"/>`);
-    });
-    return `<g>${out.join('')}</g>`;
-};
-
-const scope = (x, y, w, h) => {
-    const pts = [];
-    const mid = y + h / 2;
-    for (let i = 0; i <= 48; i += 1) {
-        const t = i / 48;
-        const px = x + t * w;
-        const env = Math.sin(t * Math.PI);
-        const py = mid - Math.sin(t * 22) * (h * 0.36) * env;
-        pts.push(`${r2(px)},${r2(py)}`);
-    }
-    return `
-  <g>
-    <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#08021a" stroke="${NEON.cyan}" stroke-width="3" opacity="0.9"/>
-    <polyline points="${pts.join(' ')}" fill="none" stroke="${NEON.pink}" stroke-width="3.5" stroke-linejoin="round"/>
-  </g>`;
-};
-
-/* ------------------------------------------------------------ arc legend -- */
-// <textPath> renders nothing under librsvg, so each glyph is positioned and
-// rotated by hand along the bottom of the coin.
-const arcText = (text, radius, opts = {}) => {
-    const { sweep = 96, size = 46, fill = '#d8f6ff', opacity = 1, family = 'Futura' } = opts;
-    const chars = [...text];
-    const start = 90 + sweep / 2;               // bottom-left
-    const stepA = sweep / (chars.length - 1);
-
-    const glyphs = chars.map((ch, i) => {
-        const a = deg(start - i * stepA);
-        const x = C + Math.cos(a) * radius;
-        const y = C + Math.sin(a) * radius;
-        // Tangent of the path, so letter tops point at the centre.
-        const rot = (Math.atan2(-Math.cos(a), Math.sin(a)) * 180) / Math.PI;
-        return `<text x="${r2(x)}" y="${r2(y)}" font-family="${family}" font-size="${size}"
-        font-weight="700" fill="${fill}" text-anchor="middle"
-        stroke="#0a0320" stroke-width="5" paint-order="stroke"
-        transform="rotate(${r2(rot)} ${r2(x)} ${r2(y)})">${ch}</text>`;
-    });
-    return `<g opacity="${opacity}">${glyphs.join('\n    ')}</g>`;
-};
-
-/* -------------------------------------------------------------- scanlines -- */
-const scanlines = () => {
-    const rows = [];
-    for (let y = 0; y < SIZE; y += 6) {
-        rows.push(`<rect x="0" y="${y}" width="${SIZE}" height="2.4" fill="#000"/>`);
-    }
-    return `<g clip-path="url(#faceClip)" opacity="0.17">${rows.join('')}</g>`;
-};
-
-/* ------------------------------------------------------------------ coin -- */
-const renderCoinSvg = () => `
-<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
-${defs()}
-
-  <!-- rim -->
-  <circle cx="${C}" cy="${C}" r="${R_EDGE}" fill="url(#rim)"/>
-  <circle cx="${C}" cy="${C}" r="${R_EDGE - 13}" fill="#0b0320"/>
-  <circle cx="${C}" cy="${C}" r="${R_FACE + 9}" fill="none" stroke="${NEON.magenta}" stroke-width="3" opacity="0.75"/>
-
-  <!-- struck face -->
-  <circle cx="${C}" cy="${C}" r="${R_FACE}" fill="url(#face)"/>
-
-  <g clip-path="url(#faceClip)">
-    ${sun()}
-    ${grid()}
-  </g>
-
-  <!-- IDJ, over the sun. Two passes: a dark body for weight, chrome on top. -->
-  <g>
-    <text x="${C}" y="596" font-family="Arial Black, Arial, sans-serif" font-size="248"
-      font-weight="900" letter-spacing="6" text-anchor="middle"
-      fill="#05010e" opacity="0.85" transform="translate(5 6)">IDJ</text>
-    <text x="${C}" y="596" font-family="Arial Black, Arial, sans-serif" font-size="248"
-      font-weight="900" letter-spacing="6" text-anchor="middle"
-      fill="url(#chrome)" stroke="#0a0320" stroke-width="4">IDJ</text>
-  </g>
-
-  ${solanaMark(C, 250, 186, 30, 18, 27)}
-  ${faders(214, 210)}
-  ${scope(654, 214, 190, 118)}
-
-  ${arcText('INTERNETDJ', 400, { sweep: 92, size: 52 })}
-
-  ${scanlines()}
-
-  <!-- rim highlight last, so nothing sits on top of the edge -->
-  <circle cx="${C}" cy="${C}" r="${R_EDGE - 6}" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.22"/>
-</svg>`;
-
-
-/* ------------------------------------------------------------ share card -- */
-// Text width is MEASURED, not guessed. The first version of this card ran
-// "Get written feedback." off the right edge, because a font's advance widths
-// are not knowable from the string length. Each line is rendered alone,
-// trimmed to its ink, and scaled down if it overflows its column, so changing
-// the wording below cannot silently produce a card with the end chopped off.
+/* -------------------------------------------------------------- measuring -- */
+// Text width is MEASURED, not guessed. An earlier card ran "Get written
+// feedback." off its edge, because a font's advance widths are not knowable
+// from the string length. Each string is rendered alone, trimmed to its ink,
+// and scaled down if it overflows, so changing the wording below cannot
+// silently produce artwork with the end chopped off.
 const escapeXml = (t) => String(t).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
 const measureText = async (text, { family, size, weight = 400, spacing = 0 }) => {
@@ -326,14 +104,213 @@ const measureText = async (text, { family, size, weight = 400, spacing = 0 }) =>
     return info.width;
 };
 
-// Advance widths scale linearly with font-size, so one measurement is enough
-// to solve for the largest size that fits.
+// Advance widths scale linearly with font-size, so one measurement solves for
+// the largest size that fits.
 const fitSize = async (text, opts, maxWidth) => {
     const measured = await measureText(text, opts);
     if (measured <= maxWidth) return opts.size;
     return Math.floor(opts.size * (maxWidth / measured) * 100) / 100;
 };
 
+/* ----------------------------------------------------------------- defs -- */
+const defs = () => `
+<defs>
+  <!-- The whole face is the sun: .retro-sun's gradient, top to bottom. -->
+  <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#ffdc8a"/>
+    <stop offset="26%"  stop-color="${NEON.sunTop}"/>
+    <stop offset="50%"  stop-color="${NEON.amber}"/>
+    <stop offset="72%"  stop-color="${NEON.pink}"/>
+    <stop offset="100%" stop-color="${NEON.magenta}"/>
+  </linearGradient>
+
+  <linearGradient id="rimBand" x1="0" y1="0" x2="0.4" y2="1">
+    <stop offset="0%"   stop-color="#4b1470"/>
+    <stop offset="45%"  stop-color="${INK}"/>
+    <stop offset="100%" stop-color="#12021f"/>
+  </linearGradient>
+
+  <!-- Struck metal: light band, hard shadow turn, light band again. -->
+  <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#ffffff"/>
+    <stop offset="26%"  stop-color="#eaf7ff"/>
+    <stop offset="47%"  stop-color="#8fa6b8"/>
+    <stop offset="53%"  stop-color="#ffffff"/>
+    <stop offset="74%"  stop-color="#dcefff"/>
+    <stop offset="100%" stop-color="#93aec2"/>
+  </linearGradient>
+
+  <!-- A little depth on a flat disc: light off the top-left, shade bottom-right. -->
+  <radialGradient id="shade" cx="36%" cy="28%" r="82%">
+    <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.35"/>
+    <stop offset="55%"  stop-color="#ffffff" stop-opacity="0"/>
+    <stop offset="100%" stop-color="${INK}"  stop-opacity="0.4"/>
+  </radialGradient>
+
+  <clipPath id="faceClip">
+    <circle cx="${C}" cy="${C}" r="${R_FACE}"/>
+  </clipPath>
+</defs>`;
+
+/* ------------------------------------------------------------------ sun -- */
+// The dissolve. .retro-sun is solid to 52% then cut by a repeating stripe
+// mask; here the stripes are drawn as ink bands over the face, thickening
+// downward while the sun showing between them thins. They stop before the
+// bottom so the INTERNETDJ legend sits on clean colour.
+const sunBands = (bandFloor = BAND_FLOOR) => {
+    const bands = [];
+    let y = 512;
+    let sunH = 44;
+    let darkH = 7;
+    // BAND_FLOOR, not the bottom of the face: below this the sun stays solid so
+    // the INTERNETDJ legend has clean colour to sit on. An earlier pass ran the
+    // dissolve to the rim and the arc crossed six bands.
+    while (y < bandFloor) {
+        y += sunH;
+        bands.push(`<rect x="0" y="${r2(y)}" width="${SIZE}" height="${r2(darkH)}" fill="${INK}"/>`);
+        y += darkH;
+        sunH *= 0.85;
+        darkH *= 1.2;
+    }
+    return `<g clip-path="url(#faceClip)" opacity="0.92">${bands.join('')}</g>`;
+};
+
+/* --------------------------------------------------------------- solana -- */
+// The three slanted bars, kept from the original coin because it is the one
+// mark on there that means something specific: this is an SPL token.
+const solanaMark = (cx, cy, w = 186, barH = 30, gap = 18, skew = 27) => {
+    const bars = [0, 1, 2].map((i) => {
+        const y = cy - (barH * 3 + gap * 2) / 2 + i * (barH + gap);
+        const lean = i === 1 ? -skew : skew;   // middle bar leans the other way
+        const x0 = cx - w / 2;
+        const x1 = cx + w / 2;
+        return `<path d="M ${r2(x0 + Math.max(0, lean))} ${r2(y)} H ${r2(x1)} L ${r2(x1 - Math.max(0, lean))} ${r2(y + barH)} H ${r2(x0)} Z" fill="${INK}"/>`;
+    });
+    return `<g opacity="0.9">${bars.join('')}</g>`;
+};
+
+/* ---------------------------------------------------------------- tools -- */
+// Faders and a scope. These are why the coin reads as a music token rather
+// than a generic crypto disc, so they are kept from the original. Drawn in
+// ink now: neon on a hot ground would disappear.
+const faders = (x, y) => {
+    const out = [];
+    [0, 1, 2].forEach((i) => {
+        const fx = x + i * 52;
+        const capAt = y + [64, 30, 82][i];
+        out.push(`<line x1="${fx}" y1="${y}" x2="${fx}" y2="${y + 124}" stroke="${INK}" stroke-width="5" opacity="0.55"/>`);
+        out.push(`<rect x="${fx - 16}" y="${capAt}" width="32" height="16" rx="2" fill="${INK}"/>`);
+    });
+    return `<g>${out.join('')}</g>`;
+};
+
+const scope = (x, y, w, h) => {
+    const pts = [];
+    const mid = y + h / 2;
+    for (let i = 0; i <= 52; i += 1) {
+        const t = i / 52;
+        const env = Math.sin(t * Math.PI);
+        pts.push(`${r2(x + t * w)},${r2(mid - Math.sin(t * 24) * (h * 0.34) * env)}`);
+    }
+    return `
+  <g>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${INK}" stroke-width="5" opacity="0.75"/>
+    <polyline points="${pts.join(' ')}" fill="none" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>
+  </g>`;
+};
+
+/* ------------------------------------------------------------ arc legend -- */
+// <textPath> renders nothing under librsvg, so each glyph is positioned and
+// rotated by hand along the bottom of the coin. Cream on ink casing, because
+// the arc crosses both clean magenta and the dark dissolve bands and has to
+// hold against either.
+const arcText = async (text, radius, opts = {}) => {
+    const { sweep = 78, size = 52, fill = '#fff1d6', family = 'Futura' } = opts;
+    const chars = [...text];
+
+    // Angle is shared out by MEASURED glyph width, not evenly. Dividing the
+    // sweep by character count gives a full letter's arc to the period in
+    // INTERNETDJ.CO, which opens a gap either side of it and makes the legend
+    // read as two words. Ink width plus a constant gap keeps the letters
+    // near-even while pulling the period tight to its neighbours.
+    const gap = size * 0.42;
+    const widths = await Promise.all(
+        chars.map((ch) => measureText(ch, { family, size, weight: 700 }).then((w) => w + gap)),
+    );
+    const total = widths.reduce((a, b) => a + b, 0);
+
+    const start = 90 + sweep / 2;               // bottom-left
+    let used = 0;
+    const glyphs = chars.map((ch, i) => {
+        const centre = used + widths[i] / 2;
+        used += widths[i];
+        const a = deg(start - (centre / total) * sweep);
+        const x = C + Math.cos(a) * radius;
+        const y = C + Math.sin(a) * radius;
+        // Tangent of the path, so letter tops point at the centre.
+        const rot = (Math.atan2(-Math.cos(a), Math.sin(a)) * 180) / Math.PI;
+        return `<text x="${r2(x)}" y="${r2(y)}" font-family="${family}" font-size="${size}"
+        font-weight="700" fill="${fill}" text-anchor="middle"
+        stroke="${INK}" stroke-width="7" paint-order="stroke"
+        transform="rotate(${r2(rot)} ${r2(x)} ${r2(y)})">${ch}</text>`;
+    });
+    return `<g>${glyphs.join('\n    ')}</g>`;
+};
+
+/* -------------------------------------------------------------- scanlines -- */
+const scanlines = () => {
+    const rows = [];
+    for (let y = 0; y < SIZE; y += 6) {
+        rows.push(`<rect x="0" y="${y}" width="${SIZE}" height="2.4" fill="${INK}"/>`);
+    }
+    return `<g clip-path="url(#faceClip)" opacity="0.1">${rows.join('')}</g>`;
+};
+
+/* ------------------------------------------------------------------ coin -- */
+const renderCoinSvg = async (legend = LEGEND, bandFloor = BAND_FLOOR) => {
+    // The ticker, not the site name. Sized to the face rather than hardcoded,
+    // because IDJC is a letter wider than the IDJ it replaced.
+    const mark = { text: 'IDJC', family: 'Arial Black, Arial, sans-serif', weight: 900, spacing: 4, size: 250 };
+    mark.size = await fitSize(mark.text, mark, 660);
+
+    return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
+${defs()}
+
+  <!-- rim -->
+  <circle cx="${C}" cy="${C}" r="${R_EDGE}" fill="url(#rimBand)"/>
+  <circle cx="${C}" cy="${C}" r="${R_EDGE - 3}" fill="none" stroke="${NEON.cyan}" stroke-width="4" opacity="0.85"/>
+
+  <!-- the face IS the sun -->
+  <circle cx="${C}" cy="${C}" r="${R_FACE}" fill="url(#sun)"/>
+  ${sunBands(bandFloor)}
+  <circle cx="${C}" cy="${C}" r="${R_FACE}" fill="url(#shade)"/>
+
+  ${solanaMark(C, 250)}
+  ${faders(214, 206)}
+  ${scope(654, 210, 190, 118)}
+
+  <!-- IDJC over the sun. Dark body first for weight, chrome on top. -->
+  <g>
+    <text x="${C}" y="606" font-family="${mark.family}" font-size="${mark.size}"
+      font-weight="900" letter-spacing="${mark.spacing}" text-anchor="middle"
+      fill="${INK}" opacity="0.5" transform="translate(7 8)">${mark.text}</text>
+    <text x="${C}" y="606" font-family="${mark.family}" font-size="${mark.size}"
+      font-weight="900" letter-spacing="${mark.spacing}" text-anchor="middle"
+      fill="url(#chrome)" stroke="${INK}" stroke-width="7" paint-order="stroke">${mark.text}</text>
+  </g>
+
+  ${await arcText(legend.text, legend.radius, { size: legend.size, sweep: legend.sweep })}
+
+  ${scanlines()}
+
+  <!-- rim highlight last, so nothing sits on top of the edge -->
+  <circle cx="${C}" cy="${C}" r="${R_EDGE - 8}" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.25"/>
+  <circle cx="${C}" cy="${C}" r="${R_FACE + 2}" fill="none" stroke="${INK}" stroke-width="5" opacity="0.55"/>
+</svg>`;
+};
+
+/* ------------------------------------------------------------ share card -- */
 // The site-wide og:image fallback: every page with no picture of its own
 // shares with this. Deliberately calmer than the coin. The coin already
 // carries the sun, so repeating it behind the wordmark would only fight the
@@ -381,8 +358,8 @@ const renderCardSvg = async () => {
       <stop offset="100%" stop-color="#06010f"/>
     </linearGradient>
     <radialGradient id="halo" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"   stop-color="${NEON.magenta}" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="${NEON.magenta}" stop-opacity="0"/>
+      <stop offset="0%"   stop-color="${NEON.purple}" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="${NEON.purple}" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%"   stop-color="#ffffff"/>
@@ -415,7 +392,7 @@ const renderCardSvg = async () => {
 
 /* ------------------------------------------------------------------ main -- */
 async function main() {
-    const svg = renderCoinSvg();
+    const svg = await renderCoinSvg();
     const svgPath = path.join(__dirname, '../../frontend/src/assets/idj-coin.svg');
     fs.writeFileSync(svgPath, svg, 'utf8');
     console.log(`wrote ${path.relative(process.cwd(), svgPath)}`);
@@ -448,7 +425,11 @@ async function main() {
     console.log(`wrote frontend/public/idj-share-card.png  ${CARD_W}x${CARD_H}  ${(cardBytes / 1024).toFixed(1)} KB`);
 }
 
-main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+module.exports = { renderCoinSvg, renderCardSvg, LEGEND, BAND_FLOOR, SIZE, CARD_W, CARD_H };
+
+if (require.main === module) {
+    main().catch((err) => {
+        console.error(err);
+        process.exit(1);
+    });
+}

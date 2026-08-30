@@ -1,0 +1,23 @@
+{
+  "name": "IDJC",
+  "symbol": "IDJC",
+  "description": "IDJC powers InternetDJ.co, the artist-first music platform running since 1997. Publish your music, get written feedback from other producers, and earn IDJC from the listens your tracks pick up.",
+  "image": "https://chocolate-magnificent-swan-637.mypinata.cloud/ipfs/REPLACE_WITH_IMAGE_CID",
+  "external_url": "https://internetdj.co/idj-coin",
+  "twitter": "https://x.com/internetdjco",
+  "telegram": "",
+  "website": "https://internetdj.co/idj-coin",
+  "discord": "https://discord.gg/AbebAd3yS8",
+  "github": "https://github.com/mbordash/InternetDJ",
+  "tags": ["music", "production", "audio", "dj", "stream", "web3"],
+  "attributes": [],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://chocolate-magnificent-swan-637.mypinata.cloud/ipfs/REPLACE_WITH_IMAGE_CID",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}
