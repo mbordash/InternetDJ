@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
+import ArticleBodyEditor from '../components/ArticleBodyEditor';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
@@ -33,15 +34,21 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 // caught before an upload rather than after it.
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
 
-const Field = ({ label, hint, children, required }) => (
-    <label className="block mb-6">
-        <span className="retro-eyebrow block mb-2">
-            {label}{required && <span className="text-fuchsia-400"> *</span>}
-        </span>
-        {hint && <span className="retro-mono text-lg text-gray-400 block mb-2">{hint}</span>}
-        {children}
-    </label>
-);
+// `control` is false for fields whose input is not a form control - the body
+// editor is a contenteditable with a toolbar, and a <label> wrapped round that
+// has nothing to forward a click to.
+const Field = ({ label, hint, children, required, control = true }) => {
+    const Tag = control ? 'label' : 'div';
+    return (
+        <Tag className="block mb-6">
+            <span className="retro-eyebrow block mb-2">
+                {label}{required && <span className="text-fuchsia-400"> *</span>}
+            </span>
+            {hint && <span className="retro-mono text-lg text-gray-400 block mb-2">{hint}</span>}
+            {children}
+        </Tag>
+    );
+};
 
 const inputClass = 'retro-input w-full px-3 py-2';
 
@@ -240,14 +247,14 @@ function SubmitArticle() {
                     <Field
                         label="The article"
                         required
-                        hint={'Plain paragraphs are fine. Basic HTML is allowed: <p>, <b>, <i>, <a>, <h2>, <ul>, <blockquote>. Anything else is stripped.'}
+                        control={false}
+                        hint="Write it here and format it with the toolbar. Switch to HTML if you would rather work in markup."
                     >
-                        <textarea
-                            className={`${inputClass} min-h-[24rem] font-mono`}
+                        <ArticleBodyEditor
                             value={form.body}
-                            onChange={(e) => setForm({ ...form, body: e.target.value })}
-                            placeholder="<p>Open with the thing a producer actually needs to know...</p>"
-                            required
+                            onChange={(body) => setForm({ ...form, body })}
+                            placeholder="Open with the thing a producer actually needs to know..."
+                            label="The article"
                         />
                         <span className={`retro-mono text-lg block mt-2 ${bodyTextLength < MIN_BODY ? 'text-fuchsia-300' : 'text-cyan-300'}`}>
                             {bodyTextLength} characters{bodyTextLength < MIN_BODY && `, ${MIN_BODY - bodyTextLength} more needed`}

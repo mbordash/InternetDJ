@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS articles (
     profile_id INT DEFAULT NULL,
     hero_image_url VARCHAR(500) DEFAULT NULL,
     published_at DATE DEFAULT NULL,
-    status ENUM('draft','submitted','published') NOT NULL DEFAULT 'published',
+    status ENUM('draft','submitted','published','deleted') NOT NULL DEFAULT 'published',
     is_legacy BOOLEAN NOT NULL DEFAULT FALSE,
     legacy_story_id INT DEFAULT NULL,
     source_url VARCHAR(600) DEFAULT NULL,
@@ -61,8 +61,8 @@ const STATEMENTS = [
     // '' by a strict-mode-off server or rejected by a strict one. Re-stating the
     // full definition is the only way to widen it, and is a no-op where the
     // column already matches.
-    ['status accepts submitted', `ALTER TABLE articles MODIFY COLUMN status
-        ENUM('draft','submitted','published') NOT NULL DEFAULT 'published'`],
+    ['status accepts submitted and deleted', `ALTER TABLE articles MODIFY COLUMN status
+        ENUM('draft','submitted','published','deleted') NOT NULL DEFAULT 'published'`],
     ['category index', `ALTER TABLE articles ADD INDEX IF NOT EXISTS idx_article_category (category_slug, published_at)`],
     ['published index', `ALTER TABLE articles ADD INDEX IF NOT EXISTS idx_article_published (status, published_at)`],
 ];

@@ -188,10 +188,45 @@ const isJunkTitle = (title) => {
     }
 
     const articles = [...byIdentity.values()];
+
+    /**
+     * Drop standfirsts that are really the site's own meta description.
+     *
+     * The older pages carry no per-article description, so the scraper falls
+     * back to <meta name="description"> - which on those templates is the site
+     * blurb, "DJ Profiles, MP3 music, Forum, Daily articles and news about
+     * electronica...". It was appearing as the standfirst on 634 articles,
+     * where it says nothing about the piece it sits under.
+     *
+     * Detected by repetition rather than by matching known strings: a real
+     * standfirst is written for one article and appears once, so any deck
+     * shared by several articles is boilerplate by definition. That catches
+     * the site descriptions from every era without a list to maintain, and it
+     * is done here rather than in the scraper because only the importer sees
+     * the whole corpus at once.
+     */
+    const MAX_DECK_REPEATS = 4;
+    const MIN_DECK_CHARS = 15;
+    const deckCounts = articles.reduce((acc, a) => {
+        if (a.deck) acc[a.deck] = (acc[a.deck] || 0) + 1;
+        return acc;
+    }, {});
+    let boilerplateDecks = 0;
+    for (const a of articles) {
+        if (!a.deck) continue;
+        if (deckCounts[a.deck] > MAX_DECK_REPEATS || a.deck.length < MIN_DECK_CHARS) {
+            a.deck = null;
+            boilerplateDecks += 1;
+        }
+    }
+
     out('');
     out(`Accepted ${articles.length}; rejected ${records.length - articles.length} `
         + `(thin=${rejected.thin} junk-title=${rejected.junkTitle} no-slug=${rejected.noSlug} `
         + `dupe-url=${rejected.duplicate} same-article=${rejected.sameArticle})`);
+
+    out(`Cleared ${boilerplateDecks} boilerplate standfirst(s); `
+        + `${articles.filter(a => a.deck).length} article(s) keep a real one.`);
 
     const byCategory = articles.reduce((acc, a) => {
         acc[a.category] = (acc[a.category] || 0) + 1;

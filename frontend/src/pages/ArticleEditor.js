@@ -1,9 +1,11 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import API_URL from '../utils/api';
+import { articleCoverUrl, usableHeroImage } from '../utils/articleCover';
+import ArticleBodyEditor from '../components/ArticleBodyEditor';
 
 /**
  * The editor's desk.
@@ -25,6 +27,12 @@ const inputClass = 'retro-input w-full px-3 py-2';
 
 function ArticleEditor() {
     const { user } = useContext(AuthContext);
+    const [searchParams, setSearchParams] = useSearchParams();
+    // Which list the left column is showing: the review queue, or a search
+    // across already-published articles.
+    const [mode, setMode] = useState('queue');
+    const [search, setSearch] = useState('');
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const [queue, setQueue] = useState([]);
     const [selected, setSelected] = useState(null);
     const [draft, setDraft] = useState(null);
@@ -34,21 +42,37 @@ function ArticleEditor() {
     const [notice, setNotice] = useState(null);
     const [forbidden, setForbidden] = useState(false);
 
-    const loadQueue = useCallback(async () => {
+    const loadQueue = useCallback(async (nextMode = mode, term = search) => {
         setLoading(true);
         try {
-            const res = await axios.get(`${API_URL}/articles/queue`, { headers: authHeaders() });
+            const params = {};
+            if (nextMode !== 'queue') params.status = nextMode;
+            if (term.trim()) params.q = term.trim();
+            const res = await axios.get(`${API_URL}/articles/queue`, { headers: authHeaders(), params });
             setQueue(res.data || []);
             setForbidden(false);
+            setError(null);
         } catch (err) {
             if (err.response?.status === 403) setForbidden(true);
-            else setError('Could not load the queue.');
+            else setError(err.response?.data?.error || 'Could not load the queue.');
+            setQueue([]);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [mode, search]);
 
-    useEffect(() => { if (user) loadQueue(); }, [user, loadQueue]);
+    // Deliberately keyed on `user` alone: this is the initial load, and adding
+    // loadQueue (which changes with mode and search) would refetch the queue on
+    // every keystroke in the search box.
+    useEffect(() => { if (user) loadQueue('queue', ''); }, [user]);
+
+    // Arriving from "Edit This Article" on the article page: open that one
+    // straight away rather than making the editor search for what they were
+    // just looking at.
+    const deepLinkId = searchParams.get('id');
+    useEffect(() => {
+        if (user && deepLinkId) open(deepLinkId);
+    }, [user, deepLinkId]);
 
     const open = async (id) => {
         setError(null);
@@ -56,6 +80,7 @@ function ArticleEditor() {
         try {
             const res = await axios.get(`${API_URL}/articles/queue/${id}`, { headers: authHeaders() });
             setSelected(res.data);
+            setConfirmDelete(false);
             setDraft({
                 title: res.data.title || '',
                 deck: res.data.deck || '',
@@ -82,11 +107,29 @@ function ArticleEditor() {
                 : status === 'submitted' ? 'Sent back to the author.' : 'Saved.');
             // A published article leaves the queue, so the editing pane has
             // nothing left to point at.
-            if (status === 'published') { setSelected(null); setDraft(null); }
+            if (status === 'published' && mode === 'queue') { setSelected(null); setDraft(null); setSearchParams({}); }
             else setSelected(res.data);
-            await loadQueue();
+            await loadQueue(mode, search);
         } catch (err) {
             setError(err.response?.data?.error || 'Could not save.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const remove = async () => {
+        setSaving(true);
+        setError(null);
+        try {
+            const res = await axios.delete(`${API_URL}/articles/queue/${selected.id}`, { headers: authHeaders() });
+            setNotice(res.data.message);
+            setSelected(null);
+            setDraft(null);
+            setConfirmDelete(false);
+            setSearchParams({});
+            await loadQueue(mode, search);
+        } catch (err) {
+            setError(err.response?.data?.error || 'Could not delete.');
         } finally {
             setSaving(false);
         }
@@ -136,12 +179,54 @@ function ArticleEditor() {
 
                 <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
                     <aside>
+                        {/* Two ways in: the review queue for new submissions, and
+                            a search across the archive for fixing what is already
+                            live. Published is search-only - twelve hundred
+                            articles is not a list. */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {[['queue', 'Waiting'], ['published', 'Published'], ['deleted', 'Deleted']].map(([m, label]) => (
+                                <button
+                                    key={m}
+                                    onClick={() => { setMode(m); setQueue([]); setError(null); if (m !== 'published' || search.trim()) loadQueue(m, search); }}
+                                    className={`retro-btn px-4 py-2 text-xs ${mode === m ? 'retro-btn--hot' : ''}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <form
+                            className="flex items-stretch mb-4"
+                            onSubmit={(e) => { e.preventDefault(); loadQueue(mode, search); }}
+                        >
+                            <label htmlFor="editor-search" className="sr-only">Search articles</label>
+                            <input
+                                id="editor-search"
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder={mode === 'published' ? 'search the archive...' : 'filter...'}
+                                className="retro-input h-10 px-3 flex-1 w-full"
+                            />
+                            <button
+                                type="submit"
+                                className="retro-btn retro-btn--hot h-10 px-4 text-xs shrink-0"
+                                style={{ clipPath: 'none' }}
+                            >
+                                Find
+                            </button>
+                        </form>
+
                         <h2 className="retro-eyebrow mb-3">
-                            // Waiting ({queue.length}) //
+                            // {mode === 'queue' ? 'Waiting' : mode === 'deleted' ? 'Deleted' : 'Results'} ({queue.length}) //
                         </h2>
                         {loading && <p className="retro-mono text-xl text-cyan-200">&gt; loading&hellip;</p>}
-                        {!loading && queue.length === 0 && (
-                            <p className="retro-mono text-xl text-gray-400">&gt; nothing waiting.</p>
+                        {!loading && queue.length === 0 && !error && (
+                            <p className="retro-mono text-xl text-gray-400">
+                                {mode === 'queue' ? '> nothing waiting.'
+                                    : mode === 'deleted' ? '> nothing deleted.'
+                                    : '> search for a title to edit it.'}
+                            </p>
                         )}
                         <ul className="space-y-2">
                             {queue.map(a => (
@@ -173,13 +258,35 @@ function ArticleEditor() {
 
                         {draft && (
                             <div className="retro-panel retro-cut p-6">
-                                {selected.hero_image_url && (
+                                {/* The editor is the one place that should say
+                                    what is actually in the column. Everywhere
+                                    else a dead hero_image_url is quietly
+                                    replaced by generated cover art, which is
+                                    right for a reader and wrong here: someone
+                                    editing needs to know whether they are
+                                    looking at a real picture or a stand-in. */}
+                                {usableHeroImage(selected.hero_image_url) ? (
                                     <img
                                         src={selected.hero_image_url}
                                         alt=""
                                         className="max-h-40 mb-5 border border-cyan-400/40"
                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     />
+                                ) : (
+                                    <div className="flex items-start gap-4 mb-5">
+                                        <img
+                                            src={articleCoverUrl(selected.category, selected.slug)}
+                                            alt=""
+                                            className="w-56 border border-cyan-400/40"
+                                        />
+                                        <p className="retro-mono text-lg text-gray-400 pt-1">
+                                            &gt; {selected.hero_image_url
+                                                ? 'Original artwork is gone from the old domain.'
+                                                : 'No artwork on this one.'}<br />
+                                            Showing the generated {selected.category || 'InternetDJ'} cover.
+                                            Paste an image URL below to replace it.
+                                        </p>
+                                    </div>
                                 )}
 
                                 <label className="block mb-4">
@@ -209,11 +316,22 @@ function ArticleEditor() {
                                     </label>
                                 </div>
 
-                                <label className="block mb-4">
+                                <div className="block mb-4">
                                     <span className="retro-eyebrow block mb-2">Body</span>
-                                    <textarea className={`${inputClass} min-h-[28rem] font-mono`} value={draft.body_html}
-                                        onChange={(e) => setDraft({ ...draft, body_html: e.target.value })} />
-                                </label>
+                                    {/* Keyed on the article so that picking a
+                                        different one re-decides between visual
+                                        and HTML editing. Without the key the
+                                        component keeps the previous article's
+                                        mode, which would drop a horizontal rule
+                                        from the next one without saying so. */}
+                                    <ArticleBodyEditor
+                                        key={selected.id}
+                                        value={draft.body_html}
+                                        onChange={(body_html) => setDraft({ ...draft, body_html })}
+                                        minHeightClass="min-h-[28rem]"
+                                        label="Body"
+                                    />
+                                </div>
 
                                 <label className="block mb-6">
                                     <span className="retro-eyebrow block mb-2">Note to the author</span>
@@ -231,13 +349,54 @@ function ArticleEditor() {
                                     </button>
                                     <button onClick={() => save('published')} disabled={saving}
                                         className="retro-btn retro-btn--hot px-6 py-3 text-xs disabled:opacity-50">
-                                        Publish
+                                        {selected.status === 'published' ? 'Save & Keep Live'
+                                            : selected.status === 'deleted' ? 'Restore & Publish' : 'Publish'}
                                     </button>
-                                    <button onClick={() => save('submitted')} disabled={saving}
-                                        className="retro-btn px-6 py-3 text-xs disabled:opacity-50">
-                                        Send Back to Author
-                                    </button>
+                                    {selected.status !== 'published' && selected.status !== 'deleted' && (
+                                        <button onClick={() => save('submitted')} disabled={saving}
+                                            className="retro-btn px-6 py-3 text-xs disabled:opacity-50">
+                                            Send Back to Author
+                                        </button>
+                                    )}
+                                    {selected.status === 'published' && (
+                                        <a href={`/articles/${selected.slug}`} target="_blank" rel="noopener noreferrer"
+                                            className="retro-btn px-6 py-3 text-xs">
+                                            View Live
+                                        </a>
+                                    )}
                                 </div>
+
+                                {/* Two steps, and the second one names the article.
+                                    A single delete button beside Save is how the
+                                    wrong thing gets removed at speed. */}
+                                {selected.status !== 'deleted' && (
+                                    <div className="mt-6 pt-5 border-t border-fuchsia-500/25">
+                                        {!confirmDelete ? (
+                                            <button onClick={() => setConfirmDelete(true)} disabled={saving}
+                                                className="retro-mono text-lg text-fuchsia-400 hover:text-fuchsia-300 underline">
+                                                Delete this article
+                                            </button>
+                                        ) : (
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <span className="retro-mono text-lg text-fuchsia-300">
+                                                    Delete &ldquo;{selected.title}&rdquo;?
+                                                </span>
+                                                <button onClick={remove} disabled={saving}
+                                                    className="retro-btn retro-btn--hot px-5 py-2 text-xs disabled:opacity-50">
+                                                    {saving ? 'Deleting…' : 'Yes, delete'}
+                                                </button>
+                                                <button onClick={() => setConfirmDelete(false)} disabled={saving}
+                                                    className="retro-mono text-lg text-gray-400 underline">
+                                                    cancel
+                                                </button>
+                                                <span className="retro-mono text-base text-gray-500 w-full">
+                                                    It leaves the site immediately and stays gone through a re-import.
+                                                    Recoverable from the Deleted tab.
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </section>

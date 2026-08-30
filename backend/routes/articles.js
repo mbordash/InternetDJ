@@ -155,6 +155,7 @@ router.get('/', async (req, res) => {
 
 const MIN_TITLE = 6;
 const MIN_BODY_TEXT = 400;
+const EDITABLE_STATUSES = ['draft', 'submitted', 'published', 'deleted'];
 
 /**
  * Editors only.
@@ -297,14 +298,45 @@ router.get('/mine', authenticate, async (req, res) => {
     }
 });
 
-/** The editor's queue: everything not yet published. */
+/**
+ * The editor's desk.
+ *
+ * Defaults to what is waiting - submitted and draft, oldest first, because a
+ * review queue that surfaces the newest item makes the first person to submit
+ * wait longest. But an editor also needs to reach the 1,200 already-published
+ * articles to fix the mistakes in them, and those are far too many to list, so
+ * ?status=published requires a search term and returns matches rather than
+ * everything.
+ */
 router.get('/queue', authenticate, requireAdmin, async (req, res) => {
     try {
+        const status = String(req.query.status || '').toLowerCase();
+        const q = String(req.query.q || '').trim();
+
+        let where = "a.status IN ('submitted', 'draft')";
+        const params = [];
+
+        if (status && EDITABLE_STATUSES.includes(status)) {
+            where = 'a.status = ?';
+            params.push(status);
+        }
+        if (q) {
+            where += ' AND (a.title LIKE ? OR a.slug LIKE ?)';
+            params.push(`%${q}%`, `%${q}%`);
+        } else if (status === 'published') {
+            // Refusing rather than truncating: an editor who searched for
+            // nothing wants to be told to search, not handed the first 50 of
+            // twelve hundred articles and left wondering where the rest went.
+            return res.status(400).json({ error: 'Search for a title to edit a published article.' });
+        }
+
         const rows = await pool.query(
             `SELECT ${CARD_FIELDS}, a.status, a.submitted_at, a.editor_note
              FROM articles a
-             WHERE a.status IN ('submitted', 'draft')
-             ORDER BY a.submitted_at IS NULL, a.submitted_at ASC, a.id ASC`
+             WHERE ${where}
+             ORDER BY a.submitted_at IS NULL, a.submitted_at ASC, a.id ASC
+             LIMIT 60`,
+            params
         );
         res.json(rows.map(row => ({
             ...toCard(row),
@@ -365,7 +397,10 @@ router.patch('/queue/:id', authenticate, requireAdmin, async (req, res) => {
 
         if (req.body.status !== undefined) {
             const status = String(req.body.status);
-            if (!['draft', 'submitted', 'published'].includes(status)) {
+            // EDITABLE_STATUSES includes 'deleted', which is what makes restore
+            // work: setting a deleted article back to 'published' is an
+            // ordinary edit rather than a special endpoint.
+            if (!EDITABLE_STATUSES.includes(status)) {
                 return res.status(400).json({ error: 'Unknown status.' });
             }
             updates.status = status;
@@ -389,6 +424,40 @@ router.patch('/queue/:id', authenticate, requireAdmin, async (req, res) => {
     } catch (err) {
         logger.error('Articles: failed to update:', err);
         res.status(500).json({ error: 'Failed to update the article' });
+    }
+});
+
+/**
+ * Remove an article from the site.
+ *
+ * A soft delete, and deliberately so. importArticles.js matches on slug and
+ * updates legacy rows in place, but never writes `status` - so an article
+ * removed this way stays removed the next time the archive is re-imported,
+ * where a real DELETE would simply be re-inserted and reappear. It also means
+ * a mistake is one PATCH away from being undone.
+ *
+ * Everything public already filters on status = 'published', so the article
+ * leaves the index, the search, the API and the sitemap the moment this runs.
+ */
+router.delete('/queue/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const rows = await pool.query(
+            'SELECT id, title, status FROM articles WHERE id = ? LIMIT 1', [req.params.id]);
+        if (!rows.length) return res.status(404).json({ error: 'Article not found' });
+        if (rows[0].status === 'deleted') {
+            return res.json({ id: rows[0].id, status: 'deleted', message: 'Already deleted.' });
+        }
+
+        await pool.query("UPDATE articles SET status = 'deleted' WHERE id = ?", [req.params.id]);
+        logger.info(`Articles: ${req.user.id} deleted article ${req.params.id} (${rows[0].title})`);
+        res.json({
+            id: rows[0].id,
+            status: 'deleted',
+            message: 'Deleted. It is off the site but recoverable from the deleted list.',
+        });
+    } catch (err) {
+        logger.error('Articles: failed to delete:', err);
+        res.status(500).json({ error: 'Failed to delete the article' });
     }
 });
 

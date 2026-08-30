@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
+import { articleCoverUrl, shareSafeImage, usableHeroImage } from '../utils/articleCover';
 
 /**
  * The article reader.
@@ -26,6 +28,7 @@ const formatDate = (value) => {
 
 function Article() {
     const { slug } = useParams();
+    const { user } = useContext(AuthContext);
     const [article, setArticle] = useState(null);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
@@ -71,15 +74,20 @@ function Article() {
 
     const url = `${SITE_URL}/articles/${article.slug}`;
     const description = article.deck || `${article.title}, on InternetDJ.`;
-    // og:image must be absolute. Legacy artwork is already a full URL on the
-    // old domain, but artwork committed to this repo is a site-relative path,
-    // and a share card given "/images/..." resolves it against the crawler's
-    // own host and fetches nothing.
-    const shareImage = article.hero_image_url
-        ? (/^https?:\/\//i.test(article.hero_image_url)
-            ? article.hero_image_url
-            : `${SITE_URL}${article.hero_image_url}`)
-        : null;
+    const hero = usableHeroImage(article.hero_image_url);
+    const cover = articleCoverUrl(article.category, article.slug);
+
+    // og:image must be absolute: artwork committed to this repo is a
+    // site-relative path, and a share card given "/images/..." resolves it
+    // against the crawler's own host and fetches nothing.
+    //
+    // The cover stands in when there is no picture, but as its PNG twin, not
+    // the SVG the page uses. Facebook, Slack, Discord and X all refuse an SVG
+    // og:image and render a blank card instead.
+    const shareable = shareSafeImage(hero) || cover.replace(/\.svg$/, '.png');
+    const shareImage = /^https?:\/\//i.test(shareable)
+        ? shareable
+        : `${SITE_URL}${shareable}`;
 
     return (
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
@@ -100,6 +108,29 @@ function Article() {
             </Helmet>
 
             <div className="container mx-auto px-4 py-10 max-w-4xl">
+                {/* Editing starts from the article itself, because that is where
+                    a mistake is noticed. Rendering this on is_admin only decides
+                    what is shown; the API re-reads the flag from the database on
+                    every request, so hiding the link is convenience, not
+                    security. */}
+                {/* Truthy, not === 1: /auth/me serialises the TINYINT(1) column
+                    as a JSON boolean, so a strict comparison against 1 never
+                    matched and the panel never rendered for anyone. */}
+                {Boolean(user?.is_admin) && (
+                    <div className="retro-panel retro-cut px-4 py-3 mb-6 flex flex-wrap items-center gap-3">
+                        <span className="retro-eyebrow">// Editor //</span>
+                        <Link
+                            to={`/articles/queue?id=${article.id}`}
+                            className="retro-btn px-5 py-2 text-xs"
+                        >
+                            Edit This Article
+                        </Link>
+                        <span className="retro-mono text-lg text-gray-500">
+                            {article.is_legacy ? 'from the archive' : 'written on site'}
+                        </span>
+                    </div>
+                )}
+
                 <nav className="retro-mono text-lg text-gray-400 mb-6" aria-label="Breadcrumb">
                     <Link to="/articles" className="text-cyan-300 hover:text-fuchsia-300">Articles</Link>
                     {article.category && (
@@ -136,17 +167,35 @@ function Article() {
                     <div className="retro-rule mt-5" />
                 </header>
 
-                {article.hero_image_url && (
+                {/* One masthead shape whatever artwork exists, so the page does
+                    not change proportions between an article that kept its
+                    picture and one that did not.
+
+                    The generated cover is always the ground. A real picture
+                    sits on it at its own size: most of what came back from the
+                    Wayback Machine is a 100px index thumbnail, and blowing one
+                    up to the width of the text would be worse than showing no
+                    photograph at all. A large picture fills the frame by the
+                    same rule, with no special case. */}
+                <div className="relative w-full aspect-[16/9] mb-8 overflow-hidden
+                                border border-cyan-400/30 bg-[#04010c]">
                     <img
-                        src={article.hero_image_url}
+                        src={cover}
                         alt=""
-                        className="w-full max-w-lg mb-8 border border-cyan-400/30"
-                        // The images still live on the old domain; if one has
-                        // rotted, the layout should close up rather than show a
-                        // broken-image icon in the middle of the piece.
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        className="absolute inset-0 w-full h-full object-cover"
                     />
-                )}
+                    {hero && (
+                        <img
+                            src={hero}
+                            alt=""
+                            className="absolute inset-0 m-auto w-auto h-auto max-w-full max-h-full
+                                       shadow-[0_0_40px_rgba(4,1,12,0.85)]"
+                            // A submitted picture can still rot. If one has, the
+                            // cover underneath is simply what remains.
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                    )}
+                </div>
 
                 <div
                     className="retro-article retro-mono text-xl text-gray-200 leading-relaxed"

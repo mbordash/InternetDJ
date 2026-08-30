@@ -499,7 +499,11 @@ CREATE TABLE IF NOT EXISTS articles (
     -- stays 'published' because the legacy importer and the submission
     -- endpoint both set this explicitly, and changing it would only affect
     -- rows inserted by hand.
-    status ENUM('draft','submitted','published') NOT NULL DEFAULT 'published',
+    -- 'deleted' is a soft delete. The row stays so an editor can restore it,
+    -- and because importArticles.js never writes `status`: a legacy article
+    -- removed here stays removed through the next re-import, where a real
+    -- DELETE would simply be re-inserted.
+    status ENUM('draft','submitted','published','deleted') NOT NULL DEFAULT 'published',
     is_legacy BOOLEAN NOT NULL DEFAULT FALSE,
     legacy_story_id INT DEFAULT NULL,
     source_url VARCHAR(600) DEFAULT NULL,

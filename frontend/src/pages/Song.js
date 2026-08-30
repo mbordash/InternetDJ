@@ -51,6 +51,15 @@ function feedbackLabel(score) {
     return 'Excellent';
 }
 
+// Which criteria a review actually scored. Reviews written before detailed
+// feedback became opt-in carry all twenty criteria whether or not the reviewer
+// opened the modal, so both the button and the results panel work off the
+// criteria that hold a real score.
+function scoredCriteria(feedback) {
+    if (!feedback) return [];
+    return feedbackCriteria.filter(criterion => feedbackScore(feedback[criterion]) !== null);
+}
+
 // Expressive reactions on reviews. These are never summed into a score or
 // fed into Top Reviewers - the point is to let people register an opinion
 // without creating a number worth farming.
@@ -94,11 +103,12 @@ const Song = () => {
     const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
     const [shareStatus, setShareStatus] = useState('');
 
-    // Initialize feedback state
-    const initialFeedback = feedbackCriteria.reduce((acc, criterion) => {
-        acc[criterion] = DEFAULT_FEEDBACK_SCORE;
-        return acc;
-    }, {});
+    // Detailed feedback starts empty. Seeding every criterion with the default
+    // score meant a reviewer who never opened the modal still posted twenty
+    // middle-of-the-road numbers, and their comment then showed a "View
+    // Detailed Feedback" button full of sliders they never touched. A criterion
+    // only exists here once the reviewer has actually moved its slider.
+    const initialFeedback = {};
     // The form belongs to the song on screen, so it is rebuilt whenever that
     // changes. Navigating between song pages does not remount this component —
     // only songId changes — so a form seeded once per mount kept whatever was
@@ -409,7 +419,11 @@ const Song = () => {
                 {
                     song_id: Number(songId),
                     review: reviewForm.review,
-                    feedback: reviewForm.feedback,
+                    // Nothing scored means no detailed feedback, not an empty
+                    // one: the comment should not advertise a panel of scores.
+                    feedback: Object.keys(reviewForm.feedback).length > 0
+                        ? reviewForm.feedback
+                        : null,
                     rating: reviewForm.rating,
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -1074,7 +1088,7 @@ const Song = () => {
                                                             {review.review && (
                                                                 <p className="mt-2 text-sm text-gray-300">{review.review}</p>
                                                             )}
-                                                            {review.feedback && Object.keys(review.feedback).length > 0 && (
+                                                            {scoredCriteria(review.feedback).length > 0 && (
                                                                 <div className="mt-2">
                                                                     <button
                                                                         type="button"
@@ -1428,7 +1442,7 @@ const Song = () => {
                                 <div className="retro-panel retro-cut p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto text-gray-100">
                                     <h2 className="retro-display text-base retro-glow-cyan mb-4">Detailed Feedback Results</h2>
                                     <div className="space-y-4">
-                                        {feedbackCriteria.map(criterion => (
+                                        {scoredCriteria(selectedFeedback).map(criterion => (
                                             <div key={criterion} className="flex items-center space-x-4">
                                                 <span className="w-1/3 text-sm font-medium text-gray-300">{criterion}</span>
                                                 <div className="w-2/3">

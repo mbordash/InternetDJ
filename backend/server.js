@@ -35,18 +35,53 @@ const server = http.createServer(app);
 
 const frontendLocalUrl = process.env.FRONTEND_URL_LOCAL || 'http://localhost:3000';
 const frontendProdUrl = process.env.FRONTEND_URL_PROD || process.env.FRONTEND_URL || process.env.CLIENT_URL;
-const primaryDomain = process.env.PRIMARY_DOMAIN;
-const primaryAppHost = process.env.PRIMARY_APP_HOST;
-
-// Optional canonical host redirect for Fly/custom domain deployments
-app.use((req, res, next) => {
-    const host = req.hostname; // or req.get('host')
-    if (primaryDomain && primaryAppHost && host === primaryAppHost) {
-        const redirectUrl = `${primaryDomain.replace(/\/+$/, '')}${req.originalUrl}`;
-        logger.debug(`Redirecting from ${host}${req.originalUrl} to ${redirectUrl}`);
-        return res.redirect(301, redirectUrl);
+// The one hostname the site is allowed to answer on. PRIMARY_DOMAIN is honoured
+// first for deployments that set it, but it does not have to be set: the
+// canonical origin is already spelled out in FRONTEND_URL_PROD, and requiring a
+// second variable to agree with the first is how this redirect ended up inert
+// in production.
+const canonicalOrigin = (() => {
+    const configured = process.env.PRIMARY_DOMAIN || frontendProdUrl;
+    if (!configured) return null;
+    try {
+        return new URL(configured).origin;
+    } catch {
+        logger.warn(`Canonical host redirect disabled: could not parse "${configured}" as a URL`);
+        return null;
     }
-    next();
+})();
+const canonicalHost = canonicalOrigin ? new URL(canonicalOrigin).host : null;
+
+// Hosts that are the app talking to itself rather than a visitor: the Fly
+// private network, the machine's own address, and local development. Sending a
+// redirect to any of these breaks the caller instead of helping a crawler.
+const isInternalHost = (host) => !host
+    || host === 'localhost'
+    || host.endsWith('.internal')
+    || /^\[?[0-9a-f:.]+\]?$/i.test(host);   // bare IPv4/IPv6 literal
+
+/**
+ * Send every visitor to the canonical hostname, keeping the path.
+ *
+ * www.internetdj.co was pointed at a registrar redirect that answered 404 as
+ * often as it answered 301, and when it did redirect it threw the path away and
+ * dumped the visitor on the home page. Google fetching a sitemap through it got
+ * HTML back and reported "Sitemap could not be read". internetdj.fly.dev had
+ * the opposite problem: it served the whole site happily, as a second complete
+ * copy for a crawler to index.
+ *
+ * Only GET and HEAD are redirected. A 301 on a POST invites the client to
+ * re-send it as a GET and lose the body, and anything posting to a non-canonical
+ * host is a bug worth seeing rather than papering over.
+ */
+app.use((req, res, next) => {
+    const host = req.hostname;
+    if (!canonicalHost || host === canonicalHost || isInternalHost(host)) return next();
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+
+    const redirectUrl = `${canonicalOrigin}${req.originalUrl}`;
+    logger.debug(`Redirecting from ${host}${req.originalUrl} to ${redirectUrl}`);
+    return res.redirect(301, redirectUrl);
 });
 
 app.use((req, res, next) => {

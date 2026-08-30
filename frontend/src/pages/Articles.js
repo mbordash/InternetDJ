@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
+import { AuthContext } from '../context/AuthContext';
+import { articleCoverUrl, usableHeroImage } from '../utils/articleCover';
 
 /**
  * The article index.
@@ -27,22 +29,30 @@ const formatDate = (value) => {
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
-const ArticleCard = ({ article }) => (
+const ArticleCard = ({ article }) => {
+    // Two layers, always both drawn.
+    //
+    // The base is generated cover art, chosen from the article's category and
+    // slug (see utils/articleCover). Cards in a grid row stretch to the tallest
+    // one, so a card with no band became a full-height card with a hole above
+    // its text.
+    //
+    // A real picture, when there is one, sits on top of the cover at its own
+    // size rather than filling the band. Most of the artwork recovered from the
+    // Wayback Machine is the old site's index thumbnail, often only 100px wide,
+    // because that is the size the crawler happened to catch. Stretched across
+    // a card those are a blurry mess; centred on the cover at their true size
+    // they read as a photograph on a mat, and the same rule scales up - a large
+    // picture simply fills the frame.
+    //
+    // If it fails to load, onError hides only that <img> and the cover is left,
+    // so the card keeps its shape whatever happens.
+    const cover = articleCoverUrl(article.category, article.slug);
+    const hero = usableHeroImage(article.hero_image_url);
+
+    return (
     <article className="retro-card retro-cut flex flex-col h-full overflow-hidden">
-        {/* The band is always drawn, with a fallback behind the image rather
-            than instead of it.
-
-            Hiding the band when there is no artwork was the first attempt, and
-            it looked broken: cards in a grid row stretch to the tallest one, so
-            an imageless card became a full-height card with a hole above its
-            text. Almost every legacy article hits this - their artwork still
-            points at the old internetdj.com, which no longer serves it, so the
-            image 404s and the band would vanish on most of the grid.
-
-            So the fallback sits underneath and the image lies on top of it.
-            When the image fails, onError hides only the <img>, the gradient
-            shows through, and every card keeps the same shape. */}
-        {/* The whole band is the link, fallback included: people click the
+        {/* The whole band is the link, cover art included: people click the
             picture, and a card where the artwork is inert while the headline
             beside it works reads as broken.
 
@@ -55,21 +65,21 @@ const ArticleCard = ({ article }) => (
             tabIndex={-1}
             aria-hidden="true"
             className="relative block aspect-[16/9] overflow-hidden border-b border-cyan-400/25
-                       bg-gradient-to-br from-[#1d0a38] via-[#140628] to-[#04010c] group"
+                       bg-[#04010c] transition-[filter] duration-200 hover:brightness-110"
         >
-            <span
-                className="absolute inset-0 flex items-center justify-center retro-display
-                           text-xs tracking-widest text-fuchsia-400/40"
-            >
-                {article.category || 'InternetDJ'}
-            </span>
-            {article.hero_image_url && (
+            <img
+                src={cover}
+                alt=""
+                loading="lazy"
+                className="absolute inset-0 w-full h-full object-cover"
+            />
+            {hero && (
                 <img
-                    src={article.hero_image_url}
+                    src={hero}
                     alt=""
                     loading="lazy"
-                    className="relative w-full h-full object-cover transition-opacity
-                               group-hover:opacity-80"
+                    className="absolute inset-0 m-auto w-auto h-auto max-w-full max-h-full
+                               shadow-[0_0_28px_rgba(4,1,12,0.8)]"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
             )}
@@ -98,9 +108,11 @@ const ArticleCard = ({ article }) => (
         )}
         </div>
     </article>
-);
+    );
+};
 
 function Articles() {
+    const { user } = useContext(AuthContext);
     const [searchParams, setSearchParams] = useSearchParams();
     const category = searchParams.get('category') || '';
     const query = searchParams.get('q') || '';
@@ -190,9 +202,20 @@ function Articles() {
                     {/* The archive is the draw, but the section is not a museum:
                         the way in for someone who wants to write belongs at the
                         top of the page, not buried under 1,500 old articles. */}
-                    <Link to="/articles/submit" className="retro-btn px-6 py-3 text-xs mt-5 inline-block">
-                        Write for InternetDJ
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3 mt-5">
+                        <Link to="/articles/submit" className="retro-btn px-6 py-3 text-xs">
+                            Write for InternetDJ
+                        </Link>
+                        {/* Until now the only way into the editor's desk was to
+                            open an article and click Edit, which is no use when
+                            what you want is the submission queue - the one thing
+                            that has nothing published to click through from. */}
+                        {Boolean(user?.is_admin) && (
+                            <Link to="/articles/queue" className="retro-btn retro-btn--hot px-6 py-3 text-xs">
+                                Editor&rsquo;s Desk
+                            </Link>
+                        )}
+                    </div>
                     <div className="retro-rule mt-5" />
                 </header>
 

@@ -1177,3 +1177,140 @@
     padding: 0.9em;
     overflow-x: auto;
 }
+
+/* ---------- Quill editor skin -------------------------------------------- */
+
+/*
+   quill.snow.css is built for a white page: a light toolbar, black icon
+   strokes and a hairline grey border. Dropped onto this site unstyled it is a
+   bright slab in the middle of a dark form. This restyles it to match
+   .retro-input rather than replacing the theme, so Quill's own layout and
+   dropdown behaviour keep working.
+
+   The icon rules use `stroke`/`fill` because Quill's toolbar buttons are inline
+   SVG, so `color` does not reach them.
+*/
+
+.retro-quill {
+    display: flex;
+    flex-direction: column;
+}
+
+.retro-quill .quill {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.retro-quill .ql-toolbar.ql-snow {
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    border-bottom: 0;
+    background: rgba(0, 240, 255, 0.08);
+    border-radius: 0;
+}
+
+.retro-quill .ql-container.ql-snow {
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    background: rgba(0, 240, 255, 0.06);
+    border-radius: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.retro-quill .ql-editor {
+    font-family: var(--retro-mono);
+    font-size: 1.15rem;
+    line-height: 1.6;
+    color: #eafcff;
+    flex: 1;
+}
+
+.retro-quill .ql-editor.ql-blank::before {
+    color: rgba(160, 200, 230, 0.65);
+    font-style: normal;
+}
+
+.retro-quill .ql-editor h2,
+.retro-quill .ql-editor h3,
+.retro-quill .ql-editor h4 {
+    font-family: var(--retro-display);
+    color: var(--neon-cyan);
+}
+
+.retro-quill .ql-editor blockquote {
+    border-left: 3px solid var(--neon-magenta);
+    padding-left: 0.9em;
+    color: #cfe8f5;
+}
+
+.retro-quill .ql-editor a {
+    color: var(--neon-cyan);
+}
+
+.retro-quill .ql-editor pre.ql-syntax {
+    background: rgba(4, 1, 12, 0.75);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    color: #d8f6ff;
+}
+
+/* Toolbar icons and labels */
+.retro-quill .ql-snow .ql-stroke {
+    stroke: rgba(190, 230, 245, 0.85);
+}
+
+.retro-quill .ql-snow .ql-fill,
+.retro-quill .ql-snow .ql-stroke.ql-fill {
+    fill: rgba(190, 230, 245, 0.85);
+}
+
+.retro-quill .ql-snow .ql-picker {
+    color: rgba(190, 230, 245, 0.85);
+    font-family: var(--retro-mono);
+}
+
+.retro-quill .ql-snow button:hover .ql-stroke,
+.retro-quill .ql-snow button.ql-active .ql-stroke,
+.retro-quill .ql-snow .ql-picker-label:hover .ql-stroke {
+    stroke: var(--neon-magenta);
+}
+
+.retro-quill .ql-snow button:hover .ql-fill,
+.retro-quill .ql-snow button.ql-active .ql-fill {
+    fill: var(--neon-magenta);
+}
+
+.retro-quill .ql-snow .ql-picker-label:hover,
+.retro-quill .ql-snow .ql-picker-item:hover,
+.retro-quill .ql-snow .ql-picker-label.ql-active {
+    color: var(--neon-magenta);
+}
+
+/* The heading dropdown opens over the page, so it needs its own dark ground
+   rather than inheriting the toolbar's translucent one. */
+.retro-quill .ql-snow .ql-picker-options {
+    background: var(--void-2);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    border-radius: 0;
+}
+
+/* Same for the link tooltip, which is a white bubble by default. */
+.retro-quill .ql-snow .ql-tooltip {
+    background: var(--void-2);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    box-shadow: 0 0 18px rgba(0, 240, 255, 0.2);
+    color: #eafcff;
+    border-radius: 0;
+}
+
+.retro-quill .ql-snow .ql-tooltip input[type="text"] {
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    color: #eafcff;
+}
+
+.retro-quill .ql-snow .ql-tooltip a {
+    color: var(--neon-cyan);
+}

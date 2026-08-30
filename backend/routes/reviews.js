@@ -87,6 +87,10 @@ router.post('/', authenticate, async (req, res) => {
     if (feedback && (typeof feedback !== 'object' || Array.isArray(feedback))) {
       return res.status(400).json({ error: 'Feedback must be an object' });
     }
+    // An object with nothing in it is not detailed feedback. Storing `{}` made
+    // the song page offer a "View Detailed Feedback" panel for comments whose
+    // author never scored anything.
+    const feedbackValue = feedback && Object.keys(feedback).length > 0 ? feedback : null;
 
     const ratingField = parseOptionalRating(rating);
     if (!ratingField.ok) {
@@ -96,7 +100,7 @@ router.post('/', authenticate, async (req, res) => {
     // Insert review
     const insertResult = await pool.query(
         'INSERT INTO reviews (song_id, profile_id, review, feedback, rating) VALUES (?, ?, ?, ?, ?)',
-        [song_id, profileId, normalizedReview, feedback ? JSON.stringify(feedback) : null, ratingField.value]
+        [song_id, profileId, normalizedReview, feedbackValue ? JSON.stringify(feedbackValue) : null, ratingField.value]
     );
     const result = Array.isArray(insertResult) ? insertResult : insertResult[0] || {};
 
@@ -105,7 +109,7 @@ router.post('/', authenticate, async (req, res) => {
       song_id: Number(song_id),
       profile_id: Number(profileId),
       review: normalizedReview,
-      feedback: feedback || null,
+      feedback: feedbackValue,
       rating: ratingField.value,
       created_at: new Date(),
       user_name: profiles[0].name || req.user.name,

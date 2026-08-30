@@ -55,6 +55,22 @@ WORKDIR /app
 COPY --from=node-build /app/frontend/build ./frontend/build
 COPY --from=node-build /app/backend ./backend
 
+# The recovered InternetDJ.com article archive, read once by
+# backend/scripts/importArticles.js.
+#
+# It ships inside the image rather than being uploaded to a machine because the
+# app runs as six machines across five process groups with no shared
+# filesystem, and `fly ssh sftp` has no machine-selection flag: a file put in
+# /tmp lands on whichever machine sftp happened to pick, which is usually not
+# the one `fly ssh console` then runs on. Baking it in makes the import work
+# from any machine, and survive restarts, for about 9MB.
+COPY article-recovery/articles.jsonl ./article-recovery/articles.jsonl
+
+# The map of article slug to recovered artwork, read by applyRecoveredImages.js
+# in the release command. The pictures themselves are under frontend/public and
+# are already in the image; this is only the index that points rows at them.
+COPY article-recovery/recovered-images.json ./article-recovery/recovered-images.json
+
 # Copy crontab file
 COPY crontab /app/crontab
 

@@ -21,6 +21,25 @@ const pool = require('../config/database');
 const { normalizeGenre, expandGenreString } = require('../utils/genres');
 
 const FALLBACK_IMAGE = '/idj-coin-200-nobg.png';
+const { articleCoverPath, usableHeroImage, shareSafeImage } = require('../utils/articleCover');
+
+/**
+ * The share image for an article. Its own artwork if that artwork still exists,
+ * otherwise the generated cover for its category.
+ *
+ * This matters more than the on-page fallback does. 957 archive articles carry
+ * a hero_image_url on www.internetdj.com, a domain that stopped resolving years
+ * ago, so until now every one of them advertised an og:image that 404s - which
+ * is worse than advertising none, because a scraper that cannot fetch the image
+ * it was promised renders the card without a picture at all.
+ *
+ * Always the PNG, never the SVG: Facebook, Slack, Discord and X all refuse an
+ * SVG og:image.
+ */
+const articleShareImage = (article) => (
+    shareSafeImage(usableHeroImage(article.hero_image_url))
+    || articleCoverPath(article.category_slug || article.category, article.slug, 'png')
+);
 
 // Social networks, chat apps and classic search engines. These mostly want a
 // share card, and the ones that matter for ranking (Googlebot, Bingbot) run
@@ -1050,7 +1069,7 @@ const fetchArticleMetadata = async (slug) => {
         return {
             title: article.title,
             description: toPlainText(article.deck) || toPlainText(article.body_text, 200),
-            image: article.hero_image_url || FALLBACK_IMAGE,
+            image: articleShareImage(article),
             url: `/articles/${article.slug}`,
             type: 'article',
             body: {
@@ -1093,7 +1112,7 @@ const fetchArticleMetadata = async (slug) => {
                 headline: article.title,
                 url: `${base}/articles/${article.slug}`,
                 description: toPlainText(article.deck) || undefined,
-                image: absolute(article.hero_image_url, base),
+                image: absolute(articleShareImage(article), base),
                 articleSection: article.category || undefined,
                 datePublished: published || undefined,
                 author: { '@type': 'Person', name: author },
@@ -1138,7 +1157,11 @@ const fetchArticleCategoryMetadata = async (categorySlug) => {
             "SELECT COUNT(*) AS n FROM articles WHERE status = 'published' AND category_slug = ?",
             [categorySlug]);
         const total = Number(totals ? totals.n : rows.length);
-        const cover = rows.find(r => r.hero_image_url);
+        // The newest article in the section that still has a picture fronts the
+        // category card, and its generated cover counts as a picture - so a
+        // section where nothing survived gets section-appropriate art rather
+        // than the site logo.
+        const cover = rows.find(r => usableHeroImage(r.hero_image_url)) || rows[0];
         const years = rows.map(r => r.published_at).filter(Boolean).map(d => new Date(d).getFullYear());
         const span = years.length ? `${Math.min(...years)}\u2013${Math.max(...years)}` : null;
 
@@ -1146,7 +1169,7 @@ const fetchArticleCategoryMetadata = async (categorySlug) => {
             title: `${name} \u2014 Electronic Music Articles`,
             description: `${total} ${name.toLowerCase()} article${total === 1 ? '' : 's'} for electronic `
                 + `music producers on InternetDJ${span ? `, ${span}` : ''}.`,
-            image: cover ? cover.hero_image_url : FALLBACK_IMAGE,
+            image: cover ? articleShareImage({ ...cover, category_slug: categorySlug }) : FALLBACK_IMAGE,
             url: `/articles?category=${encodeURIComponent(categorySlug)}`,
             type: 'website',
             body: {
