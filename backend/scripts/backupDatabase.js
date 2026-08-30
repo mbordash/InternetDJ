@@ -5,7 +5,7 @@
 // gzip to a temp file rather than buffered, so memory stays flat as the
 // database grows.
 //
-// The backup bucket MUST NOT be the bucket that serves songs and stems: that
+// The backup bucket MUST NOT be the bucket that serves songs and loops: that
 // one is public-read (objects return 200 without credentials), and a dump key
 // is guessable from the date, so writing there would publish the whole user
 // database. The guard below refuses to run in that case.

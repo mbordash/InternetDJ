@@ -5,7 +5,7 @@ import API_URL from '../utils/api';
 import { MUSICAL_KEYS } from '../utils/musicalKeys';
 import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
-// A stem job outlives a backend restart, but the poll that happens to land
+// A loop job outlives a backend restart, but the poll that happens to land
 // mid-restart does not. Treat "no response" and 5xx as transient and retry a
 // few times before surfacing an error; anything else is a real answer.
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
@@ -22,7 +22,7 @@ function isTransientPollError(err) {
     return err.response.status >= 500 || err.response.status === 408;
 }
 
-function AIStems() {
+function AILoops() {
     const { user } = useContext(AuthContext);
     const baseUrl = SITE_URL;
     const [type, setType] = useState('bass');
@@ -32,36 +32,36 @@ function AIStems() {
     const [duration, setDuration] = useState(4);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [userStems, setUserStems] = useState([]);
+    const [userLoops, setUserLoops] = useState([]);
     const [dailyRemaining, setDailyRemaining] = useState(10);
-    const [highlightedStemId, setHighlightedStemId] = useState(null);
-    const [copyingStemId, setCopyingStemId] = useState(null);
+    const [highlightedLoopId, setHighlightedLoopId] = useState(null);
+    const [copyingLoopId, setCopyingLoopId] = useState(null);
 
     useEffect(() => {
         if (user && user.id) {
-            fetchUserStems();
+            fetchUserLoops();
         }
     }, [user]);
 
-    const fetchUserStems = async () => {
+    const fetchUserLoops = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`${API_URL}/stems/my`, { headers: { Authorization: `Bearer ${token}` } });
-            setUserStems(res.data.stems);
+            const res = await axios.get(`${API_URL}/loops/my`, { headers: { Authorization: `Bearer ${token}` } });
+            setUserLoops(res.data.loops);
             setDailyRemaining(res.data.dailyRemaining);
         } catch (err) {
-            console.error('Failed to fetch user stems', err);
+            console.error('Failed to fetch user loops', err);
         }
     };
 
     const generate = async () => {
         if (!user || !user.id) {
-            setError('You must be logged in to generate stems.');
+            setError('You must be logged in to generate loops.');
             return;
         }
 
         if (dailyRemaining <= 0) {
-            setError('Daily limit of 10 stems reached');
+            setError('Daily limit of 10 loops reached');
             return;
         }
 
@@ -73,11 +73,11 @@ function AIStems() {
                 throw new Error('No authentication token found');
             }
 
-            const res = await axios.post(`${API_URL}/stems/generate`,
+            const res = await axios.post(`${API_URL}/loops/generate`,
                 { type, prompt, bpm, key, duration },
                 { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
             );
-            const { stemId } = res.data;
+            const { loopId } = res.data;
 
             const startedAt = Date.now();
             let transientFailures = 0;
@@ -90,16 +90,16 @@ function AIStems() {
                     return;
                 }
                 try {
-                    const statusRes = await axios.get(`${API_URL}/stems/${stemId}`,
+                    const statusRes = await axios.get(`${API_URL}/loops/${loopId}`,
                         { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
                     );
                     transientFailures = 0;
                     const data = statusRes.data;
                     if (data.status === 'ready') {
                         clearInterval(poll);
-                        fetchUserStems(); // Refresh list and remaining count
-                        setHighlightedStemId(stemId);
-                        setTimeout(() => setHighlightedStemId(null), 3000); // Highlight for 3 seconds
+                        fetchUserLoops(); // Refresh list and remaining count
+                        setHighlightedLoopId(loopId);
+                        setTimeout(() => setHighlightedLoopId(null), 3000); // Highlight for 3 seconds
                         setLoading(false);
                     } else if (data.status === 'failed') {
                         clearInterval(poll);
@@ -124,20 +124,20 @@ function AIStems() {
         }
     };
 
-    const copyToSampleLibrary = async (stemId) => {
-        setCopyingStemId(stemId);
+    const copyToSampleLibrary = async (loopId) => {
+        setCopyingLoopId(loopId);
         try {
             const token = localStorage.getItem('token');
-            await axios.post(`${API_URL}/sample-library/from-stem`,
-                { stemId },
+            await axios.post(`${API_URL}/sample-library/from-loop`,
+                { loopId },
                 { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
             );
-            alert('Stem copied to your sample library!'); // Replace with toast if using a library
-            fetchUserStems(); // Optional: Refresh stems if needed
+            alert('Loop copied to your sample library!'); // Replace with toast if using a library
+            fetchUserLoops(); // Optional: Refresh loops if needed
         } catch (err) {
-            alert('Failed to copy stem: ' + (err.response?.data?.error || err.message));
+            alert('Failed to copy loop: ' + (err.response?.data?.error || err.message));
         } finally {
-            setCopyingStemId(null);
+            setCopyingLoopId(null);
         }
     };
 
@@ -171,36 +171,36 @@ function AIStems() {
     return (
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
             <Helmet>
-                <title>AI Music Stem Generator - InternetDJ</title>
+                <title>AI Music Loop Generator - InternetDJ</title>
                 <meta
                     name="description"
-                    content="Use our free AI music stem generator to create royalty-free AI bass stems, synth stems, effects, and drums. Perfect for music producers importing into DAWs like Ableton or Logic Pro."
+                    content="Use our free AI music loop generator to create royalty-free AI bass loops, synth loops, effects and drum loops. Perfect for music producers importing into DAWs like Ableton or Logic Pro."
                 />
-                <link rel="canonical" href={`${baseUrl}/ai-stems`} />
-                <meta property="og:title" content="AI Music Stem Generator - InternetDJ" />
-                <meta property="og:description" content="Generate AI-powered music stems for bass, synth, effects, and drums to import into your DAW. Best AI stem generator for creators." />
-                <meta property="og:url" content={`${baseUrl}/ai-stems`} />
+                <link rel="canonical" href={`${baseUrl}/loops`} />
+                <meta property="og:title" content="AI Music Loop Generator - InternetDJ" />
+                <meta property="og:description" content="Generate AI-powered music loops for bass, synth, effects and drums to import into your DAW. Best AI loop generator for creators." />
+                <meta property="og:url" content={`${baseUrl}/loops`} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content="AI Music Stem Generator - InternetDJ" />
-                <meta name="twitter:description" content="Generate AI-powered music stems for bass, synth, effects, and drums to import into your DAW. Best AI stem generator for creators." />
+                <meta name="twitter:title" content="AI Music Loop Generator - InternetDJ" />
+                <meta name="twitter:description" content="Generate AI-powered music loops for bass, synth, effects and drums to import into your DAW. Best AI loop generator for creators." />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
             <div className="container mx-auto px-4 py-8">
                 <header className="mb-8 text-center">
                     <div className="retro-eyebrow mb-3">
-                        <span className="text-sm align-middle">&#10024;</span> Stem Generator <span className="text-sm align-middle">&#10024;</span>
+                        <span className="text-sm align-middle">&#10024;</span> Loop Generator <span className="text-sm align-middle">&#10024;</span>
                     </div>
-                    <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">AI Music Stems</h1>
+                    <h1 className="retro-display retro-chrome text-3xl sm:text-4xl">AI Music Loops</h1>
                     <div className="retro-rule mt-4" />
                 </header>
                 <p className="text-center text-gray-300 mb-6 max-w-2xl mx-auto">
-                    Discover the best AI music stem generator for creating high-quality, royalty-free stems. Generate AI bass stems, synth stems, effects, and drums tailored to your prompt, BPM, and key—perfect for music producers using DAWs like Ableton, Logic Pro, or FL Studio. Or try our own online DAW at <a href="/projects" className="retro-link hover:underline">InternetDJ Projects</a> to integrate stems directly into your tracks.
+                    Generate brand-new, royalty-free loops from a description: bass, synth, effects and drums, written to your prompt at the BPM and key you pick. Ready to drop into Ableton, Logic Pro or FL Studio — or into our own online DAW at <a href="/projects" className="retro-link hover:underline">InternetDJ Projects</a>.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="retro-panel retro-cut p-6">
-                        <h2 className="retro-display text-base retro-glow-cyan mb-4">Generate AI Music Stems</h2>
-                        <label htmlFor="type" className="retro-label">Stem Type</label>
+                        <h2 className="retro-display text-base retro-glow-cyan mb-4">Generate AI Music Loops</h2>
+                        <label htmlFor="type" className="retro-label">Loop Type</label>
                         <select
                             id="type"
                             value={type}
@@ -268,29 +268,29 @@ function AIStems() {
                                 </select>
                             </div>
                         </div>
-                        <p className="text-sm text-gray-300 mb-2">You have {dailyRemaining} stems left today.</p>
+                        <p className="text-sm text-gray-300 mb-2">You have {dailyRemaining} loops left today.</p>
                         <button
                             onClick={generate}
                             disabled={loading || !prompt || dailyRemaining <= 0}
                             className="retro-btn retro-btn--hot w-full py-3 text-xs"
                         >
-                            {loading ? 'Generating...' : 'Create Stem'}
+                            {loading ? 'Generating...' : 'Create Loop'}
                         </button>
                     </div>
                     <div>
-                        <h2 className="retro-display text-lg retro-glow-magenta mb-4">Your Recent AI-Generated Music Stems</h2>
+                        <h2 className="retro-display text-lg retro-glow-magenta mb-4">Your Recent AI-Generated Loops</h2>
                         <p className="retro-mono text-xl text-gray-300 mb-6">
-                            Note: Stems are automatically deleted after 24 hours.
+                            Note: Loops are automatically deleted after 24 hours.
                         </p>
-                        {userStems.length === 0 ? (
-                            <p className="retro-mono text-xl text-gray-300">No recent stems found.</p>
+                        {userLoops.length === 0 ? (
+                            <p className="retro-mono text-xl text-gray-300">No recent loops found.</p>
                         ) : (
-                            userStems.map(s => (
+                            userLoops.map(s => (
                                 <div
                                     key={s.id}
-                                    className={`retro-panel retro-cut p-4 mb-4 transition-colors duration-300 ${s.id === highlightedStemId ? 'ring-2 ring-primary-brand-400' : ''}`}
+                                    className={`retro-panel retro-cut p-4 mb-4 transition-colors duration-300 ${s.id === highlightedLoopId ? 'ring-2 ring-primary-brand-400' : ''}`}
                                 >
-                                    <p className="font-semibold text-white">{s.type.toUpperCase()} Stem</p>
+                                    <p className="font-semibold text-white">{s.type.toUpperCase()} Loop</p>
                                     <p className="retro-mono text-lg text-gray-400">{s.prompt}</p>
                                     <p className="retro-mono text-lg text-gray-400">BPM: {s.bpm}, Key: {s.key}, Duration: {s.duration}s</p>
                                     <p className="retro-mono text-lg text-gray-400">Status: {s.status}</p>
@@ -307,10 +307,10 @@ function AIStems() {
                                                 </a>
                                                 <button
                                                     onClick={() => copyToSampleLibrary(s.id)}
-                                                    disabled={copyingStemId === s.id}
+                                                    disabled={copyingLoopId === s.id}
                                                     className="inline-block retro-btn retro-btn--hot px-3 py-1 text-[0.6rem] disabled:opacity-50"
                                                 >
-                                                    {copyingStemId === s.id ? 'Copying...' : 'Add to DAW Sample Library'}
+                                                    {copyingLoopId === s.id ? 'Copying...' : 'Add to DAW Sample Library'}
                                                 </button>
                                             </div>
                                         </div>
@@ -325,4 +325,4 @@ function AIStems() {
     );
 }
 
-export default AIStems;
+export default AILoops;

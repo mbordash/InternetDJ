@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
+import profilePath from '../utils/profilePath';
 import { Helmet } from 'react-helmet-async';
 import StudioRackImage1 from '../assets/studio-rack-image-1.jpg';
 import StudioRackImage2 from '../assets/studio-rack-image-2.jpg';
@@ -42,6 +44,7 @@ const Bullet = ({ children }) => (
 );
 
 function About() {
+    const { user } = useContext(AuthContext);
     const [randomBackgroundImage, setRandomBackgroundImage] = useState(null);
     const baseUrl = SITE_URL;
 
@@ -175,19 +178,28 @@ function About() {
 
                     <section>
                         <SectionHeader eyebrow="// Pull Up a Deck //" title="Join Us" />
+                        {/* Resolved against auth state. This section invited the
+                            reader to join and handed everyone the registration
+                            form, including members who were already signed in —
+                            the same bug the /promote page had. A member gets the
+                            upload screen instead, which is what "get started"
+                            actually means once you have an account.
+
+                            (The button also once pointed at /signup, which is not
+                            a route, so the page's primary call to action rendered
+                            a blank screen. The registration route is /register.) */}
                         <div className="retro-panel retro-cut p-6">
                             <p className="retro-mono text-xl text-gray-300 mb-6">
-                                Whether you&rsquo;re an aspiring artist, a seasoned producer, or a music enthusiast, InternetDJ welcomes you. Start creating, connect with others, and be part of a global movement that celebrates creativity and independence.
+                                {user
+                                    ? 'You\u2019re already part of this. Put a track up, leave a review on someone else\u2019s, or start a thread in the forum \u2014 the site only works because people do.'
+                                    : 'Whether you\u2019re an aspiring artist, a seasoned producer, or a music enthusiast, InternetDJ welcomes you. Start creating, connect with others, and be part of a global movement that celebrates creativity and independence.'}
                             </p>
-                            {/* This pointed at /signup, which is not a route — the
-                                page's primary call to action rendered a blank
-                                screen. The registration route is /register. */}
                             <Link
-                                to="/register"
+                                to={user ? `${profilePath(user)}/songs-manager` : '/register'}
                                 className="retro-btn retro-btn--hot px-8 py-4 text-sm"
-                                aria-label="Sign up for InternetDJ"
+                                aria-label={user ? 'Upload a track to InternetDJ' : 'Sign up for InternetDJ'}
                             >
-                                Get Started
+                                {user ? 'Upload a Track' : 'Get Started'}
                             </Link>
                         </div>
                     </section>

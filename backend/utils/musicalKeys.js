@@ -1,7 +1,7 @@
 const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // The 24 keys, written the same way everywhere: sharps, lower-case mode.
-// Detection (utils/audioFeatures.js), the stem generator and the song editor
+// Detection (utils/audioFeatures.js), the loop generator and the song editor
 // all have to agree on this spelling or a detected key will not match an
 // option in the editor's dropdown.
 const MUSICAL_KEYS = PITCH_NAMES.flatMap(name => [`${name} major`, `${name} minor`]);

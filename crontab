@@ -12,5 +12,5 @@
 # dockerfile installs.
 15 3 * * * node backend/scripts/backupDatabase.js >> /app/cron.log 2>&1
 
-*/5 * * * * node backend/scripts/cleanupStems.js
+*/5 * * * * node backend/scripts/cleanupLoops.js
 */15 * * * * node backend/scripts/cleanupMasteringPreviews.js

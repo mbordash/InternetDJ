@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useContext, useMemo } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { SpeakerWaveIcon, PlayIcon, PauseIcon, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import API_URL from '../utils/api';
@@ -8,7 +8,7 @@ import SITE_URL from '../utils/site';
 import { Helmet } from "react-helmet-async";
 import profilePath from '../utils/profilePath';
 import TrackFilters, {
-    EMPTY_FILTERS, hasActiveFilters, filtersToParams, TrackMetaChips,
+    hasActiveFilters, filtersToParams, paramsToFilters, TrackMetaChips,
 } from '../components/TrackFilters';
 import { tagHref } from '../utils/genreTags';
 
@@ -20,7 +20,11 @@ function Browse() {
     const [unreviewedSongs, setUnreviewedSongs] = useState([]);
     const [error, setError] = useState(null);
     const [genreQuery, setGenreQuery] = useState('');
-    const [filters, setFilters] = useState(EMPTY_FILTERS);
+    // Filters live in the URL as well as in state: that is what lets the BPM
+    // and key on a song page link straight into a filtered browse, and what
+    // makes a filtered view survive a reload or a share.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [filters, setFilters] = useState(() => paramsToFilters(searchParams));
     const [filterResults, setFilterResults] = useState([]);
     const [filterMissing, setFilterMissing] = useState(null);
     const [filterBusy, setFilterBusy] = useState(false);
@@ -64,6 +68,31 @@ function Browse() {
 
         fetchData();
     }, []);
+
+    // Mirror the filters into the URL, and adopt a URL we did not write
+    // ourselves (a link followed while already here, or back/forward). The ref
+    // is what tells those two apart: without it, a half-typed tempo would be
+    // parsed back out of the URL and clear the box under the cursor.
+    const filterQuery = useMemo(
+        () => new URLSearchParams(filtersToParams(filters)).toString(),
+        [filters]
+    );
+    const pushedQuery = useRef(null);
+
+    useEffect(() => {
+        if (filterQuery === searchParams.toString()) return;
+        pushedQuery.current = filterQuery;
+        setSearchParams(filterQuery, { replace: true });
+        // searchParams is read, not tracked: reacting to it here is the other
+        // effect's job, and depending on it would undo edits mid-keystroke.
+    }, [filterQuery]);
+
+    useEffect(() => {
+        const query = searchParams.toString();
+        if (query === pushedQuery.current) return;
+        pushedQuery.current = query;
+        setFilters(paramsToFilters(searchParams));
+    }, [searchParams]);
 
     useEffect(() => {
         if (!hasActiveFilters(filters)) {
@@ -346,6 +375,7 @@ function Browse() {
                                                 <TrackMetaChips
                                                     bpm={song.bpm}
                                                     musicalKey={song.musical_key}
+                                                    rating={song.avg_rating}
                                                     className="mt-1"
                                                 />
                                             </div>

@@ -216,19 +216,31 @@ function TagSongs() {
         );
     }
 
+    /* Every genre page used to carry the same sentence with one word swapped,
+       which reads to a search engine as one page duplicated fifty times. Built
+       from the genre's own counts instead, so each page describes itself, and
+       carrying the promotion angle because "where do I put my techno track"
+       is a search these pages can realistically win. */
+    const metaDescription = overview?.total
+        ? `Listen to ${overview.total} ${title} track${overview.total === 1 ? '' : 's'} from independent `
+          + `producers on InternetDJ. Publish your own ${title} tracks free and get written feedback `
+          + `from other producers.`
+        : `${title} tracks from independent producers on InternetDJ. Publish your own ${title} tracks `
+          + `free and get written feedback from other producers.`;
+
     return (
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100">
             <Helmet>
-                <title>Browse {title} Music</title>
-                <meta name="description" content={`Browse ${title} Music on InternetDJ`} />
+                <title>{`${title} Tracks by Independent Producers`}</title>
+                <meta name="description" content={metaDescription} />
                 <link rel="canonical" href={canonicalUrl} />
-                <meta property="og:title" content={`Browse ${title} Music`} />
-                <meta property="og:description" content={`Browse ${title} Music on InternetDJ`} />
+                <meta property="og:title" content={`${title} Tracks by Independent Producers`} />
+                <meta property="og:description" content={metaDescription} />
                 <meta property="og:url" content={canonicalUrl} />
                 <meta property="og:site_name" content="InternetDJ" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content={`Browse ${title} Music`} />
-                <meta name="twitter:description" content={`Browse ${title} Music on InternetDJ`} />
+                <meta name="twitter:title" content={`${title} Tracks by Independent Producers`} />
+                <meta name="twitter:description" content={metaDescription} />
                 <meta name="twitter:site" content="@internetdjco" />
             </Helmet>
 
@@ -514,6 +526,31 @@ function TagSongs() {
                         </section>
                     </aside>
                 </div>
+
+                {/* ==================== PRODUCER CTA ====================
+                    Placed below the listing rather than above it: someone who
+                    arrived here from a genre search came to hear the tracks,
+                    and the ask reads better once they have. Its wording carries
+                    the genre so the page says "publish your techno" rather than
+                    a generic invitation. */}
+                <section className="retro-panel retro-cut p-6 mt-10">
+                    <h2 className="retro-display text-lg sm:text-xl retro-glow-magenta mb-3 capitalize">
+                        Make {title}?
+                    </h2>
+                    <p className="retro-mono text-xl text-gray-300 mb-5">
+                        Publish your own {title} tracks on InternetDJ for free and get written
+                        feedback from other producers, not just a play count. You keep every
+                        right to your music.
+                    </p>
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                        <Link to="/promote" className="retro-btn retro-btn--hot px-6 py-3 text-sm">
+                            Promote Your Music
+                        </Link>
+                        <Link to="/browse" className="retro-btn px-6 py-3 text-sm">
+                            Browse Every Genre
+                        </Link>
+                    </div>
+                </section>
             </div>
         </div>
     );

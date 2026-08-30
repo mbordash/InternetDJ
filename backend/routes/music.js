@@ -86,6 +86,7 @@ router.get('/user-songs', authenticate, async (req, res) => {
             profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
             allow_download: Boolean(row.allow_download),
+            allow_ai_training: Boolean(row.allow_ai_training),
         }));
 
         res.json(Array.isArray(sanitizedRows) ? sanitizedRows : []);
@@ -530,6 +531,42 @@ router.get('/unreviewed', async (req, res) => {
     }
 });
 
+/**
+ * A song's score is the average of the reviews that carried one — comments
+ * without a rating are not zeros, so they stay out of it entirely.
+ *
+ * Kept as one expression because it is needed in three places at once (the
+ * select list, the WHERE, and the "how many have no rating yet" count), and
+ * three copies of an averaging rule is three chances for them to disagree. It
+ * is a correlated subquery rather than a joined derived table so that the
+ * filter and the missing-count query, which select FROM songs alone, can use
+ * the very same string.
+ */
+const AVG_RATING_SQL = `(SELECT AVG(rv.rating) FROM reviews rv
+                          WHERE rv.song_id = s.id AND rv.rating IS NOT NULL)`;
+const RATING_COUNT_SQL = `(SELECT COUNT(rv.rating) FROM reviews rv
+                            WHERE rv.song_id = s.id AND rv.rating IS NOT NULL)`;
+
+/**
+ * A rating bound from the query string. Absent is fine and means unbounded;
+ * anything present has to be a number on the 0-10 scale. Unlike a rating being
+ * *given*, a bound of 0 is meaningful here, so the floor is 0 rather than the
+ * 0.5 the reviews table enforces.
+ */
+const parseRatingBound = (value) => {
+    if (value === undefined || value === null || value === '') {
+        return { ok: true, value: null };
+    }
+    const rating = Number(value);
+    if (!Number.isFinite(rating)) {
+        return { ok: false, error: 'Rating must be a number' };
+    }
+    if (rating < 0 || rating > 10) {
+        return { ok: false, error: 'Rating must be between 0 and 10' };
+    }
+    return { ok: true, value: Math.round(rating * 10) / 10 };
+};
+
 router.get('/search', async (req, res) => {
     try {
         const term = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -553,10 +590,21 @@ router.get('/search', async (req, res) => {
         const exactKey = req.query.keyMode === 'exact';
         const keySet = keyFilter ? (exactKey ? [keyFilter] : compatibleKeys(keyFilter)) : [];
 
+        // Rating filter, so "what else is this good?" is answerable the same way
+        // "what else mixes with this?" already is.
+        const ratingMin = parseRatingBound(req.query.ratingMin);
+        const ratingMax = parseRatingBound(req.query.ratingMax);
+        if (!ratingMin.ok || !ratingMax.ok) {
+            return res.status(400).json({ error: (ratingMin.ok ? ratingMax : ratingMin).error });
+        }
+        const hasRatingFilter = ratingMin.value != null || ratingMax.value != null;
+
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
 
-        if (!term && !hasBpmFilter && !keyFilter) {
-            return res.json({ songs: [], profiles: [], missing: { bpm: 0, key: 0 }, matchedKeys: [] });
+        if (!term && !hasBpmFilter && !keyFilter && !hasRatingFilter) {
+            return res.json({
+                songs: [], profiles: [], missing: { bpm: 0, key: 0, rating: 0 }, matchedKeys: [],
+            });
         }
 
         // Assembled in pieces because any combination of the three may be absent.
@@ -575,14 +623,28 @@ router.get('/search', async (req, res) => {
             : null;
         const keyParams = keySet;
 
-        const where = [termClause, bpmClause, keyClause].filter(Boolean).join(' AND ');
-        const params = [...termParams, ...bpmParams, ...keyParams];
+        const ratingClauses = [];
+        const ratingParams = [];
+        if (ratingMin.value != null) {
+            ratingClauses.push(`${AVG_RATING_SQL} >= ?`);
+            ratingParams.push(ratingMin.value);
+        }
+        if (ratingMax.value != null) {
+            ratingClauses.push(`${AVG_RATING_SQL} <= ?`);
+            ratingParams.push(ratingMax.value);
+        }
+        const ratingClause = ratingClauses.length ? ratingClauses.join(' AND ') : null;
+
+        const where = [termClause, bpmClause, keyClause, ratingClause].filter(Boolean).join(' AND ');
+        const params = [...termParams, ...bpmParams, ...keyParams, ...ratingParams];
 
         // Search songs
         const songRows = await pool.query(`
             SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, s.genre,
                    s.bpm, s.musical_key, s.duration,
                    p.name AS profile_name, p.slug AS profile_slug,
+                   ${AVG_RATING_SQL} AS avg_rating,
+                   ${RATING_COUNT_SQL} AS rating_count,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
@@ -597,8 +659,10 @@ router.get('/search', async (req, res) => {
         // How many tracks the filter had to leave out because nothing has been
         // detected for them yet. Without this the catalogue looks smaller than
         // it is, and the honest answer is "not analysed", not "no match".
-        const countMissing = async (column, otherClause, otherParams) => {
-            const clauses = [termClause, otherClause, `s.${column} IS NULL`].filter(Boolean);
+        // Each count is "how many did THIS filter exclude for having no value",
+        // so it applies every other active filter and then asks for the nulls.
+        const countMissing = async (nullClause, otherClauses, otherParams) => {
+            const clauses = [termClause, ...otherClauses, nullClause].filter(Boolean);
             const rows = await pool.query(
                 `SELECT COUNT(*) AS count FROM songs s WHERE ${clauses.join(' AND ')}`,
                 [...termParams, ...otherParams]
@@ -606,8 +670,15 @@ router.get('/search', async (req, res) => {
             return Number(rows[0].count) || 0;
         };
         const missing = {
-            bpm: hasBpmFilter ? await countMissing('bpm', keyClause, keyParams) : 0,
-            key: keyFilter ? await countMissing('musical_key', bpmClause, bpmParams) : 0,
+            bpm: hasBpmFilter
+                ? await countMissing('s.bpm IS NULL', [keyClause, ratingClause], [...keyParams, ...ratingParams])
+                : 0,
+            key: keyFilter
+                ? await countMissing('s.musical_key IS NULL', [bpmClause, ratingClause], [...bpmParams, ...ratingParams])
+                : 0,
+            rating: hasRatingFilter
+                ? await countMissing(`${AVG_RATING_SQL} IS NULL`, [bpmClause, keyClause], [...bpmParams, ...keyParams])
+                : 0,
         };
 
         const songs = songRows.map((row) => ({
@@ -622,6 +693,8 @@ router.get('/search', async (req, res) => {
             musical_key: row.musical_key || null,
             camelot: row.musical_key ? camelotOf(row.musical_key) : null,
             duration: row.duration == null ? null : Number(row.duration),
+            avg_rating: row.avg_rating == null ? null : Number(row.avg_rating),
+            rating_count: Number(row.rating_count) || 0,
             profile_name: row.profile_name || 'Unknown',
             profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
@@ -1056,7 +1129,7 @@ router.delete('/:songId', authenticate, async (req, res) => {
 });
 
 router.post('/upload', authenticate, async (req, res) => {
-    const { title, description, genre, stems_url } = req.body;
+    const { title, description, genre, stems_url, allow_download, allow_ai_training } = req.body;
     const mp3 = req.files?.mp3;
     const image = req.files?.image;
 
@@ -1111,10 +1184,19 @@ router.post('/upload', authenticate, async (req, res) => {
             imageUrl = buildPublicFileUrl(imageUploadParams.Key);
         }
 
+        // Both permissions are off unless this upload explicitly said yes, and
+        // the consent timestamp only exists when it did — a track is never
+        // downloadable, or in a training set, by default or by omission.
+        const allowDownload = parseBooleanFlag(allow_download);
+        const allowAiTraining = parseBooleanFlag(allow_ai_training);
+
         // Insert song
         const result = await pool.query(
-            'INSERT INTO songs (profile_id, title, mp3_url, image_url, description, genre, stems_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [profileId, title, mp3Url, imageUrl, description || '', genre || '', stems_url || null]
+            `INSERT INTO songs (profile_id, title, mp3_url, image_url, description, genre, stems_url,
+                                allow_download, allow_ai_training, ai_training_opted_in_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [profileId, title, mp3Url, imageUrl, description || '', genre || '', stems_url || null,
+             allowDownload, allowAiTraining, allowAiTraining ? new Date() : null]
         );
         const songId = Number(result.insertId);
 
@@ -1138,6 +1220,8 @@ router.post('/upload', authenticate, async (req, res) => {
             description: description || '',
             genre: genre || '',
             stems_url: stems_url || null,
+            allow_download: allowDownload,
+            allow_ai_training: allowAiTraining,
             plays: 0,
             likes_count: 0,
         };
@@ -1452,6 +1536,7 @@ router.get('/:songId', async (req, res) => {
             background: songs[0].background || null,
             likes_count: Number(songs[0].likes_count) || 0,
             allow_download: Boolean(songs[0].allow_download),
+            allow_ai_training: Boolean(songs[0].allow_ai_training),
         };
         res.json({ song });
     } catch (err) {
@@ -1461,7 +1546,7 @@ router.get('/:songId', async (req, res) => {
 });
 
 router.put('/:songId', authenticate, async (req, res) => {
-    const { title, description, genre, stems_url, allow_download } = req.body;
+    const { title, description, genre, stems_url, allow_download, allow_ai_training } = req.body;
     const mp3 = req.files?.mp3;
     const image = req.files?.image;
     try {
@@ -1482,7 +1567,8 @@ router.put('/:songId', authenticate, async (req, res) => {
         }
 
         const songs = await pool.query(`
-            SELECT s.id, s.profile_id, s.mp3_url, s.image_url, s.stems_url, s.allow_download
+            SELECT s.id, s.profile_id, s.mp3_url, s.image_url, s.stems_url, s.allow_download,
+                   s.allow_ai_training, s.ai_training_opted_in_at
             FROM songs s
                      JOIN profiles p ON s.profile_id = p.id
             WHERE s.id = ?
@@ -1538,9 +1624,21 @@ router.put('/:songId', authenticate, async (req, res) => {
             imageUrl = buildPublicFileUrl(imageUploadParams.Key);
         }
 
+        // An edit that says nothing about AI training must leave the artist's
+        // answer exactly as it was: consent is theirs to change deliberately,
+        // never something a title edit quietly grants or revokes.
+        const wasOptedIn = Boolean(songs[0].allow_ai_training);
+        const allowAiTraining = allow_ai_training !== undefined
+            ? parseBooleanFlag(allow_ai_training)
+            : wasOptedIn;
+        const aiOptedInAt = allowAiTraining
+            ? (wasOptedIn ? songs[0].ai_training_opted_in_at : new Date())
+            : null;
+
         await pool.query(`
             UPDATE songs
-            SET title = ?, description = ?, genre = ?, mp3_url = ?, image_url = ?, stems_url = ?, allow_download = ?
+            SET title = ?, description = ?, genre = ?, mp3_url = ?, image_url = ?, stems_url = ?,
+                allow_download = ?, allow_ai_training = ?, ai_training_opted_in_at = ?
             WHERE id = ?
         `, [
             title || songs[0].title,
@@ -1550,6 +1648,8 @@ router.put('/:songId', authenticate, async (req, res) => {
             imageUrl,
             stems_url !== undefined ? stems_url : songs[0].stems_url,
             allow_download !== undefined ? parseBooleanFlag(allow_download) : Boolean(songs[0].allow_download),
+            allowAiTraining,
+            aiOptedInAt,
             songId
         ]);
 
@@ -1598,6 +1698,7 @@ router.put('/:songId', authenticate, async (req, res) => {
             plays: Number(updatedSongs[0].plays) || 0,
             stems_url: updatedSongs[0].stems_url,
             allow_download: Boolean(updatedSongs[0].allow_download),
+            allow_ai_training: Boolean(updatedSongs[0].allow_ai_training),
             likes_count: 0,
         };
 
@@ -1637,6 +1738,60 @@ router.patch('/:songId/allow-download', authenticate, async (req, res) => {
         res.status(200).json({ id: songId, allow_download: allowDownload });
     } catch (err) {
         logger.error('Error in PATCH /music/:songId/allow-download:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Opt a single song in or out of AI model training (owner only).
+//
+// Consent is per song and per artist, and it is only ever given here: nothing
+// else in the codebase may set allow_ai_training to true. Turning it off clears
+// the timestamp too, so the row never claims a consent that has been withdrawn.
+router.patch('/:songId/allow-ai-training', authenticate, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const { allow_ai_training } = req.body;
+        if (allow_ai_training === undefined) {
+            return res.status(400).json({ error: 'allow_ai_training is required' });
+        }
+        const allowAiTraining = parseBooleanFlag(allow_ai_training);
+
+        const songs = await pool.query(
+            'SELECT id, profile_id, allow_ai_training, ai_training_opted_in_at FROM songs WHERE id = ?',
+            [songId]
+        );
+        if (!songs || songs.length === 0) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
+        const profileResult = await pool.query('SELECT user_id FROM profiles WHERE id = ?', [songs[0].profile_id]);
+        if (!profileResult || profileResult.length === 0 || Number(profileResult[0].user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        // Re-consenting to a track that was already opted in keeps the original
+        // date: the artist agreed then, and that is the fact worth recording.
+        const wasOptedIn = Boolean(songs[0].allow_ai_training);
+        const optedInAt = allowAiTraining
+            ? (wasOptedIn ? songs[0].ai_training_opted_in_at : new Date())
+            : null;
+
+        await pool.query(
+            'UPDATE songs SET allow_ai_training = ?, ai_training_opted_in_at = ? WHERE id = ?',
+            [allowAiTraining, optedInAt, songId]
+        );
+
+        res.status(200).json({
+            id: songId,
+            allow_ai_training: allowAiTraining,
+            ai_training_opted_in_at: optedInAt,
+        });
+    } catch (err) {
+        logger.error('Error in PATCH /music/:songId/allow-ai-training:', err);
         res.status(500).json({ error: err.message });
     }
 });

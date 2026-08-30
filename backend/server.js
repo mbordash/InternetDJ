@@ -17,10 +17,11 @@ const collabRouter = require('./routes/collabs');
 const projectRoutes = require('./routes/projects');
 const playlistsRouter = require('./routes/playlists');
 const sampleLibraryRouter = require('./routes/sampleLibrary');
-const stemsRouter = require('./routes/stems');
+const loopsRouter = require('./routes/loops');
 const idjcRouter = require('./routes/idjc');
 const notificationsRouter = require('./routes/notifications');
 const sitemapRouter = require('./routes/sitemap');
+const articlesRouter = require('./routes/articles');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -159,9 +160,10 @@ app.use('/api/collabs', collabRouter);
 app.use('/api/projects', projectRoutes);
 app.use('/api/sample-library', sampleLibraryRouter);
 app.use('/api/playlists', playlistsRouter);
-app.use('/api/stems', stemsRouter);
+app.use('/api/loops', loopsRouter);
 app.use('/api/idjc', idjcRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/articles', articlesRouter);
 
 // robots.txt and sitemap.xml are generated from the database, so they must be
 // matched before express.static and before the SPA catch-all below.
@@ -188,7 +190,9 @@ app.get(/(.*)/, async (req, res) => {
     // Check if this is a crawler request and if so, inject OG tags
     const userAgent = req.get('user-agent') || '';
     if (isCrawler(userAgent)) {
-        const metadata = extractMetadata(req.path);
+        // req.query as well as the path: /articles serves a different page per
+        // ?category=, and passing only the path made them all identical.
+        const metadata = extractMetadata(req.path, req.query);
         if (metadata) {
             logger.debug(`Crawler detected: ${userAgent}, extracting metadata for ${metadata.type}/${metadata.id}`);
             

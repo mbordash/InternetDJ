@@ -353,6 +353,18 @@ const Footer = () => {
                             <span className="retro-eyebrow hidden md:inline">
                                 Serving Independent Music Since 1997
                             </span>
+                            {/* A text link rather than another icon, and the
+                                only one in this row: it is the site's entry
+                                point for producers arriving from search, and
+                                icon-only links carry no anchor text for the
+                                crawlers that have to find it. Sitewide, so
+                                /promote is linked from every page. */}
+                            <Link
+                                to="/promote"
+                                className="retro-mono text-lg text-cyan-300 hover:text-cyan-200 whitespace-nowrap"
+                            >
+                                Promote Your Music
+                            </Link>
                             <Link
                                 to="/about"
                                 className="retro-icon-btn p-1.5"

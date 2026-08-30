@@ -24,7 +24,17 @@ function Home() {
     const [error, setError] = useState(null);
     const [showWelcome, setShowWelcome] = useState(true);
 
-    const description = "Discover, create, and share music on InternetDJ - the ultimate platform for music creators, DJs, and enthusiasts.";
+    /* This used to read "the ultimate platform for music creators, DJs, and
+       enthusiasts", which describes no particular site and matches no search
+       anyone performs. The home page is where both search engines and
+       assistants decide what this domain is for, so it names the thing a
+       producer is actually looking for: somewhere to publish a track and get
+       told what is wrong with it. Kept in step with the '/' entry in
+       backend/middleware/ogMetaTags.js, which serves the same claim to crawlers
+       that do not run JavaScript. */
+    const description = "Publish your music free on InternetDJ and get written feedback from other "
+        + "electronic producers. House, techno, drum & bass, ambient and everything in between, "
+        + "plus crates, collaborations and a free AI loop generator.";
 
     // Dismissible welcome banner
     useEffect(() => {
@@ -277,7 +287,7 @@ function Home() {
     return (
         <>
             <Helmet>
-                <title>InternetDJ - Discover, Create, and Share Music</title>
+                <title>InternetDJ: Publish Your Music, Get Real Feedback</title>
                 <meta name="description" content={description} />
             </Helmet>
 
@@ -291,16 +301,35 @@ function Home() {
                         <div className="retro-sun" aria-hidden="true" />
 
                         <div className="relative container mx-auto px-4 py-20 md:py-28 text-center">
+                            {/* Was "NOW WITH 100% MORE A.I." - an infomercial joke,
+                                but the first line on the page and it celebrated the
+                                exact thing a wary producer is suspicious of, leaving
+                                the headline below to walk it back. This sets up
+                                "Human Music" instead of arguing with it. */}
                             <div className="retro-eyebrow mb-6">
-                                * EST. 1997 * NOW WITH 100% MORE A.I. *
+                                * EST. 1997 * BY PRODUCERS, FOR PRODUCERS *
                             </div>
 
+                            {/* "AI Music" was the previous headline, and it named the
+                                wrong thing: as a noun phrase it means music made by
+                                AI, which writes the producer out of their own work.
+                                "AI Tools" names an instrument instead, so the person
+                                reading it is still the author. Same two beats, same
+                                chrome treatment - one word doing the work.
+
+                                AI stays in the headline deliberately. The loop
+                                generator is a real feature people search for by name,
+                                and burying it would cost traffic to fix a problem that
+                                was only ever about grammar. */}
                             <h1 className="retro-display retro-chrome text-4xl sm:text-6xl md:text-7xl leading-[1.05] mb-6">
-                                AI Music.<br />Made Simple.
+                                AI Tools.<br />Human Music.
                             </h1>
 
+                            {/* "Collaborate" traded for "Real feedback": the subhead
+                                listed four tools and nothing about the thing that
+                                actually separates this site from a file host. */}
                             <p className="retro-mono text-2xl md:text-3xl text-cyan-200 max-w-3xl mx-auto mb-10">
-                                Royalty-free stems &#9642; Online DAW &#9642; Collaborate &#9642; Discover
+                                Royalty-free loops &#9642; Online DAW &#9642; Real feedback &#9642; Discover
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -327,8 +356,8 @@ function Home() {
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <Link to="/stems" className="retro-btn retro-btn--hot px-5 py-3 text-xs">
-                                        Generate AI Stems
+                                    <Link to="/loops" className="retro-btn retro-btn--hot px-5 py-3 text-xs">
+                                        Generate AI Loops
                                     </Link>
                                     <Link to="/projects" className="retro-btn px-5 py-3 text-xs">
                                         Open DAW
@@ -376,6 +405,54 @@ function Home() {
                     </nav>
                 )}
 
+                {/* ==================== FOR PRODUCERS ====================
+                    The hero leads with the AI tools, which is the right pitch
+                    for someone who came here to make something. It is the wrong
+                    pitch for the other half of the audience: the producer who
+                    already has a finished track and is looking for somewhere to
+                    put it. This section is that half's entry point, and it sits
+                    directly under the ticker so a visitor arriving from a
+                    search for somewhere to publish does not have to scroll
+                    past a wall of other people's music to find the way in.
+
+                    Signed-out only. A member has already joined, and the copy
+                    below is an invitation to. Crawlers are always signed out,
+                    so this is what search engines and assistants read. */}
+                {!user && (
+                    <section className="container mx-auto px-4 pt-10">
+                        <div className="retro-panel retro-cut p-6 md:p-8">
+                            <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+                                <div className="flex-1">
+                                    <div className="retro-eyebrow mb-2">// For Producers //</div>
+                                    <h2 className="retro-display text-xl sm:text-2xl retro-glow-magenta mb-3">
+                                        Made a track? Put it up.
+                                    </h2>
+                                    <p className="retro-mono text-xl text-gray-300">
+                                        Publish your music on InternetDJ for free and get written
+                                        feedback from other producers, not just a play count.
+                                        No upload limit, no submission fee, and you keep every right
+                                        to your work.
+                                    </p>
+                                </div>
+                                <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0">
+                                    <Link
+                                        to="/promote"
+                                        className="retro-btn retro-btn--hot px-8 py-4 text-sm whitespace-nowrap"
+                                    >
+                                        Promote Your Music
+                                    </Link>
+                                    <Link
+                                        to="/new"
+                                        className="retro-btn px-8 py-4 text-sm whitespace-nowrap"
+                                    >
+                                        Hear What&rsquo;s New
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                )}
+
                 <div className="container mx-auto px-4 py-10">
 
                     {/* === 3 COLUMN GRID === */}
@@ -391,9 +468,15 @@ function Home() {
                                         ['/new', 'New Releases'],
                                         ['/browse', 'Browse Artists'],
                                         ['/crates', 'Mixtapes'],
-                                        ['/stems', 'AI Stems'],
+                                        ['/articles', 'Articles'],
+                                        ['/loops', 'AI Loops'],
                                         ['/projects', 'Studio / DAW'],
                                         ['/forum', 'Forum'],
+                                        // Listed for members rather than for search. The producer
+                                        // section further up this page is signed-out only, so
+                                        // without this entry a signed-in member has no route to
+                                        // /promote except the footer. This card renders either way.
+                                        ['/promote', 'Promote Your Music'],
                                     ].map(([to, label]) => (
                                         <Link
                                             key={to}

@@ -9,6 +9,35 @@ import { AudioPlayerContext, toPlayableUrl } from '../context/AudioPlayerContext
 import { CancelToken } from 'axios';
 import API_URL from '../utils/api';
 
+const eqBands = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+
+/** Every band flat, which is both the starting point and what Reset returns to. */
+const flatEqGains = () => eqBands.reduce((acc, band) => ({ ...acc, [band]: 0 }), {});
+
+/**
+ * Saved settings come out of a JSON column, so they can arrive as a string,
+ * with the gains themselves as strings, or missing a band that was added since
+ * they were saved. Everything downstream — the slider, the readout, the filter
+ * — wants a plain number for every band, so settle that once here.
+ */
+const normalizeEqGains = (stored) => {
+  let parsed = stored;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (err) {
+      console.warn('Stored EQ settings are not valid JSON:', stored);
+      return flatEqGains();
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return flatEqGains();
+
+  return eqBands.reduce((acc, band) => {
+    const gain = Number(parsed[band]);
+    return { ...acc, [band]: Number.isFinite(gain) ? gain : 0 };
+  }, {});
+};
+
 function AudioPlayer({ songId, s3Url, isOwner = false }) {
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
@@ -32,9 +61,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
   const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [eqSaved, setEqSaved] = useState(false);
+  const eqSettingsLoadedRef = useRef(false);
 
-  const eqBands = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-  const [eqGains, setEqGains] = useState(eqBands.reduce((acc, band) => ({ ...acc, [band]: 0 }), {}));
+  const [eqGains, setEqGains] = useState(flatEqGains);
   const filtersRef = useRef({});
 
   const [modalPosition, setModalPosition] = useState({ top: 150, left: 300 });
@@ -150,6 +180,7 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
           { headers: { Authorization: `Bearer ${token}` } }
       );
       console.log('EQ settings saved successfully');
+      setEqSaved(true);
     } catch (err) {
       console.error('Error saving EQ settings:', {
         message: err.message,
@@ -173,17 +204,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
       });
       console.log('Fetched EQ settings:', response.data);
       if (response.data.eqGains) {
-        setEqGains(response.data.eqGains);
-        if (filtersInitialized) {
-          Object.keys(response.data.eqGains).forEach((band) => {
-            if (filtersRef.current[band]) {
-              filtersRef.current[band].gain.value = parseFloat(response.data.eqGains[band]);
-            }
-          });
-        }
+        setEqGains(normalizeEqGains(response.data.eqGains));
       } else {
         console.log('No EQ settings found for user');
-        setEqGains(eqBands.reduce((acc, band) => ({ ...acc, [band]: 0 }), {}));
+        setEqGains(flatEqGains());
       }
     } catch (err) {
       console.error('Error fetching EQ settings:', {
@@ -195,21 +219,34 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
     }
   };
 
+  // The sliders are just numbers until there is an audio chain to put them
+  // through, so nothing here touches the filters directly: the gains are state,
+  // and this effect is the one place that pushes them at whatever filters
+  // currently exist. That is what lets a member set the EQ up before pressing
+  // play — the chain is built with these values when it appears (see
+  // initializeEQFilters), and re-synced here the moment it does.
+  useEffect(() => {
+    Object.entries(eqGains).forEach(([band, gain]) => {
+      const filter = filtersRef.current[band];
+      if (filter) {
+        filter.gain.value = Number(gain) || 0;
+      }
+    });
+  }, [eqGains, filtersInitialized]);
+
+  // Moving a slider makes whatever is stored no longer what you are hearing,
+  // so the saved confirmation stops applying. Keyed on the gains alone: the
+  // chain appearing later does not change what is stored.
+  useEffect(() => {
+    setEqSaved(false);
+  }, [eqGains]);
+
   const updateEQGain = (band, value) => {
     setEqGains((prev) => ({ ...prev, [band]: parseFloat(value) }));
-    if (filtersRef.current[band]) {
-      filtersRef.current[band].gain.value = parseFloat(value);
-    }
   };
 
   const resetEQ = () => {
-    const resetGains = eqBands.reduce((acc, band) => ({ ...acc, [band]: 0 }), {});
-    setEqGains(resetGains);
-    Object.keys(filtersRef.current).forEach((band) => {
-      if (filtersRef.current[band]) {
-        filtersRef.current[band].gain.value = 0;
-      }
-    });
+    setEqGains(flatEqGains());
   };
 
   const initializeEQFilters = () => {
@@ -684,7 +721,10 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
 
   const toggleEQModal = () => {
     setShowEQ(!showEQ);
-    if (!showEQ && isAuthenticated) {
+    // Once per mount: re-fetching on every open would quietly throw away
+    // slider positions the member had set but not saved yet.
+    if (!showEQ && isAuthenticated && !eqSettingsLoadedRef.current) {
+      eqSettingsLoadedRef.current = true;
       fetchEQSettings();
     }
     if (isActive && !filtersInitialized && wavesurferRef.current) {
@@ -834,9 +874,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                     </svg>
                   </div>
               )}
+              {/* The sliders always work; what changes is whether there is
+                  anything to hear yet. Say which of those it is instead of the
+                  old "unable to initialize", which read as broken when the only
+                  thing missing was playback. */}
               {!eqLoading && !filtersInitialized && (
-                  <div className="text-center mb-4 text-gray-300">
-                    Unable to initialize equalizer. Please try playing the audio first.
+                  <div className="retro-mono text-lg text-center mb-4 text-gray-300">
+                    {isActive
+                        ? 'The equalizer could not be set up for this track.'
+                        : 'Set these however you like \u2014 they take effect when you hit play.'}
                   </div>
               )}
               <div className="flex justify-between space-x-2">
@@ -848,13 +894,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                           min="-30"
                           max="30"
                           step="0.1"
-                          value={eqGains[band]}
+                          value={Number(eqGains[band]) || 0}
                           onChange={(e) => updateEQGain(band, e.target.value)}
                           className="w-8 h-24"
-                          disabled={!filtersInitialized || eqLoading}
+                          aria-label={`${band} Hz gain`}
                       />
                       <span className="retro-mono text-base text-cyan-300 mt-2">{band} Hz</span>
-                      <span className="retro-mono text-base text-gray-300">{eqGains[band].toFixed(1)} dB</span>
+                      <span className="retro-mono text-base text-gray-300">
+                        {(Number(eqGains[band]) || 0).toFixed(1)} dB
+                      </span>
                     </div>
                 ))}
               </div>
@@ -862,7 +910,6 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                 <button
                     onClick={resetEQ}
                     className="retro-btn py-1 px-3 text-[0.6rem]"
-                    disabled={!filtersInitialized || eqLoading}
                 >
                   Reset EQ
                 </button>
@@ -873,12 +920,15 @@ function AudioPlayer({ songId, s3Url, isOwner = false }) {
                             ? 'bg-primary-brand-500 text-white hover:bg-primary-brand-700'
                             : 'bg-white/10 text-gray-500 cursor-not-allowed'
                     }`}
-                    disabled={!isAuthenticated || isSaving || eqLoading || !filtersInitialized}
+                    disabled={!isAuthenticated || isSaving}
                 >
                   {isSaving ? 'Saving...' : 'Save EQ Settings'}
                 </button>
               </div>
               {saveError && <div className="retro-mono text-lg text-fuchsia-400 mt-2">{saveError}</div>}
+              {eqSaved && !saveError && (
+                  <div className="retro-mono text-lg text-cyan-300 mt-2">Settings saved.</div>
+              )}
             </div>
         ), document.body)}
       </div>

@@ -11,7 +11,7 @@ import PianoRoll from '../components/PianoRoll';
 import TrackSettingsModal from '../components/TrackSettingsModal';
 import TrackEffectsModal from '../components/TrackEffectsModal';
 import MidiGenerateModal from '../components/MidiGenerateModal';
-import StemGenerateModal from '../components/StemGenerateModal';
+import LoopGenerateModal from '../components/LoopGenerateModal';
 import synthConfigs from '../config/synthConfigs';
 import API_URL from '../utils/api';
 
@@ -566,7 +566,7 @@ const MultiTrackSampler = () => {
     const [minimizedTracks, setMinimizedTracks] = useState({});
     const [selectedTrackForEffects, setSelectedTrackForEffects] = useState(null);
     const [selectedTrackForGenerate, setSelectedTrackForGenerate] = useState(null);
-    const [selectedTrackForStem, setSelectedTrackForStem] = useState(null);
+    const [selectedTrackForLoop, setSelectedTrackForLoop] = useState(null);
     const effectsNodes = useRef({});
     const [metronomeOn, setMetronomeOn] = useState(false);
     const metronomeRef = useRef(false);
@@ -1520,9 +1520,9 @@ const MultiTrackSampler = () => {
         handleNotesChange(trackId, newNotes);
     };
 
-    // Place an AI-generated stem (already copied into the sample library by the
+    // Place an AI-generated loop (already copied into the sample library by the
     // ✨ generate modal) onto a sample track at the playhead
-    const handleApplyGeneratedStem = async (trackId, librarySample) => {
+    const handleApplyGeneratedLoop = async (trackId, librarySample) => {
         setLibrarySamples(prev => [...prev, librarySample]);
 
         const timeScale = 120 / bpm;
@@ -2888,7 +2888,7 @@ const MultiTrackSampler = () => {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setSelectedTrackForStem(tracks.find(t => t.id === track.id));
+                                                        setSelectedTrackForLoop(tracks.find(t => t.id === track.id));
                                                     }}
                                                     className="bg-[#1d0a38] text-gray-200 hover:bg-purple-600 rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     disabled={isLoadingDurations}
@@ -3188,13 +3188,13 @@ const MultiTrackSampler = () => {
                         onApply={handleApplyGeneratedNotes}
                     />
                 )}
-                {selectedTrackForStem && (
-                    <StemGenerateModal
-                        track={selectedTrackForStem}
+                {selectedTrackForLoop && (
+                    <LoopGenerateModal
+                        track={selectedTrackForLoop}
                         bpm={bpm}
                         startTime={playheadPosition}
-                        onClose={() => setSelectedTrackForStem(null)}
-                        onApply={handleApplyGeneratedStem}
+                        onClose={() => setSelectedTrackForLoop(null)}
+                        onApply={handleApplyGeneratedLoop}
                     />
                 )}
                 {selectedClip && (

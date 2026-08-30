@@ -13,6 +13,7 @@ import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import profilePath from '../utils/profilePath';
 import genreTags, { tagHref } from '../utils/genreTags';
+import { TrackMetaChips, ratingHref } from '../components/TrackFilters';
 
 // Feedback criteria
 const feedbackCriteria = [
@@ -67,7 +68,9 @@ const Song = () => {
     const [isLoadingSong, setIsLoadingSong] = useState(true);
     const [reviews, setReviews] = useState([]);
     const [error, setError] = useState(null);
-    const [reviewForm, setReviewForm] = useState({ review: '', feedback: {} });
+    // `rating` is null until the reviewer actually moves the slider: unrated and
+    // rated-zero are different statements, and only one of them is the default.
+    const [reviewForm, setReviewForm] = useState({ review: '', feedback: {}, rating: null });
     const [reviewError, setReviewError] = useState(null);
     const [showReviewDeleteConfirm, setShowReviewDeleteConfirm] = useState(false);
     const [reviewToDelete, setReviewToDelete] = useState(null);
@@ -96,15 +99,30 @@ const Song = () => {
         acc[criterion] = DEFAULT_FEEDBACK_SCORE;
         return acc;
     }, {});
+    // The form belongs to the song on screen, so it is rebuilt whenever that
+    // changes. Navigating between song pages does not remount this component —
+    // only songId changes — so a form seeded once per mount kept whatever was
+    // typed or rated on the previous track and posted it with the next comment.
+    // That is what made a rating look like it followed the reviewer from song
+    // to song: the insert was writing exactly what the page had handed it.
     useEffect(() => {
-        setReviewForm(prev => ({ ...prev, feedback: initialFeedback }));
-    }, []);
+        setReviewForm({ review: '', feedback: initialFeedback, rating: null });
+        setReviewError(null);
+        // initialFeedback is rebuilt every render, so it cannot be a dependency
+        // without resetting the form on each keystroke.
+    }, [songId]);
 
     // Navigating between song pages changes songId a render before the new
     // song arrives, so `song` still holds the previous track. Handing that
     // stale mp3_url to the player is what loaded the wrong audio under the
     // new song's page.
     const isSongLoaded = song?.id === Number(songId);
+
+    // The song row comes back straight from the database, where bpm is a
+    // decimal and can arrive as a string; the chips expect a number.
+    const songBpm = Number.isFinite(Number(song?.bpm)) && song?.bpm !== '' && song?.bpm !== null
+        ? Number(song.bpm)
+        : null;
 
     const audioPlayerProps = useMemo(
         () => ({
@@ -351,6 +369,20 @@ const Song = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    // The song's score is just the reviews that carried one. Reviews without a
+    // rating are left out of the average rather than counted as zero, which is
+    // the whole point of letting people skip it.
+    const ratingSummary = useMemo(() => {
+        const scores = reviews
+            .map((review) => review.rating)
+            .filter((rating) => typeof rating === 'number' && Number.isFinite(rating));
+        if (scores.length === 0) return null;
+        return {
+            average: scores.reduce((sum, score) => sum + score, 0) / scores.length,
+            count: scores.length,
+        };
+    }, [reviews]);
+
     const handleReviewInputChange = (e) => {
         const { name, value } = e.target;
         setReviewForm(prev => ({ ...prev, [name]: value }));
@@ -378,11 +410,12 @@ const Song = () => {
                     song_id: Number(songId),
                     review: reviewForm.review,
                     feedback: reviewForm.feedback,
+                    rating: reviewForm.rating,
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setReviews([response.data.review, ...reviews]);
-            setReviewForm({ review: '', feedback: initialFeedback });
+            setReviewForm({ review: '', feedback: initialFeedback, rating: null });
             setShowFeedbackModal(false);
             setReviewError(null);
         } catch (err) {
@@ -821,35 +854,24 @@ const Song = () => {
                                             <AudioPlayer key={songId} {...audioPlayerProps} />
                                         )}
                                     </div>
-                                    {/* Detected tempo and key. Either can be absent:
+                                    {/* Description, genres, tempo and key.
+                                        Tempo and key sit in the same row as the
+                                        genre tags because they are the same thing
+                                        to a listener — a way into more tracks like
+                                        this — and each one links to browse with that
+                                        filter already applied. Either can be absent:
                                         analysis stores nothing when it is not
                                         confident, which is the right answer for
                                         beatless or atonal tracks. */}
-                                    {(song?.bpm || song?.musical_key) && (
-                                        <div className="flex flex-wrap gap-2">
-                                            {song?.bpm && (
-                                                <span className="retro-chip" title="Detected tempo">
-                                                    {Math.round(song.bpm)} BPM
-                                                </span>
-                                            )}
-                                            {song?.musical_key && (
-                                                <span className="retro-chip" title="Detected key">
-                                                    {song.musical_key}
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Description and Genre Tags */}
                                     <div className="space-y-2">
                                         {song?.description && (
                                             <p className="retro-mono text-xl text-gray-300 whitespace-pre-line">
                                                 {sanitizeHtml(song.description, { allowedTags: [], allowedAttributes: {} })}
                                             </p>
                                         )}
-                                        {genreTags(song?.genre).length > 0 ? (
-                                            <div className="flex flex-wrap gap-2">
-                                                {genreTags(song.genre).map((genre) => (
+                                        {genreTags(song?.genre).length > 0 || songBpm != null || song?.musical_key ? (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {genreTags(song?.genre).map((genre) => (
                                                     <Link
                                                         key={genre}
                                                         to={tagHref(genre)}
@@ -858,6 +880,11 @@ const Song = () => {
                                                         {genre}
                                                     </Link>
                                                 ))}
+                                                <TrackMetaChips
+                                                    bpm={songBpm}
+                                                    musicalKey={song?.musical_key}
+                                                    linked
+                                                />
                                             </div>
                                         ) : (
                                             <p className="text-sm text-gray-300">No genres specified</p>
@@ -885,6 +912,69 @@ const Song = () => {
                                                     className="retro-field mt-1"
                                                 />
                                             </div>
+                                            {/* Optional by design: the comment is what an artist
+                                                can act on, so the score sits under it and starts
+                                                unset. Saying nothing is a valid answer, and it is
+                                                not the same as scoring the track zero. */}
+                                            <div>
+                                                <div className="flex items-baseline justify-between gap-4">
+                                                    <label
+                                                        className="block text-sm font-medium text-gray-300"
+                                                        htmlFor="review-rating"
+                                                    >
+                                                        Rating (optional)
+                                                    </label>
+                                                    {reviewForm.rating != null && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setReviewForm(prev => ({ ...prev, rating: null }))}
+                                                            className="retro-link retro-mono text-lg underline"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="mt-1">
+                                                    {/* Same control as the detailed feedback modal:
+                                                        one slider treatment across every score on
+                                                        the page, end labels and all. */}
+                                                    <input
+                                                        id="review-rating"
+                                                        type="range"
+                                                        min="0.5"
+                                                        max="10"
+                                                        step="0.5"
+                                                        value={reviewForm.rating ?? 5}
+                                                        onChange={(e) => setReviewForm(prev => ({
+                                                            ...prev,
+                                                            rating: Number(e.target.value),
+                                                        }))}
+                                                        aria-valuetext={reviewForm.rating != null
+                                                            ? `${reviewForm.rating.toFixed(1)} out of 10`
+                                                            : 'no rating given'}
+                                                        className="retro-slider w-full cursor-pointer"
+                                                    />
+                                                    <div className="flex justify-between items-baseline text-xs mt-1 text-gray-500">
+                                                        <span>0.5</span>
+                                                        <span className="retro-mono text-cyan-300">
+                                                            {reviewForm.rating != null ? (
+                                                                <>
+                                                                    <span className="tabular-nums">
+                                                                        {reviewForm.rating.toFixed(1)}
+                                                                    </span>
+                                                                    <span className="text-gray-400"> / 10</span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-gray-500">not rated</span>
+                                                            )}
+                                                        </span>
+                                                        <span>10</span>
+                                                    </div>
+                                                </div>
+                                                <p className="retro-mono text-lg text-gray-400 mt-1">
+                                                    Leave this alone if you would rather just say what you think.
+                                                </p>
+                                            </div>
                                             <div className="flex space-x-4">
                                                 <button
                                                     type="button"
@@ -906,7 +996,26 @@ const Song = () => {
                                 )}
 
                                 <div className="retro-panel retro-cut p-6">
-                                    <h2 className="retro-display text-lg retro-glow-magenta mb-4">Comments</h2>
+                                    <div className="flex items-baseline justify-between gap-4 flex-wrap mb-4">
+                                        <h2 className="retro-display text-lg retro-glow-magenta">Comments</h2>
+                                        {ratingSummary && (
+                                            <span className="retro-mono text-lg">
+                                                {/* The score is a way into the catalogue, not just a
+                                                    number: it opens browse filtered to tracks
+                                                    scoring around the same mark. */}
+                                                <Link
+                                                    to={ratingHref(ratingSummary.average)}
+                                                    className="retro-link text-cyan-300"
+                                                    title={`Browse tracks rated around ${ratingSummary.average.toFixed(1)}`}
+                                                >
+                                                    {ratingSummary.average.toFixed(1)} / 10
+                                                </Link>
+                                                <span className="text-gray-400">
+                                                    {' '}&middot; {ratingSummary.count} rating{ratingSummary.count === 1 ? '' : 's'}
+                                                </span>
+                                            </span>
+                                        )}
+                                    </div>
                                     {reviews.length === 0 ? (
                                         <p className="text-gray-300">No comments yet.</p>
                                     ) : (
@@ -940,6 +1049,15 @@ const Song = () => {
                                                                     {review.user_name}
                                                                 </Link>
                                                                 <div className="flex items-center space-x-4">
+                                                                    {typeof review.rating === 'number' && (
+                                                                        <Link
+                                                                            to={ratingHref(review.rating)}
+                                                                            className="retro-chip"
+                                                                            title={`Rated ${review.rating.toFixed(1)} — browse tracks scoring around that`}
+                                                                        >
+                                                                            {review.rating.toFixed(1)} / 10
+                                                                        </Link>
+                                                                    )}
                                                                     <p className="text-sm text-gray-400">
                                                                         {new Date(review.created_at).toLocaleDateString()}
                                                                     </p>

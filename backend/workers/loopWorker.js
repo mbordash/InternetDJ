@@ -48,25 +48,25 @@ const trimToLength = (inputPath, outputPath, seconds) => new Promise((resolve, r
         .save(outputPath);
 });
 
-logger.info('Initializing stem worker...'); // Log startup
+logger.info('Initializing loop worker...'); // Log startup
 
-const worker = new Worker('stem-gen', async (job) => {
+const worker = new Worker('loop-gen', async (job) => {
     logger.info('Worker received job', { jobId: job.id, data: job.data });
 
-    const { stemId, fullPrompt, duration } = job.data;
+    const { loopId, fullPrompt, duration } = job.data;
 
-    await pool.query('UPDATE stems SET status = ? WHERE id = ?', ['generating', stemId]);
-    logger.info('Updated stem status to generating', { stemId });
+    await pool.query('UPDATE loops SET status = ? WHERE id = ?', ['generating', loopId]);
+    logger.info('Updated loop status to generating', { loopId });
 
-    const outputPath = path.join(__dirname, '..', 'temp', `${stemId}.wav`);
-    const rawPath = path.join(__dirname, '..', 'temp', `${stemId}-raw.wav`);
+    const outputPath = path.join(__dirname, '..', 'temp', `${loopId}.wav`);
+    const rawPath = path.join(__dirname, '..', 'temp', `${loopId}-raw.wav`);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
     const requestedDuration = Number(duration) || MIN_GENERATION_SECONDS;
     const generateDuration = Math.max(requestedDuration, MIN_GENERATION_SECONDS);
 
-    logger.info('Calling Replicate for stem generation', {
-        stemId, fullPrompt, requestedDuration, generateDuration,
+    logger.info('Calling Replicate for loop generation', {
+        loopId, fullPrompt, requestedDuration, generateDuration,
     });
 
     try {
@@ -117,15 +117,15 @@ const worker = new Worker('stem-gen', async (job) => {
         const audioRes = await axios.get(outputUrl, { responseType: 'arraybuffer' });
         fs.writeFileSync(rawPath, audioRes.data);
 
-        logger.info('Stem generated and downloaded from Replicate', { stemId });
+        logger.info('Loop generated and downloaded from Replicate', { loopId });
 
         if (generateDuration > requestedDuration) {
             try {
                 await trimToLength(rawPath, outputPath, requestedDuration);
-                logger.info('Trimmed stem to requested length', { stemId, requestedDuration });
+                logger.info('Trimmed loop to requested length', { loopId, requestedDuration });
             } catch (trimErr) {
-                // A longer stem beats no stem: fall back to the untrimmed take.
-                logger.error('Failed to trim stem, using full generation', { stemId, err: trimErr.message });
+                // A longer loop beats no loop: fall back to the untrimmed take.
+                logger.error('Failed to trim loop, using full generation', { loopId, err: trimErr.message });
                 fs.copyFileSync(rawPath, outputPath);
             }
         } else {
@@ -136,19 +136,19 @@ const worker = new Worker('stem-gen', async (job) => {
         const audioBuffer = fs.readFileSync(outputPath);
         const uploadParams = {
             Bucket: process.env.BUCKET_NAME,
-            Key: `stems/${stemId}.wav`,
+            Key: `loops/${loopId}.wav`,
             Body: audioBuffer,
             ContentType: 'audio/wav'
         };
         await s3Client.send(new PutObjectCommand(uploadParams));
         const s3Url = buildPublicFileUrl(uploadParams.Key);
 
-        await pool.query('UPDATE stems SET status = ?, url = ? WHERE id = ?', ['ready', s3Url, stemId]);
-        logger.info('Stem uploaded to S3 and status updated to ready', { stemId, s3Url });
+        await pool.query('UPDATE loops SET status = ?, url = ? WHERE id = ?', ['ready', s3Url, loopId]);
+        logger.info('Loop uploaded to S3 and status updated to ready', { loopId, s3Url });
 
     } catch (err) {
-        await pool.query('UPDATE stems SET status = ? WHERE id = ?', ['failed', stemId]);
-        logger.error('Error generating stem with Replicate', err);
+        await pool.query('UPDATE loops SET status = ? WHERE id = ?', ['failed', loopId]);
+        logger.error('Error generating loop with Replicate', err);
         throw err;
     } finally {
         // Cleanup runs on failure too, so a failed job doesn't leave a
@@ -157,13 +157,13 @@ const worker = new Worker('stem-gen', async (job) => {
             try {
                 if (fs.existsSync(file)) fs.unlinkSync(file);
             } catch (cleanupErr) {
-                logger.error('Failed to clean up temp stem file', { file, err: cleanupErr.message });
+                logger.error('Failed to clean up temp loop file', { file, err: cleanupErr.message });
             }
         });
     }
 }, { connection: redisConnection });
 
-worker.on('ready', () => logger.info('Stem worker is ready and listening for jobs'));
-worker.on('completed', (job) => logger.info(`Stem job completed`, { jobId: job.id, stemId: job.data.stemId }));
-worker.on('failed', (job, err) => logger.error(`Stem job failed`, { jobId: job.id, stemId: job.data.stemId, err: err.message }));
-worker.on('error', (err) => logger.error('Stem worker error', err));
+worker.on('ready', () => logger.info('Loop worker is ready and listening for jobs'));
+worker.on('completed', (job) => logger.info(`Loop job completed`, { jobId: job.id, loopId: job.data.loopId }));
+worker.on('failed', (job, err) => logger.error(`Loop job failed`, { jobId: job.id, loopId: job.data.loopId, err: err.message }));
+worker.on('error', (err) => logger.error('Loop worker error', err));

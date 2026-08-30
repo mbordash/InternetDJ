@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { SpeakerWaveIcon, StarIcon, PencilIcon, TrashIcon, ChartBarIcon, XMarkIcon, ArrowDownTrayIcon, BoltIcon } from '@heroicons/react/24/solid';
+import { StarIcon, PencilIcon, XMarkIcon, ArrowDownTrayIcon, SparklesIcon, ChartBarIcon, TrashIcon } from '@heroicons/react/24/solid';
 import API_URL from '../utils/api';
 import { MUSICAL_KEYS } from '../utils/musicalKeys';
 import genreTags from '../utils/genreTags';
@@ -30,6 +30,120 @@ Chart.register(
     Legend
 );
 
+/**
+ * A permission shown as what it currently is, in words, that flips when
+ * clicked. This replaces the pair it used to take — a coloured icon on the
+ * right of the row plus a separate text label in the meta line — which said
+ * the same thing twice and only made sense once you hovered for the tooltip.
+ */
+const PermissionPill = ({ icon: Icon, on, onLabel, offLabel, title, onClick, disabled = false }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={on}
+        disabled={disabled}
+        title={disabled ? 'Change this in the edit form below, then save' : title}
+        className={`retro-action px-3 py-1 retro-mono text-lg gap-1.5 ${on ? 'retro-action--on' : ''}`}
+    >
+        <Icon className={`w-4 h-4 ${on ? '' : 'opacity-60'}`} />
+        {on ? onLabel : offLabel}
+    </button>
+);
+
+/**
+ * One action in a row's control bar.
+ *
+ * These used to hide behind a single ellipsis button. The menu existed to stop
+ * a destructive delete from looking exactly like "view stats" back when every
+ * action was an unlabelled icon of the same size — but hiding all of them to
+ * solve that cost more than it fixed, since managing songs is precisely when
+ * you want the actions in front of you. Words plus a danger variant separate
+ * delete from the rest without anything having to be hidden.
+ */
+const RowAction = ({ icon: Icon, label, onClick, danger = false, disabled = false, title }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        title={title || label}
+        className={`retro-action px-3 py-2 retro-mono text-lg gap-1.5 ${danger ? 'retro-action--danger' : ''}`}
+    >
+        <Icon className="w-4 h-4" />
+        {label}
+    </button>
+);
+
+// The two permissions an artist grants a track. They live on the upload and
+// edit forms — not only behind the row icons — because deciding who may take
+// the audio and whether it trains a model belongs next to the title and genre,
+// where the artist is already thinking about the song. Both are one component
+// so the wording and the defaults cannot drift between the two forms.
+const SongPermissionFields = ({ idPrefix, allowDownload, allowAiTraining, onChange }) => (
+    <div className="border border-cyan-400/25 bg-white/5 p-3 rounded-md space-y-4">
+        <label className="flex items-start gap-3 cursor-pointer" htmlFor={`${idPrefix}-allow-download`}>
+            <input
+                id={`${idPrefix}-allow-download`}
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => onChange({ allowDownload: e.target.checked })}
+                className="mt-1"
+            />
+            <span>
+                <span className="retro-label inline-flex items-center gap-1">
+                    <ArrowDownTrayIcon className="w-4 h-4 text-primary-brand-300" />
+                    Let anyone download this track
+                </span>
+                <span className="retro-mono text-lg text-gray-400 block mt-1">
+                    Off unless you tick it. Ticking it puts a download button on the
+                    song page, so listeners can keep a copy of the audio file.
+                </span>
+            </span>
+        </label>
+
+        {/* Opt-in, not opt-out. The copy says plainly what agreeing to means,
+            including the part that cannot be taken back. */}
+        <label className="flex items-start gap-3 cursor-pointer" htmlFor={`${idPrefix}-allow-ai-training`}>
+            <input
+                id={`${idPrefix}-allow-ai-training`}
+                type="checkbox"
+                checked={allowAiTraining}
+                onChange={(e) => onChange({ allowAiTraining: e.target.checked })}
+                className="mt-1"
+            />
+            <span>
+                <span className="retro-label inline-flex items-center gap-1">
+                    <SparklesIcon className="w-4 h-4 text-cyan-300" />
+                    Use this track to train the loop generator
+                </span>
+                <span className="retro-mono text-lg text-gray-400 block mt-1">
+                    Your call, and it is off unless you tick it. Ticking it lets
+                    InternetDJ use this audio to train the model that writes brand-new
+                    bass, synth, drum and effects parts from a prompt. It is never taken
+                    apart, reproduced or handed to anyone — it teaches the model, and
+                    nothing more. You keep every right to your music, and you can change
+                    your mind here any time — that takes the track out of future
+                    training, though it cannot undo training that has already happened.
+                </span>
+            </span>
+        </label>
+    </div>
+);
+
+// Same idea for the upload form: reset it from here, not from a literal
+// repeated at each call site.
+const EMPTY_SONG_FORM = {
+    title: '',
+    description: '',
+    genres: [],
+    genreInput: '',
+    mp3: null,
+    image: null,
+    // Both permissions start off: a track is downloadable, or part of a
+    // training set, only because the artist ticked the box for it.
+    allowDownload: false,
+    allowAiTraining: false,
+};
+
 // One place to reset the edit form from, so a new field cannot be added to
 // the form and forgotten in one of the three places that clear it.
 const EMPTY_EDIT_FORM = {
@@ -41,6 +155,10 @@ const EMPTY_EDIT_FORM = {
     musicalKey: '',
     mp3: null,
     image: null,
+    // Filled in from the song when the form opens, so the boxes always show
+    // what is actually set rather than a default.
+    allowDownload: false,
+    allowAiTraining: false,
 };
 
 const SongsManager = () => {
@@ -53,14 +171,7 @@ const SongsManager = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadCompleted, setUploadCompleted] = useState(false);
     const [showUploadForm, setShowUploadForm] = useState(false);
-    const [songForm, setSongForm] = useState({
-        title: '',
-        description: '',
-        genres: [],
-        genreInput: '',
-        mp3: null,
-        image: null,
-    });
+    const [songForm, setSongForm] = useState(EMPTY_SONG_FORM);
     const [editSongId, setEditSongId] = useState(null);
     const [editFormData, setEditFormData] = useState(EMPTY_EDIT_FORM);
     const [featureNotice, setFeatureNotice] = useState(null);
@@ -228,6 +339,8 @@ const SongsManager = () => {
         form.append('title', songForm.title);
         form.append('description', songForm.description || '');
         form.append('genre', finalGenres.join(','));
+        form.append('allow_download', songForm.allowDownload ? 'true' : 'false');
+        form.append('allow_ai_training', songForm.allowAiTraining ? 'true' : 'false');
         form.append('mp3', songForm.mp3);
         if (songForm.image) {
             form.append('image', songForm.image);
@@ -247,7 +360,7 @@ const SongsManager = () => {
                 },
             });
             setSongs([...songs, { ...response.data.song, plays: Number(response.data.song.plays) || 0 }]);
-            setSongForm({ title: '', description: '', genres: [], genreInput: '', mp3: null, image: null });
+            setSongForm(EMPTY_SONG_FORM);
             setUploadCompleted(true);
             setShowUploadForm(false);
             setError(null);
@@ -266,7 +379,7 @@ const SongsManager = () => {
     };
 
     const handleUploadMore = () => {
-        setSongForm({ title: '', description: '', genres: [], genreInput: '', mp3: null, image: null });
+        setSongForm(EMPTY_SONG_FORM);
         setUploadCompleted(false);
         setError(null);
         if (mp3InputRef.current) mp3InputRef.current.value = '';
@@ -486,6 +599,8 @@ const SongsManager = () => {
         if (editFormData.image) {
             form.append('image', editFormData.image);
         }
+        form.append('allow_download', editFormData.allowDownload ? 'true' : 'false');
+        form.append('allow_ai_training', editFormData.allowAiTraining ? 'true' : 'false');
 
         try {
             const response = await axios.put(`${API_URL}/music/${editSongId}`, form, {
@@ -541,6 +656,35 @@ const SongsManager = () => {
             setError(null);
         } catch (err) {
             setError(`Failed to update download setting: ${err.response?.data?.error || err.message}`);
+        }
+    };
+
+    // Opting a track in or out of training InternetDJ's loop generator. This is
+    // the artist's call and nothing else changes it, so the request goes to its
+    // own endpoint rather than riding along with an edit.
+    const handleToggleAiTraining = async (song) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setError('You must be logged in to change AI training settings');
+            return;
+        }
+
+        const nextValue = !song.allow_ai_training;
+        try {
+            await axios.patch(
+                `${API_URL}/music/${song.id}/allow-ai-training`,
+                { allow_ai_training: nextValue },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setSongs((prevSongs) => prevSongs.map((s) =>
+                s.id === song.id ? { ...s, allow_ai_training: nextValue } : s
+            ));
+            setError(null);
+            setFeatureNotice(nextValue
+                ? `"${song.title}" can now be used to train the loop generator.`
+                : `"${song.title}" will not be used to train the loop generator.`);
+        } catch (err) {
+            setError(`Failed to update AI training setting: ${err.response?.data?.error || err.message}`);
         }
     };
 
@@ -678,15 +822,15 @@ const SongsManager = () => {
 
     return (
         <div className="retro-page -mt-24 pt-24 -mb-28 pb-28 text-gray-100 min-h-screen">
-            <div className="container mx-auto px-4 py-8 max-w-4xl">
+            <div className="container mx-auto px-4 py-8 max-w-6xl">
             <h1 className="retro-display retro-chrome text-3xl mb-6">Songs Manager</h1>
 
             {/* Upload Song Button */}
             {!showUploadForm && (
                 <div className="mb-8">
-                        <button
+                    <button
                         onClick={() => setShowUploadForm(true)}
-                            className="py-2 px-4 bg-primary-brand-500 text-white font-semibold rounded-full shadow-sm  focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                        className="retro-btn retro-btn--hot py-2 px-4 text-xs"
                     >
                         Upload New Song
                     </button>
@@ -695,7 +839,7 @@ const SongsManager = () => {
 
             {/* Song Upload Section */}
             {showUploadForm && (
-                <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100">
+                <div className="retro-panel retro-cut border border-white/10 p-6 rounded-xl shadow-md mb-8 text-gray-100 max-w-3xl">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="retro-display text-base retro-glow-cyan">Upload a Song</h2>
                         <button
@@ -824,6 +968,12 @@ const SongsManager = () => {
                                     className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                                 />
                             </div>
+                            <SongPermissionFields
+                                idPrefix="upload"
+                                allowDownload={songForm.allowDownload}
+                                allowAiTraining={songForm.allowAiTraining}
+                                onChange={(patch) => setSongForm({ ...songForm, ...patch })}
+                            />
                             {isUploading && (
                                 <div className="relative w-full bg-white/10 rounded-full h-6">
                                     <div
@@ -860,7 +1010,12 @@ const SongsManager = () => {
                     <div className="space-y-6">
                         {songs.map((song) => (
                             <div key={song.id} className="p-4 bg-white/5 border border-white/10 rounded-xl shadow-sm">
-                                <div className="flex items-center space-x-4">
+                                {/* Content on the left, every control on the right. The
+                                    extra page width buys a real control column, so the
+                                    permissions no longer sit in the middle of the song's
+                                    facts and the actions no longer need hiding. */}
+                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                                  <div className="flex items-start gap-4 flex-1 min-w-0">
                                     {song.image_url ? (
                                         <Link to={`/song/${song.id}`}>
                                             <img
@@ -874,121 +1029,132 @@ const SongsManager = () => {
                                             No Image
                                         </div>
                                     )}
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0 space-y-2">
                                         <Link
                                             to={`/song/${song.id}`}
-                                            className="text-lg font-semibold text-white hover:underline"
+                                            className="text-lg font-semibold text-white hover:underline block truncate"
                                         >
                                             {song.title}
                                         </Link>
-                                        <div className="text-sm text-gray-300 flex items-center gap-x-2">
-                                            {genreTags(song.genre).length > 0 ? (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {genreTags(song.genre).slice(0, 3).map((tag) => (
-                                                        <span
-                                                            key={tag}
-                                                            className="retro-chip inline-flex items-center px-2 py-0.5"
-                                                        >
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <span>No genres</span>
-                                            )}
-                                            <span> | </span>
-                                            <span className="inline-flex items-center">
-                                                {Number(song.plays) || 0}
-                                                <SpeakerWaveIcon
-                                                    className={`w-4 h-4 ml-1 ${Number(song.plays) > 0 ? 'text-white' : 'text-gray-500'}`}
-                                                />
-                                            </span>
-                                            <span> | </span>
-                                            <span className="inline-flex items-center">
+                                        {genreTags(song.genre).length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {genreTags(song.genre).slice(0, 3).map((tag) => (
+                                                    <span
+                                                        key={tag}
+                                                        className="retro-chip inline-flex items-center px-2 py-0.5"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="retro-mono text-lg text-gray-500">No genres</p>
+                                        )}
+                                        {/* Facts about the track, separated by dots rather than
+                                            pipes: the row already carries enough vertical bars. */}
+                                        <div className="retro-mono text-lg text-gray-400 flex flex-wrap items-center gap-x-2">
+                                            <span>{Number(song.plays) || 0} play{Number(song.plays) === 1 ? '' : 's'}</span>
+                                            <span aria-hidden="true">·</span>
+                                            <span className="inline-flex items-center gap-1">
                                                 {typeof song.avg_rating === 'number' && song.avg_rating > 0 ? (
                                                     <>
                                                         {song.avg_rating.toFixed(1)}
-                                                        <StarIcon className="w-4 h-4 text-white ml-1" />
+                                                        <StarIcon className="w-4 h-4 text-white" />
                                                     </>
                                                 ) : (
-                                                    <>
-                                                        N/A
-                                                        <StarIcon className="w-4 h-4 text-gray-500 ml-1" />
-                                                    </>
+                                                    'unrated'
                                                 )}
                                             </span>
-                                            {song.allow_download && (
-                                                <>
-                                                    <span> | </span>
-                                                    <span className="inline-flex items-center text-primary-brand-300">
-                                                        Downloadable
-                                                        <ArrowDownTrayIcon className="w-4 h-4 ml-1" />
-                                                    </span>
-                                                </>
-                                            )}
                                         </div>
                                     </div>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            onClick={() => handleToggleDownload(song)}
-                                            className={`p-2 ${song.allow_download ? 'text-primary-brand-300 hover:text-primary-brand-200' : 'text-gray-500 hover:text-gray-400'}`}
-                                            title={song.allow_download ? 'Public downloads enabled — click to disable' : 'Public downloads disabled — click to enable'}
-                                            aria-pressed={Boolean(song.allow_download)}
-                                        >
-                                            <ArrowDownTrayIcon className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => setSongToMaster(song)}
-                                            className="p-2 text-cyan-400 hover:text-cyan-300"
-                                            title="Auto Master — save a mastered copy as a new song"
-                                        >
-                                            <BoltIcon className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setEditSongId(song.id);
-                                                setEditFormData({
-                                                    ...EMPTY_EDIT_FORM,
-                                                    title: song.title,
-                                                    description: song.description || '',
-                                                    genres: genreTags(song.genre).slice(0, 3),
-                                                    // Numbers arrive as strings from a form; keep them
-                                                    // that way so an empty field means "clear it".
-                                                    bpm: song.bpm != null ? String(Math.round(Number(song.bpm))) : '',
-                                                    musicalKey: song.musical_key || '',
-                                                });
-                                            }}
-                                            className="p-2 text-blue-600 hover:text-blue-700"
-                                            title="Edit Song"
-                                        >
-                                            <PencilIcon className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setSongToDelete(song.id);
-                                                setShowDeleteConfirm(true);
-                                            }}
-                                            className="p-2 text-red-600 hover:text-red-700"
-                                            title="Delete Song"
-                                        >
-                                            <TrashIcon className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setStatsSongId(song.id);
-                                                setStartDate('');
-                                                setEndDate('');
-                                                setShowStatsModal(true);
-                                            }}
-                                            className="p-2 text-green-600 hover:text-green-700"
-                                            title="View Stats"
-                                        >
-                                            <ChartBarIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
+                                  </div>
+
+                                  {/* The permissions, each stating what it currently is. They
+                                      go inert while this song's edit form is open: the form
+                                      holds its own copy of both values, so a pill flipped
+                                      underneath it would be reverted on save. */}
+                                  <div className="shrink-0 flex flex-col gap-2 lg:items-end lg:w-[22rem]">
+                                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                                            <PermissionPill
+                                                icon={ArrowDownTrayIcon}
+                                                on={Boolean(song.allow_download)}
+                                                onLabel="Downloadable"
+                                                offLabel="Downloads off"
+                                                title={song.allow_download
+                                                    ? 'Anyone can download this track — click to turn downloads off'
+                                                    : 'Nobody can download this track — click to allow downloads'}
+                                                onClick={() => handleToggleDownload(song)}
+                                                disabled={editSongId === song.id}
+                                            />
+                                            <PermissionPill
+                                                icon={SparklesIcon}
+                                                on={Boolean(song.allow_ai_training)}
+                                                onLabel="Training opt-in"
+                                                offLabel="Not in training"
+                                                title={song.allow_ai_training
+                                                    ? 'Opted in to training the loop generator — click to opt out'
+                                                    : 'Not used for AI training — click to opt in'}
+                                                onClick={() => handleToggleAiTraining(song)}
+                                                disabled={editSongId === song.id}
+                                            />
+                                        </div>
+                                        {/* Edit first because it is what people came for,
+                                            then the two read-and-process actions. Delete is
+                                            pushed off on its own with a danger colour so it
+                                            can be visible without being easy to hit. */}
+                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                            <RowAction
+                                                icon={PencilIcon}
+                                                label="Edit"
+                                                title="Edit song"
+                                                onClick={() => {
+                                                    setEditSongId(song.id);
+                                                    setEditFormData({
+                                                        ...EMPTY_EDIT_FORM,
+                                                        title: song.title,
+                                                        description: song.description || '',
+                                                        genres: genreTags(song.genre).slice(0, 3),
+                                                        // Numbers arrive as strings from a form; keep them
+                                                        // that way so an empty field means "clear it".
+                                                        bpm: song.bpm != null ? String(Math.round(Number(song.bpm))) : '',
+                                                        musicalKey: song.musical_key || '',
+                                                        allowDownload: Boolean(song.allow_download),
+                                                        allowAiTraining: Boolean(song.allow_ai_training),
+                                                    });
+                                                }}
+                                            />
+                                            <RowAction
+                                                icon={SparklesIcon}
+                                                label="Auto Master"
+                                                title="Master this track and save the result as a new song"
+                                                onClick={() => setSongToMaster(song)}
+                                            />
+                                            <RowAction
+                                                icon={ChartBarIcon}
+                                                label="Stats"
+                                                title="View play stats for this song"
+                                                onClick={() => {
+                                                    setStatsSongId(song.id);
+                                                    setStartDate('');
+                                                    setEndDate('');
+                                                    setShowStatsModal(true);
+                                                }}
+                                            />
+                                            <RowAction
+                                                icon={TrashIcon}
+                                                label="Delete"
+                                                title="Delete this song"
+                                                danger
+                                                onClick={() => {
+                                                    setSongToDelete(song.id);
+                                                    setShowDeleteConfirm(true);
+                                                }}
+                                            />
+                                        </div>
+                                  </div>
                                 </div>
                                 {editSongId === song.id && (
-                                    <form onSubmit={handleEditSubmit} className="mt-4 space-y-6">
+                                    <form onSubmit={handleEditSubmit} className="mt-4 space-y-6 max-w-3xl">
                                         <div>
                                                 <label className="retro-label">Title</label>
                                             <input
@@ -1119,6 +1285,12 @@ const SongsManager = () => {
                                                 className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
                                             />
                                         </div>
+                                        <SongPermissionFields
+                                            idPrefix={`edit-${song.id}`}
+                                            allowDownload={editFormData.allowDownload}
+                                            allowAiTraining={editFormData.allowAiTraining}
+                                            onChange={(patch) => setEditFormData({ ...editFormData, ...patch })}
+                                        />
                                         <div className="flex space-x-4">
                                             <button
                                                 type="submit"

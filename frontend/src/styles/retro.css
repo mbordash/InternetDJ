@@ -432,6 +432,35 @@
     }
     .retro-eq span { height: 60%; }
     .retro-card:hover { transform: none; }
+
+    /* Tailwind's own animation utilities, which this block used to miss.
+       They are applied in JSX rather than declared here, so they were easy to
+       overlook: three loading spinners, a set of skeleton placeholders, and one
+       progress bar. None of them is fast enough to be a seizure risk - the
+       quickest is a one-second rotation - but a reader who has asked their
+       operating system for less motion has asked for all of it, not the parts
+       one stylesheet happens to know about.
+
+       Stopping them is safe here because none carries meaning through movement:
+       the spinners sit beside "loading" text, the skeletons are placeholders
+       whose shape is the message, and the progress bar reports with its width.
+       A static spinner is a weaker cue than a turning one, which is the trade
+       this setting asks for.
+
+       !important because these are utility classes; Tailwind does not mark them
+       important, so this wins regardless of stylesheet order. */
+    .animate-spin,
+    .animate-pulse,
+    .animate-bounce,
+    .animate-ping,
+    .animate-fade-out {
+        animation: none !important;
+    }
+
+    /* The skeletons animate between full and half opacity. Frozen at whatever
+       frame they stopped on they could read as a rendering fault, so they are
+       pinned to the dimmer end, where they clearly look like placeholders. */
+    .animate-pulse { opacity: 0.6; }
 }
 
 /* ---------- 11. Chrome: top bar + bottom deck ---------------------------- */
@@ -756,6 +785,22 @@
     box-shadow: 0 0 26px rgba(255, 47, 142, 0.65);
 }
 
+/* Destructive action. Dimmer than the cyan default at rest so a visible delete
+   button does not compete with the actions beside it, and unmistakably red the
+   moment you are over it. */
+.retro-action--danger {
+    color: #ffb4b4;
+    background: rgba(255, 47, 92, 0.08);
+    border-color: rgba(255, 47, 92, 0.35);
+}
+
+.retro-action--danger:hover:not(:disabled) {
+    color: #ffffff;
+    background: rgba(255, 47, 92, 0.24);
+    border-color: #ff2f5c;
+    box-shadow: 0 0 18px rgba(255, 47, 92, 0.5);
+}
+
 .retro-tooltip {
     font-family: var(--retro-pixel);
     font-size: 0.45rem;
@@ -1038,4 +1083,97 @@
 
 .retro-slider:focus-visible::-moz-range-thumb {
     box-shadow: 0 0 0 2px var(--neon-magenta), 0 0 10px var(--neon-magenta);
+}
+
+/* ==================== ARTICLE BODY ====================
+   Article HTML comes out of the recovered archive as bare <p>, <a>, <img> and
+   list tags with every presentational attribute stripped, so it arrives with no
+   classes to hook Tailwind onto. These rules are what turn that back into
+   something readable — the one place in this stylesheet that styles raw
+   elements rather than a class, scoped to .retro-article so it cannot leak into
+   the rest of the app. */
+.retro-article p {
+    margin: 0 0 1.15em;
+}
+
+.retro-article a {
+    color: #67e8f9;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.retro-article a:hover {
+    color: #f0abfc;
+}
+
+.retro-article b,
+.retro-article strong {
+    color: #fff;
+    font-weight: 700;
+}
+
+/* The interviews carry the question in italics and the answer in plain text,
+   which is the only thing distinguishing them now that the original markup is
+   gone. Worth making the contrast obvious. */
+.retro-article i,
+.retro-article em {
+    color: #f5d0fe;
+    font-style: italic;
+}
+
+.retro-article h2,
+.retro-article h3,
+.retro-article h4 {
+    font-family: 'Orbitron', system-ui, sans-serif;
+    color: #67e8f9;
+    margin: 1.6em 0 0.6em;
+    line-height: 1.3;
+}
+
+.retro-article h2 { font-size: 1.35rem; }
+.retro-article h3 { font-size: 1.15rem; }
+.retro-article h4 { font-size: 1rem; }
+
+.retro-article ul,
+.retro-article ol {
+    margin: 0 0 1.15em 1.4em;
+}
+
+.retro-article ul { list-style: disc; }
+.retro-article ol { list-style: decimal; }
+.retro-article li { margin-bottom: 0.4em; }
+
+.retro-article blockquote {
+    border-left: 3px solid rgba(217, 70, 239, 0.6);
+    padding-left: 1em;
+    margin: 0 0 1.15em;
+    color: #d4d4d8;
+}
+
+/* Old article images were sized for a fixed-width table layout and carry
+   hard-coded dimensions in the markup; the stripped attributes plus this rule
+   keep them inside a phone screen. */
+.retro-article img {
+    max-width: 100%;
+    height: auto;
+    margin: 0.5em 0 1em;
+    border: 1px solid rgba(34, 211, 238, 0.3);
+}
+
+.retro-article hr {
+    border: 0;
+    border-top: 1px solid rgba(34, 211, 238, 0.25);
+    margin: 1.8em 0;
+}
+
+.retro-article pre,
+.retro-article code {
+    font-family: 'VT323', ui-monospace, monospace;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 0.1em 0.35em;
+}
+
+.retro-article pre {
+    padding: 0.9em;
+    overflow-x: auto;
 }

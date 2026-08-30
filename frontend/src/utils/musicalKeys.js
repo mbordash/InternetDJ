@@ -1,10 +1,10 @@
 export const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // The 24 keys, spelled exactly as the backend writes them (sharps, lower-case
-// mode). Detection, the stem generator and the song editor all read from this
+// mode). Detection, the loop generator and the song editor all read from this
 // one list so a detected key always matches an option in a dropdown - a value
 // with no matching <option> silently renders as the first one, which is how a
-// stem request once went out at a tempo nobody picked.
+// loop request once went out at a tempo nobody picked.
 export const MUSICAL_KEYS = PITCH_NAMES.flatMap(name => [`${name} major`, `${name} minor`]);
 
 // Camelot notation, mirroring backend/utils/musicalKeys.js. DJs read 5A/8B at

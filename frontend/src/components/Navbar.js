@@ -105,7 +105,7 @@ function Navbar() {
             label: 'Create',
             children: [
                 { to: '/projects', label: 'Studio / DAW' },
-                { to: '/stems', label: 'AI Stems' },
+                { to: '/loops', label: 'AI Loops' },
             ],
         },
         { to: '/forum', label: 'Forum' },

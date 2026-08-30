@@ -6,24 +6,24 @@ const { extractObjectKey } = require('../utils/storage');
 
 (async () => {
     try {
-        const oldStems = await pool.query('SELECT id, url FROM stems WHERE created_at < NOW() - INTERVAL 1 DAY');
+        const oldLoops = await pool.query('SELECT id, url FROM loops WHERE created_at < NOW() - INTERVAL 1 DAY');
 
-        for (const stem of oldStems) {
-            if (stem.url) {
-                const key = extractObjectKey(stem.url);
+        for (const loop of oldLoops) {
+            if (loop.url) {
+                const key = extractObjectKey(loop.url);
                 const deleteParams = {
                     Bucket: process.env.BUCKET_NAME,
                     Key: key
                 };
                 await s3Client.send(new DeleteObjectCommand(deleteParams));
-                logger.info('Deleted S3 file for expired stem', { stemId: stem.id, key });
+                logger.info('Deleted S3 file for expired loop', { loopId: loop.id, key });
             }
         }
 
-        await pool.query('DELETE FROM stems WHERE created_at < NOW() - INTERVAL 1 DAY');
-        logger.info('Expired stems cleaned up from DB', { count: oldStems.length });
+        await pool.query('DELETE FROM loops WHERE created_at < NOW() - INTERVAL 1 DAY');
+        logger.info('Expired loops cleaned up from DB', { count: oldLoops.length });
     } catch (err) {
-        logger.error('Error cleaning up stems:', err);
+        logger.error('Error cleaning up loops:', err);
     }
     process.exit(0);
 })();

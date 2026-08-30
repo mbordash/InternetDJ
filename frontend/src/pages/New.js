@@ -189,6 +189,81 @@ function SongCard({ song, metaLabel, meta, currentSong, isPlaying, onPlay, toggl
     );
 }
 
+/* The narrow right column cannot carry the five-column table, and the mobile
+   card is far too tall to stack twenty of. This is a third density: artwork,
+   title, artist, and the one number that section is actually about. */
+function RailRow({ song, meta, currentSong, isPlaying, onPlay, togglePlayPause }) {
+    return (
+        <li className="flex items-center gap-3 py-2 border-b border-cyan-400/10 last:border-b-0">
+            <SongArtwork
+                song={song}
+                sizeClass="w-10 h-10"
+                iconClass="w-4 h-4"
+                currentSong={currentSong}
+                isPlaying={isPlaying}
+                onPlay={onPlay}
+                togglePlayPause={togglePlayPause}
+            />
+            <div className="min-w-0 flex-1">
+                <Link
+                    to={`/song/${song.id}`}
+                    className="retro-display text-[0.65rem] text-white hover:text-cyan-200 block truncate"
+                    title={song.title}
+                >
+                    {song.title}
+                </Link>
+                <div className="retro-mono text-base text-gray-400 truncate">
+                    <Link
+                        to={song.profile_id ? profilePath(song) : '#'}
+                        className={song.profile_id ? 'retro-link' : 'text-gray-500 cursor-not-allowed'}
+                        title={song.profile_name}
+                    >
+                        {song.profile_name}
+                    </Link>
+                </div>
+            </div>
+            <div className="retro-mono text-base text-cyan-300/80 whitespace-nowrap flex-shrink-0 text-right">
+                {meta !== null ? meta : (
+                    <span className="inline-flex items-center">
+                        {Number(song.plays) || 0}
+                        <SpeakerWaveIcon className="w-4 h-4 text-gray-300 ml-1" />
+                    </span>
+                )}
+            </div>
+        </li>
+    );
+}
+
+function RailSection({ title, blurb, songs, metaLabel, renderMeta, playProps }) {
+    if (!songs.length) {
+        return null;
+    }
+
+    const hasMeta = typeof renderMeta === 'function';
+
+    return (
+        <section className="retro-panel retro-cut p-4">
+            <header className="mb-3">
+                <h2 className="retro-display retro-chrome text-lg">{title}</h2>
+                {blurb && <p className="retro-mono text-base text-gray-400 mt-1">{blurb}</p>}
+                <div className="retro-rule mt-2" />
+                <div className="retro-eyebrow mt-2 text-right">{hasMeta ? metaLabel : 'Plays'}</div>
+            </header>
+
+            <ul>
+                {songs.map((song) => (
+                    <RailRow
+                        key={song.id}
+                        song={song}
+                        meta={hasMeta ? renderMeta(song) : null}
+                        {...playProps}
+                    />
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 function SongSection({ eyebrow, title, blurb, songs, metaLabel, renderMeta, playProps }) {
     if (!songs.length) {
         return null;
@@ -197,7 +272,7 @@ function SongSection({ eyebrow, title, blurb, songs, metaLabel, renderMeta, play
     const hasMeta = typeof renderMeta === 'function';
 
     return (
-        <section className="mb-12">
+        <section>
             <header className="mb-4">
                 {eyebrow && <div className="retro-eyebrow mb-2">&gt;&gt; {eyebrow}</div>}
                 <h2 className="retro-display retro-chrome text-2xl sm:text-3xl">{title}</h2>
@@ -355,32 +430,41 @@ function New() {
                 {isEmpty ? (
                     <p className="retro-mono text-xl text-gray-300">No new songs available recently.</p>
                 ) : (
-                    <>
-                        <SongSection
-                            title="Just Added"
-                            blurb="The newest uploads on the site."
-                            songs={sections.justAdded}
-                            metaLabel="Added"
-                            renderMeta={(song) => relativeDate(song.created_at)}
-                            playProps={playProps}
-                        />
+                    /* Just Added is the reason people come to a page called New
+                       Releases, so it keeps the wide column and the full table.
+                       The other two ride a narrow rail beside it, which roughly
+                       halves the scroll: ten rail rows each land about level
+                       with the twenty table rows on the left. */
+                    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem] lg:gap-10">
+                        <div className="min-w-0">
+                            <SongSection
+                                title="Just Added"
+                                blurb="The newest uploads on the site."
+                                songs={sections.justAdded}
+                                metaLabel="Added"
+                                renderMeta={(song) => relativeDate(song.created_at)}
+                                playProps={playProps}
+                            />
+                        </div>
 
-                        <SongSection
-                            title="Getting Played Lately"
-                            blurb={`What people have actually been listening to over the last ${playedLatelyDays} days.`}
-                            songs={sections.playedLately}
-                            metaLabel="Recent plays"
-                            renderMeta={(song) => Number(song.recent_plays) || 0}
-                            playProps={playProps}
-                        />
+                        <aside className="min-w-0 space-y-8">
+                            <RailSection
+                                title="Getting Played Lately"
+                                blurb={`What people have actually been listening to over the last ${playedLatelyDays} days.`}
+                                songs={sections.playedLately}
+                                metaLabel="Recent plays"
+                                renderMeta={(song) => Number(song.recent_plays) || 0}
+                                playProps={playProps}
+                            />
 
-                        <SongSection
-                            title="Dig This Up"
-                            blurb="A different handful from the back catalogue every time you land here."
-                            songs={sections.fromArchive}
-                            playProps={playProps}
-                        />
-                    </>
+                            <RailSection
+                                title="Dig This Up"
+                                blurb="A different handful from the back catalogue every time you land here."
+                                songs={sections.fromArchive}
+                                playProps={playProps}
+                            />
+                        </aside>
+                    </div>
                 )}
             </div>
         </div>

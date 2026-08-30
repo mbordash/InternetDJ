@@ -9,11 +9,11 @@ const { MUSICAL_KEYS } = require('../utils/musicalKeys');
 const router = express.Router();
 
 const redisConnection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-logger.info('Redis connection for stems route:', process.env.REDIS_URL); // Log on startup
+logger.info('Redis connection for loops route:', process.env.REDIS_URL); // Log on startup
 
-const stemQueue = new Queue('stem-gen', { connection: redisConnection });
+const loopQueue = new Queue('loop-gen', { connection: redisConnection });
 
-const STEM_TYPES = ['bass', 'synth', 'effects', 'drums'];
+const LOOP_TYPES = ['bass', 'synth', 'effects', 'drums'];
 const MIN_BPM = 60;
 const MAX_BPM = 180;
 const MAX_DURATION = 10;
@@ -24,7 +24,7 @@ const MAX_DURATION = 10;
 // for a jazz one. MusicGen also has no negative prompting, so "no other
 // instruments" subtracts nothing and only steers it toward sparse,
 // near-silent takes -- "solo <instrument>" carries the isolation instead.
-const STEM_DESCRIPTORS = {
+const LOOP_DESCRIPTORS = {
     bass: 'solo bass',
     synth: 'solo synthesizer',
     drums: 'solo drum kit',
@@ -33,8 +33,8 @@ const STEM_DESCRIPTORS = {
 
 // The member's own words go first, where they carry the most weight. Key is
 // meaningless for an unpitched drum kit, so it is left off there.
-const buildStemPrompt = (type, prompt, bpm, key) => {
-    const parts = [prompt.trim(), STEM_DESCRIPTORS[type], `${bpm} BPM`];
+const buildLoopPrompt = (type, prompt, bpm, key) => {
+    const parts = [prompt.trim(), LOOP_DESCRIPTORS[type], `${bpm} BPM`];
     if (type !== 'drums') {
         parts.push(`in ${key}`);
     }
@@ -47,9 +47,9 @@ const clampInt = (value, min, max, fallback) => {
     return Math.min(max, Math.max(min, n));
 };
 
-// POST /api/stems/generate (matches your API style)
+// POST /api/loops/generate (matches your API style)
 router.post('/generate', authenticate, async (req, res) => { // authenticate optional
-    logger.info('Received POST /api/stems/generate request'); // Log entry
+    logger.info('Received POST /api/loops/generate request'); // Log entry
 
     const { type, prompt, duration = MAX_DURATION } = req.body;
     // The key is interpolated into the model prompt and stored in a VARCHAR(20),
@@ -57,13 +57,13 @@ router.post('/generate', authenticate, async (req, res) => { // authenticate opt
     const key = MUSICAL_KEYS.includes(req.body.key) ? req.body.key : 'C minor';
     const userId = req.user.id; // From passport
 
-    if (!STEM_TYPES.includes(type)) {
-        logger.error('Invalid stem type:', type);
-        return res.status(400).json({ error: 'Invalid stem type' });
+    if (!LOOP_TYPES.includes(type)) {
+        logger.error('Invalid loop type:', type);
+        return res.status(400).json({ error: 'Invalid loop type' });
     }
 
     if (typeof prompt !== 'string' || !prompt.trim()) {
-        logger.error('Missing stem prompt');
+        logger.error('Missing loop prompt');
         return res.status(400).json({ error: 'Describe the sound you want first' });
     }
 
@@ -80,87 +80,87 @@ router.post('/generate', authenticate, async (req, res) => { // authenticate opt
     try {
         // Check daily limit
         const countResult = await pool.query(
-            'SELECT COUNT(*) AS count FROM stems WHERE user_id = ? AND created_at >= NOW() - INTERVAL 1 DAY',
+            'SELECT COUNT(*) AS count FROM loops WHERE user_id = ? AND created_at >= NOW() - INTERVAL 1 DAY',
             [userId]
         );
         const dailyCount = Number(countResult[0].count);
         if (dailyCount >= 10) {
-            logger.info('Daily stem limit reached for user', { userId });
-            return res.status(429).json({ error: 'Daily limit of 10 stems reached' });
+            logger.info('Daily loop limit reached for user', { userId });
+            return res.status(429).json({ error: 'Daily limit of 10 loops reached' });
         }
 
-        const stemId = uuidv4();
-        const fullPrompt = buildStemPrompt(type, prompt, requestedBpm, key);
+        const loopId = uuidv4();
+        const fullPrompt = buildLoopPrompt(type, prompt, requestedBpm, key);
 
-        logger.info('Attempting to insert stem into DB', {
-            stemId, userId, bpm: requestedBpm, key, duration: requestedDuration,
+        logger.info('Attempting to insert loop into DB', {
+            loopId, userId, bpm: requestedBpm, key, duration: requestedDuration,
         });
-        // Store what the member typed, not the engineered prompt: the stem
+        // Store what the member typed, not the engineered prompt: the loop
         // list shows this back to them.
         await pool.query(
-            'INSERT INTO stems (id, type, prompt, user_id, bpm, `key`, duration) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [stemId, type, prompt.trim(), userId, requestedBpm, key, requestedDuration]
+            'INSERT INTO loops (id, type, prompt, user_id, bpm, `key`, duration) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [loopId, type, prompt.trim(), userId, requestedBpm, key, requestedDuration]
         );
-        logger.info('Stem inserted into DB successfully', { stemId });
+        logger.info('Loop inserted into DB successfully', { loopId });
 
-        logger.info('Adding stem to queue', { stemId, fullPrompt });
-        await stemQueue.add('generate-stem', { stemId, fullPrompt, duration: requestedDuration });
-        logger.info('Stem added to queue successfully', { stemId });
+        logger.info('Adding loop to queue', { loopId, fullPrompt });
+        await loopQueue.add('generate-loop', { loopId, fullPrompt, duration: requestedDuration });
+        logger.info('Loop added to queue successfully', { loopId });
 
         res.json({
-            stemId,
+            loopId,
             status: 'queued',
-            checkStatus: `/api/stems/${stemId}`
+            checkStatus: `/api/loops/${loopId}`
         });
     } catch (err) {
-        logger.error('Error in POST /api/stems/generate:', err);
-        res.status(500).json({ error: 'Failed to queue stem generation' });
+        logger.error('Error in POST /api/loops/generate:', err);
+        res.status(500).json({ error: 'Failed to queue loop generation' });
     }
 });
 
 router.get('/my', authenticate, async (req, res) => {
-    logger.info('Received GET /api/stems/my request');
+    logger.info('Received GET /api/loops/my request');
 
     const userId = req.user.id;
 
     try {
-        const stems = await pool.query('SELECT * FROM stems WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+        const loops = await pool.query('SELECT * FROM loops WHERE user_id = ? ORDER BY created_at DESC', [userId]);
         const countResult = await pool.query(
-            'SELECT COUNT(*) AS count FROM stems WHERE user_id = ? AND created_at >= NOW() - INTERVAL 1 DAY',
+            'SELECT COUNT(*) AS count FROM loops WHERE user_id = ? AND created_at >= NOW() - INTERVAL 1 DAY',
             [userId]
         );
         const dailyCount = Number(countResult[0].count);
         const dailyRemaining = 10 - dailyCount;
-        logger.info('User stems fetched', { count: stems.length });
-        res.json({ stems, dailyRemaining });
+        logger.info('User loops fetched', { count: loops.length });
+        res.json({ loops, dailyRemaining });
     } catch (err) {
-        logger.error('Error in GET /api/stems/my:', err);
-        res.status(500).json({ error: 'Failed to fetch user stems' });
+        logger.error('Error in GET /api/loops/my:', err);
+        res.status(500).json({ error: 'Failed to fetch user loops' });
     }
 });
 
-// GET /api/stems/:id (status + details)
+// GET /api/loops/:id (status + details)
 router.get('/:id', authenticate, async (req, res) => { // authenticate optional
-    logger.info('Received GET /api/stems/:id request', { id: req.params.id });
+    logger.info('Received GET /api/loops/:id request', { id: req.params.id });
 
     const { id } = req.params;
     const userId = req.user.id;
 
     try {
-        logger.info('Querying stem from DB', { id, userId });
-        const stems = await pool.query('SELECT * FROM stems WHERE id = ? AND user_id = ?', [id, userId]);
-        logger.info('Query result length:', stems.length);
-        logger.info('Query result:', stems); // New log (be careful with sensitive data in prod)
+        logger.info('Querying loop from DB', { id, userId });
+        const loops = await pool.query('SELECT * FROM loops WHERE id = ? AND user_id = ?', [id, userId]);
+        logger.info('Query result length:', loops.length);
+        logger.info('Query result:', loops); // New log (be careful with sensitive data in prod)
 
-        if (!stems.length) {
-            logger.error('Stem not found', { id, userId });
-            return res.status(404).json({ error: 'Stem not found' });
+        if (!loops.length) {
+            logger.error('Loop not found', { id, userId });
+            return res.status(404).json({ error: 'Loop not found' });
         }
-        logger.info('Stem fetched successfully', { id });
-        res.json(stems[0]);
+        logger.info('Loop fetched successfully', { id });
+        res.json(loops[0]);
     } catch (err) {
-        logger.error('Error in GET /api/stems/:id:', err);
-        res.status(500).json({ error: 'Failed to fetch stem' });
+        logger.error('Error in GET /api/loops/:id:', err);
+        res.status(500).json({ error: 'Failed to fetch loop' });
     }
 });
 

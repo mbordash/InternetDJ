@@ -571,11 +571,17 @@ router.get('/:profileId', async (req, res, next) => {
       return res.status(500).json({ error: 'Invalid profile data' });
     }
     const songs = await pool.query(`
-      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, s.bpm, s.musical_key, s.duration, p.user_id, p.name as profile_name, p.slug as profile_slug,
+      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, s.allow_ai_training, s.bpm, s.musical_key, s.duration, p.user_id, p.name as profile_name, p.slug as profile_slug,
              (SELECT COUNT(*)
               FROM playlist_songs ps
                      JOIN playlists pl ON ps.playlist_id = pl.id
-              WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+              WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count,
+             -- Manage Songs has always rendered an avg_rating that nothing sent
+             -- it, so every row read "N/A" however the song was reviewed. Only
+             -- reviews that carried a score count: a comment without one is not
+             -- a zero.
+             (SELECT AVG(r.rating) FROM reviews r
+               WHERE r.song_id = s.id AND r.rating IS NOT NULL) AS avg_rating
       FROM songs s
              LEFT JOIN profiles p ON s.profile_id = p.id
       WHERE s.profile_id = ?
@@ -588,6 +594,10 @@ router.get('/:profileId', async (req, res, next) => {
       plays: Number(song.plays) || 0,
       is_featured: Boolean(song.is_featured),
       allow_download: Boolean(song.allow_download),
+      // Manage Songs reads its list from here, so a permission missing from
+      // this column list reads back as off however it was saved.
+      allow_ai_training: Boolean(song.allow_ai_training),
+      avg_rating: song.avg_rating == null ? null : Number(song.avg_rating),
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
       profile_slug: song.profile_slug || null,

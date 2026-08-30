@@ -19,10 +19,39 @@ function readViewerId(req) {
   }
 }
 
+/**
+ * An overall score for a track: 0.5 to 10 in half steps, or nothing at all.
+ *
+ * Optional on purpose. The page asks for a comment first because that is what
+ * an artist can actually act on, and a listener who does not want to put a
+ * number on someone's work should be able to say nothing by leaving it alone —
+ * which is not the same as scoring it zero.
+ *
+ * The bounds mirror the CHECK constraint on reviews.rating, so a bad value is
+ * refused with a message the reviewer can read rather than a 500 out of the
+ * database.
+ */
+const parseOptionalRating = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true, value: null };
+  }
+  const rating = Number(value);
+  if (!Number.isFinite(rating)) {
+    return { ok: false, error: 'Rating must be a number' };
+  }
+  if (rating < 0.5 || rating > 10) {
+    return { ok: false, error: 'Rating must be between 0.5 and 10' };
+  }
+  if (Math.round(rating * 2) !== rating * 2) {
+    return { ok: false, error: 'Rating must be in steps of 0.5' };
+  }
+  return { ok: true, value: rating };
+};
+
 const router = express.Router();
 
 router.post('/', authenticate, async (req, res) => {
-  const { song_id, review, feedback } = req.body;
+  const { song_id, review, feedback, rating } = req.body;
   try {
     if (!song_id) {
       return res.status(400).json({ error: 'Song ID is required' });
@@ -59,10 +88,15 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Feedback must be an object' });
     }
 
+    const ratingField = parseOptionalRating(rating);
+    if (!ratingField.ok) {
+      return res.status(400).json({ error: ratingField.error });
+    }
+
     // Insert review
     const insertResult = await pool.query(
-        'INSERT INTO reviews (song_id, profile_id, review, feedback) VALUES (?, ?, ?, ?)',
-        [song_id, profileId, normalizedReview, feedback ? JSON.stringify(feedback) : null]
+        'INSERT INTO reviews (song_id, profile_id, review, feedback, rating) VALUES (?, ?, ?, ?, ?)',
+        [song_id, profileId, normalizedReview, feedback ? JSON.stringify(feedback) : null, ratingField.value]
     );
     const result = Array.isArray(insertResult) ? insertResult : insertResult[0] || {};
 
@@ -72,6 +106,7 @@ router.post('/', authenticate, async (req, res) => {
       profile_id: Number(profileId),
       review: normalizedReview,
       feedback: feedback || null,
+      rating: ratingField.value,
       created_at: new Date(),
       user_name: profiles[0].name || req.user.name,
       picture_url: profiles[0].picture_url || null,
@@ -106,7 +141,7 @@ router.get('/:songId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid song ID' });
     }
     const reviews = await pool.query(`
-      SELECT r.id, r.song_id, r.profile_id, r.review, r.feedback, r.created_at,
+      SELECT r.id, r.song_id, r.profile_id, r.review, r.feedback, r.rating, r.created_at,
              p.name AS user_name, p.slug AS profile_slug, p.picture_url
       FROM reviews r
       JOIN profiles p ON r.profile_id = p.id
@@ -153,6 +188,8 @@ router.get('/:songId', async (req, res) => {
       profile_slug: review.profile_slug || null,
       review: review.review || '',
       feedback: review.feedback ? review.feedback : null, // MariaDB returns JSON as object
+      // DECIMAL comes back as a string from the driver; the UI averages these.
+      rating: review.rating == null ? null : Number(review.rating),
       created_at: review.created_at,
       user_name: review.user_name || 'Unknown',
       picture_url: review.picture_url || null,

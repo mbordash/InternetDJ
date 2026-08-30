@@ -196,7 +196,7 @@ CREATE TABLE `follows` (
                                      KEY `idx_follower` (`follower_id`,`followed_profile_id`),
                                      CONSTRAINT `follows_ibfk_1` FOREIGN KEY (`follower_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
                                      CONSTRAINT `follows_ibfk_2` FOREIGN KEY (`followed_profile_id`) REFERENCES `profiles` (`id`) ON DELETE CASCADE
-          ) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+          ) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 ALTER TABLE users ADD is_admin TINYINT(1) DEFAULT 0;
 
@@ -297,6 +297,17 @@ ALTER TABLE songs ADD COLUMN is_featured BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE songs ADD COLUMN IF NOT EXISTS allow_download BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Consent to use a track to train the model behind InternetDJ's AI loop
+-- generator, which writes brand-new material from a prompt. It is not a
+-- source-separation model and the track is never taken apart or reproduced.
+-- Opt-in and nothing else: the column defaults to FALSE, so a track can only
+-- ever be in a training set because its artist said yes, and existing songs
+-- stay out when this column is added. `ai_training_opted_in_at` is the record
+-- of when that yes was given, and is cleared again if consent is withdrawn, so
+-- there is always an answer to "when did this artist agree to this".
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS allow_ai_training BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS ai_training_opted_in_at DATETIME DEFAULT NULL;
+
 -- Tempo/key/duration, detected on upload by backend/workers/analysisWorker.js.
 -- `musical_key` rather than `key` because KEY is reserved in MySQL/MariaDB.
 -- Both bpm and musical_key are suggestions the artist can correct, and stay
@@ -311,7 +322,12 @@ ALTER TABLE songs ADD INDEX IF NOT EXISTS analysis_status_idx (analysis_status);
 ALTER TABLE forum_posts ADD COLUMN image_url VARCHAR(255) DEFAULT NULL;
 ALTER TABLE forum_comments ADD COLUMN image_url VARCHAR(255) DEFAULT NULL;
 
-CREATE TABLE IF NOT EXISTS stems (
+-- Output of the AI loop generator: short, brand-new musical segments written
+-- from a prompt at a chosen tempo and key. Called `stems` until that word was
+-- found to promise source separation, which this is not. Note that
+-- songs.stems_url above is unrelated and correctly named -- it is an artist's
+-- link to the real bounced submixes of their own track.
+CREATE TABLE IF NOT EXISTS loops (
     id VARCHAR(36) PRIMARY KEY,
     type ENUM('bass', 'synth', 'effects', 'drums') NOT NULL,
     prompt TEXT NOT NULL,
@@ -325,7 +341,7 @@ CREATE TABLE IF NOT EXISTS stems (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-ALTER TABLE stems ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE loops ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS idjc_claims (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -452,4 +468,52 @@ CREATE TABLE IF NOT EXISTS song_analysis (
     analysis MEDIUMTEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (song_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Editorial articles: news, features, interviews and guides.
+--
+-- Most rows are the recovered InternetDJ.com archive (2001-2017), which is why
+-- the legacy columns exist: `legacy_story_id` is the story id from the original
+-- CMS, and `source_url` records the Wayback capture a row was rebuilt from, so
+-- a bad extraction can always be traced back and re-run. New articles written
+-- on the current site simply leave those NULL.
+--
+-- `category_slug` is stored rather than derived so the URL a category is
+-- reachable at can never drift from the label shown on the page.
+CREATE TABLE IF NOT EXISTS articles (
+    id INT NOT NULL AUTO_INCREMENT,
+    slug VARCHAR(220) NOT NULL,
+    title VARCHAR(300) NOT NULL,
+    deck VARCHAR(600) DEFAULT NULL,
+    body_html MEDIUMTEXT,
+    body_text MEDIUMTEXT,
+    category VARCHAR(80) DEFAULT NULL,
+    category_slug VARCHAR(80) DEFAULT NULL,
+    author_name VARCHAR(120) DEFAULT NULL,
+    -- Set when a legacy byline matches a member on the current site; most
+    -- legacy authors have no account here, so it stays NULL.
+    profile_id INT DEFAULT NULL,
+    hero_image_url VARCHAR(500) DEFAULT NULL,
+    published_at DATE DEFAULT NULL,
+    -- 'submitted' is a member's article waiting for an editor. The default
+    -- stays 'published' because the legacy importer and the submission
+    -- endpoint both set this explicitly, and changing it would only affect
+    -- rows inserted by hand.
+    status ENUM('draft','submitted','published') NOT NULL DEFAULT 'published',
+    is_legacy BOOLEAN NOT NULL DEFAULT FALSE,
+    legacy_story_id INT DEFAULT NULL,
+    source_url VARCHAR(600) DEFAULT NULL,
+    archived_at VARCHAR(20) DEFAULT NULL,
+    views INT NOT NULL DEFAULT 0,
+    submitted_at TIMESTAMP NULL DEFAULT NULL,
+    -- Set by the editor when returning a submission; shown to its author.
+    editor_note TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uniq_article_slug (slug),
+    KEY idx_article_category (category_slug, published_at),
+    KEY idx_article_published (status, published_at),
+    KEY idx_article_legacy (legacy_story_id),
+    CONSTRAINT articles_ibfk_1 FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

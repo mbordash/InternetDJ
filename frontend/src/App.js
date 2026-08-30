@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AudioPlayerProvider } from './context/AudioPlayerContext';
 import { HelmetProvider, Helmet } from 'react-helmet-async'; // Add Helmet import
@@ -32,8 +32,13 @@ import Playlists from './pages/Playlists';
 import Crate from './pages/Crate';
 import Crates from './pages/Crates';
 import About from './pages/About';
+import Promote from './pages/Promote';
+import Articles from './pages/Articles';
+import Article from './pages/Article';
+import SubmitArticle from './pages/SubmitArticle';
+import ArticleEditor from './pages/ArticleEditor';
 import Discover from './pages/Discover';
-import StemGenerator from './pages/AIStems';
+import LoopGenerator from './pages/AILoops';
 import Collabs from './pages/Collabs';
 import Settings from './pages/Settings';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -59,6 +64,14 @@ function Layout() {
                 <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/about" element={<About />} />
+                    <Route path="/promote" element={<Promote />} />
+                    <Route path="/articles" element={<Articles />} />
+                    {/* Declared before the :slug route so the intent is
+                        obvious to a reader; React Router ranks static
+                        segments above dynamic ones regardless. */}
+                    <Route path="/articles/submit" element={<SubmitArticle />} />
+                    <Route path="/articles/queue" element={<ArticleEditor />} />
+                    <Route path="/articles/:slug" element={<Article />} />
                     <Route path="/privacy" element={<PrivacyPolicy />} />
                     <Route path="/terms" element={<TermsOfService />} />
                     <Route path="/discover" element={<Discover />} />
@@ -88,7 +101,11 @@ function Layout() {
                     <Route path="/crate/:crateId" element={<Crate />} />
                     <Route path="/crates" element={<Crates />} />
                     <Route path="/idj-coin" element={<IDJCoin />} />
-                    <Route path="/stems" element={<StemGenerator />} />
+                    <Route path="/loops" element={<LoopGenerator />} />
+                    {/* The generator was called "stems" until the name was found to
+                        promise source separation, which is not what it does. Anything
+                        already pointing at the old path still lands. */}
+                    <Route path="/stems" element={<Navigate to="/loops" replace />} />
                 </Routes>
             </main>
             <Footer />

@@ -5,3 +5,12 @@ build
 .README-private
 ROADMAP.md
 AI_MUSIC_PLAN.md
+
+# Python bytecode from the article-recovery scraper
+__pycache__
+*.pyc
+
+# Intermediate scrape snapshots; articles.jsonl is the one that matters
+article-recovery/*.bak
+article-recovery/scrape*.log
+article-recovery/refetch*.log

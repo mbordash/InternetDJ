@@ -217,6 +217,7 @@ function Search() {
                                                     <TrackMetaChips
                                                         bpm={song.bpm}
                                                         musicalKey={song.musical_key}
+                                                        rating={song.avg_rating}
                                                         className="my-1"
                                                     />
                                                     <div className="retro-mono text-lg text-gray-400">

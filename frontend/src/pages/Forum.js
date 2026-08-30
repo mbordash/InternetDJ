@@ -310,7 +310,11 @@ function Forum() {
                                     "author": {
                                         "@type": "Person",
                                         "name": post.user_name || "Anonymous",
-                                        "url": post.profile_id ? `${baseUrl}${profilePath(post)}` : undefined
+                                        // Either address identifies the author; a post with
+                                        // neither has no profile page to point at.
+                                        "url": (post.profile_slug || post.profile_id)
+                                            ? `${baseUrl}${profilePath(post)}`
+                                            : undefined
                                     },
                                     "datePublished": post.created_at ? new Date(post.created_at).toISOString() : undefined,
                                     "interactionStatistic": [

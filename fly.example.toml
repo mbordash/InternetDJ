@@ -3,7 +3,7 @@ primary_region = "iad"
 
 # Machine topology (counts are NOT set by this file — see `fly scale count`):
 #   app             2  web, kept warm for the DAW
-#   worker          1  stem separation
+#   worker          1  AI loop generation
 #   masterworker    1  auto-master ffmpeg passes
 #   analysisworker  1  tempo/key detection on upload
 #   cron            1  supercronic; MUST stay at 1
@@ -15,11 +15,17 @@ primary_region = "iad"
 # Runs on a temporary machine after the image is built and before the new
 # release takes traffic, so schema the new code depends on exists before any
 # request can hit it. profile.js reads coin_events for balances and the
-# leaderboard, and a deploy-then-migrate ordering would 500 those pages in the
-# gap. The migration is idempotent, so re-running it on every deploy is fine,
+# leaderboard, and music.js reads the AI-training consent columns on every song
+# edit; a deploy-then-migrate ordering 500s those the moment the release lands.
+# Every migration here is idempotent, so re-running them on each deploy is fine,
 # and a non-zero exit aborts the deploy.
+#
+# Chained through `sh -c` because fly execs this as a command line rather than
+# a shell script, so a bare `&&` would be passed along as an argument. Add new
+# migrations to the end of the chain: schema.sql alone is not enough, since it
+# only runs when the database container initialises from empty.
 [deploy]
-  release_command = "node backend/scripts/migrateCoinEvents.js"
+  release_command = 'sh -c "node backend/scripts/migrateCoinEvents.js && node backend/scripts/migrateAiTrainingConsent.js && node backend/scripts/migrateStemsToLoops.js && node backend/scripts/migrateProfileSlugs.js && node backend/scripts/migrateArticles.js"'
 
 [build]
 dockerfile = "dockerfile"
@@ -38,7 +44,7 @@ processes = ["app"]
 
 [processes]
 app = "node backend/server.js"
-worker = "node backend/workers/stemWorker.js"
+worker = "node backend/workers/loopWorker.js"
 # Auto-master runs several full ffmpeg passes per job. It gets its own
 # process so its CPU load stays off the web machines and so it can be
 # scaled on its own when mastering is worth paying more for.

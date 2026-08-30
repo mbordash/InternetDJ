@@ -4,7 +4,7 @@ import axios from 'axios';
 import API_URL from '../utils/api';
 import { MUSICAL_KEYS as KEYS } from '../utils/musicalKeys';
 
-const STEM_TYPES = ['bass', 'synth', 'effects', 'drums'];
+const LOOP_TYPES = ['bass', 'synth', 'effects', 'drums'];
 const POLL_INTERVAL_MS = 4000;
 const MAX_TRANSIENT_POLL_FAILURES = 5;
 
@@ -15,17 +15,17 @@ function isTransientPollError(err) {
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
-// Generate an AI audio stem (same backend as the standalone /ai-stems page) and
+// Generate an AI audio loop (same backend as the standalone /loops page) and
 // drop it straight onto a sample track without leaving the DAW.
-const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
+const LoopGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
     const [type, setType] = useState('bass');
     const [prompt, setPrompt] = useState('');
-    const [stemKey, setStemKey] = useState('C minor');
+    const [loopKey, setLoopKey] = useState('C minor');
     const [duration, setDuration] = useState(4);
-    const [stemBpm, setStemBpm] = useState(Math.round(bpm) || 128);
+    const [loopBpm, setLoopBpm] = useState(Math.round(bpm) || 128);
     const [dailyRemaining, setDailyRemaining] = useState(null);
     const [status, setStatus] = useState('idle'); // idle | generating | ready | applying
-    const [readyStem, setReadyStem] = useState(null);
+    const [readyLoop, setReadyLoop] = useState(null);
     const [error, setError] = useState(null);
 
     const pollRef = useRef(null);
@@ -43,12 +43,12 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
         const fetchRemaining = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const res = await axios.get(`${API_URL}/stems/my`, {
+                const res = await axios.get(`${API_URL}/loops/my`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (isMountedRef.current) setDailyRemaining(res.data.dailyRemaining);
             } catch (err) {
-                console.error('Failed to fetch stem allowance:', err.response?.data || err.message);
+                console.error('Failed to fetch loop allowance:', err.response?.data || err.message);
             }
         };
         fetchRemaining();
@@ -64,22 +64,22 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
             return;
         }
         if (dailyRemaining !== null && dailyRemaining <= 0) {
-            setError('Daily limit of 10 stems reached.');
+            setError('Daily limit of 10 loops reached.');
             return;
         }
         stopPolling();
         setError(null);
-        setReadyStem(null);
+        setReadyLoop(null);
         setStatus('generating');
 
         try {
             const token = localStorage.getItem('token');
             const res = await axios.post(
-                `${API_URL}/stems/generate`,
-                { type, prompt, bpm: stemBpm, key: stemKey, duration },
+                `${API_URL}/loops/generate`,
+                { type, prompt, bpm: loopBpm, key: loopKey, duration },
                 { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
             );
-            const { stemId } = res.data;
+            const { loopId } = res.data;
             const startedAt = Date.now();
             let transientFailures = 0;
 
@@ -90,12 +90,12 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                 }
                 if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
                     stopPolling();
-                    setError('Generation timed out. Check the AI Stems page in a minute.');
+                    setError('Generation timed out. Check the AI Loops page in a minute.');
                     setStatus('idle');
                     return;
                 }
                 try {
-                    const statusRes = await axios.get(`${API_URL}/stems/${stemId}`, {
+                    const statusRes = await axios.get(`${API_URL}/loops/${loopId}`, {
                         headers: { Authorization: `Bearer ${token}` },
                         withCredentials: true,
                     });
@@ -104,7 +104,7 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                     if (data.status === 'ready') {
                         stopPolling();
                         if (!isMountedRef.current) return;
-                        setReadyStem({ id: stemId, url: data.url });
+                        setReadyLoop({ id: loopId, url: data.url });
                         setStatus('ready');
                         setDailyRemaining(prev => (prev === null ? prev : Math.max(0, prev - 1)));
                     } else if (data.status === 'failed') {
@@ -132,23 +132,23 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
         }
     };
 
-    // Convert the finished stem to an MP3 in the user's sample library, then let
+    // Convert the finished loop to an MP3 in the user's sample library, then let
     // the parent place it on this track at the playhead.
     const handleAddToTrack = async () => {
-        if (!readyStem) return;
+        if (!readyLoop) return;
         setStatus('applying');
         setError(null);
         try {
             const token = localStorage.getItem('token');
             const res = await axios.post(
-                `${API_URL}/sample-library/from-stem`,
-                { stemId: readyStem.id },
+                `${API_URL}/sample-library/from-loop`,
+                { loopId: readyLoop.id },
                 { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
             );
             await onApply(track.id, res.data);
             onClose();
         } catch (err) {
-            setError('Failed to add stem to track: ' + (err.response?.data?.error || err.message));
+            setError('Failed to add loop to track: ' + (err.response?.data?.error || err.message));
             setStatus('ready');
         }
     };
@@ -161,28 +161,28 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="retro-panel retro-cut w-full max-w-lg flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between px-5 py-3 border-b border-cyan-400/25">
-                    <h2 className="text-lg font-semibold">✨ Generate Sample — {track.name}</h2>
+                    <h2 className="text-lg font-semibold">✨ Generate Loop — {track.name}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none" aria-label="Close">×</button>
                 </div>
                 <div className="p-5 space-y-4 overflow-y-auto">
                     <div>
-                        <label className="retro-label" htmlFor="stem-gen-type">Stem Type</label>
+                        <label className="retro-label" htmlFor="loop-gen-type">Loop Type</label>
                         <select
-                            id="stem-gen-type"
+                            id="loop-gen-type"
                             value={type}
                             onChange={(e) => setType(e.target.value)}
                             disabled={isBusy}
                             className="retro-field w-full disabled:opacity-50"
                         >
-                            {STEM_TYPES.map(t => (
+                            {LOOP_TYPES.map(t => (
                                 <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                             ))}
                         </select>
                     </div>
                     <div>
-                        <label className="retro-label" htmlFor="stem-gen-prompt">Describe it</label>
+                        <label className="retro-label" htmlFor="loop-gen-prompt">Describe it</label>
                         <textarea
-                            id="stem-gen-prompt"
+                            id="loop-gen-prompt"
                             rows="3"
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
@@ -193,24 +193,24 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div>
-                            <label className="retro-label" htmlFor="stem-gen-bpm">BPM</label>
+                            <label className="retro-label" htmlFor="loop-gen-bpm">BPM</label>
                             <input
-                                id="stem-gen-bpm"
+                                id="loop-gen-bpm"
                                 type="number"
                                 min="60"
                                 max="180"
-                                value={stemBpm}
-                                onChange={(e) => setStemBpm(Number(e.target.value))}
+                                value={loopBpm}
+                                onChange={(e) => setLoopBpm(Number(e.target.value))}
                                 disabled={isBusy}
                                 className="retro-field w-full disabled:opacity-50"
                             />
                         </div>
                         <div>
-                            <label className="retro-label" htmlFor="stem-gen-key">Key</label>
+                            <label className="retro-label" htmlFor="loop-gen-key">Key</label>
                             <select
-                                id="stem-gen-key"
-                                value={stemKey}
-                                onChange={(e) => setStemKey(e.target.value)}
+                                id="loop-gen-key"
+                                value={loopKey}
+                                onChange={(e) => setLoopKey(e.target.value)}
                                 disabled={isBusy}
                                 className="retro-field w-full disabled:opacity-50"
                             >
@@ -218,9 +218,9 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                             </select>
                         </div>
                         <div>
-                            <label className="retro-label" htmlFor="stem-gen-duration">Length (sec)</label>
+                            <label className="retro-label" htmlFor="loop-gen-duration">Length (sec)</label>
                             <select
-                                id="stem-gen-duration"
+                                id="loop-gen-duration"
                                 value={duration}
                                 onChange={(e) => setDuration(Number(e.target.value))}
                                 disabled={isBusy}
@@ -231,18 +231,18 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                         </div>
                     </div>
                     <p className="retro-mono text-base text-gray-400">
-                        BPM defaults to this project&apos;s tempo so the stem lines up. It will drop at the playhead ({startSeconds.toFixed(1)}s).
+                        BPM defaults to this project&apos;s tempo so the loop lines up. It will drop at the playhead ({startSeconds.toFixed(1)}s).
                     </p>
                     {dailyRemaining !== null && (
-                        <p className="text-sm text-gray-300">You have {dailyRemaining} stem{dailyRemaining === 1 ? '' : 's'} left today.</p>
+                        <p className="text-sm text-gray-300">You have {dailyRemaining} loop{dailyRemaining === 1 ? '' : 's'} left today.</p>
                     )}
                     {status === 'generating' && (
-                        <p className="text-sm text-purple-300">Generating your {type} stem — this usually takes 30–60 seconds…</p>
+                        <p className="text-sm text-purple-300">Generating your {type} loop — this usually takes 30–60 seconds…</p>
                     )}
-                    {readyStem?.url && (
+                    {readyLoop?.url && (
                         <div className="space-y-2">
-                            <p className="retro-mono text-lg text-cyan-300">Stem ready — have a listen before you add it.</p>
-                            <audio controls src={readyStem.url} className="w-full" />
+                            <p className="retro-mono text-lg text-cyan-300">Loop ready — have a listen before you add it.</p>
+                            <audio controls src={readyLoop.url} className="w-full" />
                         </div>
                     )}
                     {error && <p className="retro-mono text-lg text-fuchsia-400">{error}</p>}
@@ -254,11 +254,11 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                         disabled={isBusy || !prompt.trim() || (dailyRemaining !== null && dailyRemaining <= 0)}
                         className="px-4 py-2 bg-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {status === 'generating' ? 'Generating…' : readyStem ? '🎲 Regenerate' : '✨ Generate'}
+                        {status === 'generating' ? 'Generating…' : readyLoop ? '🎲 Regenerate' : '✨ Generate'}
                     </button>
                     <button
                         onClick={handleAddToTrack}
-                        disabled={!readyStem || isBusy}
+                        disabled={!readyLoop || isBusy}
                         className="px-4 py-2 bg-gradient-to-r from-teal-500 to-green-500 rounded-lg text-sm font-semibold hover:from-teal-600 hover:to-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {status === 'applying' ? 'Adding…' : 'Add to Track'}
@@ -269,7 +269,7 @@ const StemGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
     );
 };
 
-StemGenerateModal.propTypes = {
+LoopGenerateModal.propTypes = {
     track: PropTypes.object.isRequired,
     bpm: PropTypes.number.isRequired,
     startTime: PropTypes.number.isRequired,
@@ -277,4 +277,4 @@ StemGenerateModal.propTypes = {
     onApply: PropTypes.func.isRequired,
 };
 
-export default StemGenerateModal;
+export default LoopGenerateModal;

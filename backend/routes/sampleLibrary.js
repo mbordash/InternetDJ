@@ -110,27 +110,27 @@ router.post('/', authenticate, async (req, res) => {
     }
 });
 
-// Copy stem to sample library (new route)
-router.post('/from-stem', authenticate, async (req, res) => {
-    const { stemId } = req.body;
+// Copy a generated loop into the sample library.
+router.post('/from-loop', authenticate, async (req, res) => {
+    const { loopId } = req.body;
     const userId = req.user.id;
 
-    if (!stemId) {
-        return res.status(400).json({ error: 'stemId is required' });
+    if (!loopId) {
+        return res.status(400).json({ error: 'loopId is required' });
     }
 
     try {
-        // Fetch stem details (ensure it belongs to user and is ready)
-        const stems = await pool.query(
-            'SELECT url, type FROM stems WHERE id = ? AND user_id = ? AND status = ?',
-            [stemId, userId, 'ready']
+        // Fetch loop details (ensure it belongs to user and is ready)
+        const loops = await pool.query(
+            'SELECT url, type FROM loops WHERE id = ? AND user_id = ? AND status = ?',
+            [loopId, userId, 'ready']
         );
-        if (stems.length === 0) {
-            return res.status(404).json({ error: 'Ready stem not found' });
+        if (loops.length === 0) {
+            return res.status(404).json({ error: 'Ready loop not found' });
         }
 
-        const stem = stems[0];
-        const wavKey = stem.url.split('/').slice(-2).join('/'); // e.g., stems/id.wav
+        const loop = loops[0];
+        const wavKey = loop.url.split('/').slice(-2).join('/'); // e.g., loops/id.wav
         const mp3Key = `samples/${userId}-${Date.now()}.mp3`;
 
         // Download WAV from S3
@@ -168,7 +168,7 @@ router.post('/from-stem', authenticate, async (req, res) => {
         await s3Client.send(new PutObjectCommand(uploadParams));
 
         const mp3Url = buildPublicFileUrl(mp3Key);
-        const name = `${stem.type.charAt(0).toUpperCase() + stem.type.slice(1)} Stem - ${stemId.slice(0, 8)}`; // e.g., "Bass Stem - abc12345"
+        const name = `${loop.type.charAt(0).toUpperCase() + loop.type.slice(1)} Loop - ${loopId.slice(0, 8)}`; // e.g., "Bass Loop - abc12345"
         const duration = await probeDuration(mp3Buffer);
 
         // Insert into DB
@@ -185,8 +185,8 @@ router.post('/from-stem', authenticate, async (req, res) => {
             created_at: new Date(),
         });
     } catch (err) {
-        console.error('Error in POST /sample-library/from-stem:', err);
-        res.status(500).json({ error: 'Failed to copy stem to sample library: ' + err.message });
+        console.error('Error in POST /sample-library/from-loop:', err);
+        res.status(500).json({ error: 'Failed to copy loop to sample library: ' + err.message });
     }
 });
 
