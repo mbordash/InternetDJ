@@ -93,6 +93,39 @@ const MINT = new PublicKey('DTLkUR3Sfp1LcPVZMSv8toTTK3iwU7WTdF66TawwJpKN');
 })();"
 ```
 
+## Version log
+
+Pinata filenames are dashboard labels only. IPFS addresses content, so the
+filename appears nowhere in the URI and the CID is derived purely from the
+bytes. Record the mapping here, because the dashboard is the only other place
+it exists.
+
+| File on Pinata | CID | Status |
+|---|---|---|
+| `idj-metadata3.json` | `bafkreidr45k65wrcwxlwiiasz5cnliwrdatp52n7nz5cayzpvq6rlxh7ja` | on chain until v4 lands. Keep pinned. |
+| `idj-metadata4.json` | `bafkreicjlbnvlvoyiwruzmzof724ou37g6rtkps5mlb27tp42phcwroewe` | pinned and verified. Set as the mint uri. |
+
+Image CIDs:
+
+| File on Pinata | CID | Status |
+|---|---|---|
+| old coin render | `bafybeif6ozkjt6u77akd3dqdh34iqzmecyyrcihug6n2wx4s3o6foxg5qm` | superseded, keep pinned |
+| `idj-coin-512.png` | `bafkreihcvf523z6af7ywko4n6fuxaui6qo5unewqlrg7hubvswod6zrto4` | current, verified byte-identical to the generated file |
+
+Three rules that follow from content addressing:
+
+- **Pin the image before the JSON.** The JSON embeds the image CID, so the
+  other order means pinning the JSON twice.
+- **Do not unpin the previous version** until the new URI is confirmed on chain
+  and has propagated. Explorers and wallets cache the URI, and if the old CID
+  stops resolving while anything still points at it the token shows broken
+  metadata in the gap. These files are under a kilobyte; keep them all.
+- Upload the JSON **unwrapped**, not wrapped in a directory. The current one is
+  codec `0x55` (raw single file), which is why its URI carries no filename.
+  A directory wrap yields `/ipfs/<dirCID>/idj-metadata4.json` instead.
+
+If a fresh upload returns a CID you already have, you re-uploaded the old bytes.
+
 ## What changed in this revision
 
 Recorded so the next edit does not quietly undo it.

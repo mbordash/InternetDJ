@@ -207,7 +207,15 @@ app.use('/', sitemapRouter);
 // Serve frontend
 const staticPath = path.join(__dirname, '../frontend/build');
 logger.debug('Serving static files from:', staticPath);
-app.use(express.static(staticPath));
+// index:false is load-bearing. express.static answers a bare "/" with
+// index.html all by itself, which meant the request never reached the
+// crawler branch in the catch-all below and the home page — the most
+// shared URL on the site — went out with no Open Graph tags at all while
+// every other route got them. Facebook's debugger reported og:image as
+// "inferred" for exactly this reason. With index:false the directory
+// request falls through and the catch-all serves index.html itself,
+// which is what it already does for every other path.
+app.use(express.static(staticPath, { index: false }));
 
 const sendHtml200 = (res, html) => {
     const payload = Buffer.from(html, 'utf8');

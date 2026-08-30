@@ -280,7 +280,7 @@ const STATIC_PAGES = {
     // archive is a genuine draw: two decades of electronic music journalism,
     // including interviews an assistant may well be asked about by name.
     '/articles': {
-        title: 'Articles \u2014 Music News, Features, Interviews and Guides',
+        title: 'Articles: Music News, Features, Interviews and Guides',
         description: 'News, features, interviews and production guides for electronic music '
             + 'producers, including the recovered InternetDJ archive going back to 2001.',
         image: FALLBACK_IMAGE,
@@ -330,7 +330,7 @@ const STATIC_PAGES = {
     // the one static page an assistant is most likely to be asked to summarise,
     // so it carries the fullest crawler body on the site.
     '/promote': {
-        title: 'Promote Your Music \u2014 Publish Tracks and Get Real Feedback',
+        title: 'Promote Your Music: Publish Tracks and Get Real Feedback',
         description: 'Promote your music on InternetDJ: publish your tracks for free, get written '
             + 'feedback from other electronic producers, and keep every right to your work. '
             + 'House, techno, drum & bass, ambient and everything adjacent.',
@@ -448,6 +448,105 @@ const STATIC_PAGES = {
             isPartOf: { '@type': 'WebSite', name: 'InternetDJ', url: base },
             offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         }),
+    },
+
+    // ---- section pages -------------------------------------------------
+    // Everything below had no entry, so extractMetadata returned null and a
+    // crawler got the bare shell with no tags at all. Not a fallback card: no
+    // card. /projects is deliberately absent; the multitrack editor is not
+    // something to push into share previews.
+
+    '/idj-coin': {
+        title: 'IDJC: Earn Solana Coin for Your Music',
+        description: 'IDJC is the InternetDJ Solana token. Artists earn it from the listens their '
+            + 'tracks pick up, at 1 IDJC per 10 listens. Hold it, or send some to the producers '
+            + 'whose music you rate.',
+        // The wide card, not idj-coin-512.png, even though this is the coin's
+        // own page. twitter:card is summary_large_image, so X crops a square
+        // to 1.91:1 and would slice the top and bottom off the coin. The wide
+        // card carries the coin anyway. The square file stays reserved for the
+        // JSON-LD Organization logo and the SPL token metadata.
+        image: FALLBACK_IMAGE,
+        url: '/idj-coin',
+        type: 'website',
+        body: {
+            heading: 'IDJC, the InternetDJ coin',
+            paragraphs: [
+                'IDJC is a Solana token that rewards artists for the listens their music picks up '
+                + 'on InternetDJ. Earnings accrue against your profile at 1 IDJC per 10 counted '
+                + 'listens, capped at 10 IDJC a day.',
+                'Holding IDJC supports the musicians on the site. It can be sent to other members, '
+                + 'and it trades on Raydium.',
+            ],
+            facts: [
+                { label: 'Network', value: 'Solana' },
+                { label: 'Ticker', value: 'IDJC' },
+                { label: 'Earned by', value: 'Artists, from counted listens on their tracks.' },
+            ],
+        },
+    },
+
+    '/about': {
+        title: 'About InternetDJ',
+        description: 'InternetDJ has been a home for independent electronic music producers since '
+            + '1997. What the site is, who runs it, and how it works.',
+        image: FALLBACK_IMAGE,
+        url: '/about',
+        type: 'website',
+    },
+
+    '/discover': {
+        title: 'Discover: Continuous AI DJ',
+        description: 'A continuous mix of member-uploaded electronic music. The next track loads '
+            + 'by itself, so you can leave it running and turn up producers you have not heard.',
+        image: FALLBACK_IMAGE,
+        url: '/discover',
+        type: 'website',
+    },
+
+    '/browse': {
+        title: 'Browse Music by Genre',
+        description: 'Browse independent electronic music by genre. House, techno, drum and bass, '
+            + 'ambient, breaks, trance and downtempo, all uploaded by the producers themselves.',
+        image: FALLBACK_IMAGE,
+        url: '/browse',
+        type: 'website',
+    },
+
+    '/new': {
+        title: 'New Releases',
+        description: 'The newest tracks uploaded to InternetDJ by independent electronic music '
+            + 'producers, updated as members publish.',
+        image: FALLBACK_IMAGE,
+        url: '/new',
+        type: 'website',
+    },
+
+    '/crates': {
+        title: 'Crates: Mixtapes Made by Members',
+        description: 'Mixtapes put together by InternetDJ members. Dig through what other '
+            + 'producers have collected, or make one for someone and it lands in their crate.',
+        image: FALLBACK_IMAGE,
+        url: '/crates',
+        type: 'website',
+    },
+
+    '/forum': {
+        title: 'Producer Forum',
+        description: 'The InternetDJ discussion forum, where electronic music producers talk '
+            + 'about production, gear, mixing and the scene.',
+        image: FALLBACK_IMAGE,
+        url: '/forum',
+        type: 'website',
+    },
+
+    '/collabs': {
+        title: 'Find a Collaborator',
+        description: 'Public collaborations from InternetDJ members. Find producers looking for a '
+            + 'co-writer, a vocalist or a remix, and jump into a track with them.',
+        image: FALLBACK_IMAGE,
+        url: '/collabs',
+        type: 'website',
     },
 };
 
