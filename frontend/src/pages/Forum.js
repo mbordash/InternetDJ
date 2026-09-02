@@ -438,64 +438,66 @@ function Forum() {
                                                     key={post.id}
                                                     
                                                 >
-                                                    <td className="flex items-center space-x-3">
-                                                        {post.user_picture ? (
-                                                            <img
-                                                                src={post.user_picture}
-                                                                alt={post.user_name}
-                                                                className="w-12 h-12 object-cover border border-cyan-400/30"
-                                                                onError={(e) => {
-                                                                    e.target.style.display = 'none';
-                                                                    e.target.nextSibling.style.display = 'block';
-                                                                }}
-                                                                loading="lazy"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-12 h-12 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300" style={{ display: post.user_picture ? 'none' : 'flex' }}>
-                                                             ?
-                                                         </div>
-                                                     )}
-                                                     <div className="flex-1">
-                                                         <Link
-                                                             to={`/forum/post/${post.id}`}
-                                                             className="retro-display text-xs text-white hover:text-cyan-200"
-                                                         >
-                                                             {post.title}
-                                                         </Link>
-                                                         <div className="retro-mono text-lg text-gray-400">
+                                                    <td>
+                                                        <div className="flex items-center space-x-3 min-w-0">
+                                                            {post.user_picture ? (
+                                                                <img
+                                                                    src={post.user_picture}
+                                                                    alt={post.user_name}
+                                                                    className="w-12 h-12 shrink-0 object-cover border border-cyan-400/30"
+                                                                    onError={(e) => {
+                                                                        e.target.style.display = 'none';
+                                                                        e.target.nextSibling.style.display = 'block';
+                                                                    }}
+                                                                    loading="lazy"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-12 h-12 shrink-0 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300" style={{ display: post.user_picture ? 'none' : 'flex' }}>
+                                                                 ?
+                                                             </div>
+                                                         )}
+                                                         <div className="flex-1 min-w-0">
                                                              <Link
-                                                                 to={profilePath(post)}
-                                                                 className="retro-link"
+                                                                 to={`/forum/post/${post.id}`}
+                                                                 className="retro-display text-xs text-white hover:text-cyan-200"
                                                              >
-                                                                 {post.user_name}
+                                                                 {post.title}
                                                              </Link>
-                                                             {' • '}
-                                                             {formatDate(post.created_at)}
-                                                             {post.edited_at && (
-                                                                 <span> (Edited {formatDate(post.edited_at)})</span>
-                                                             )}
-                                                         </div>
-                                                     </div>
-                                                     {user && post.user_id === user.id && (
-                                                         <div className="flex space-x-2">
-                                                             {canEditPost(post) && (
-                                                                 <button
-                                                                     onClick={() => handleEditPost(post)}
+                                                             <div className="retro-mono text-lg text-gray-400">
+                                                                 <Link
+                                                                     to={profilePath(post)}
                                                                      className="retro-link"
-                                                                     title="Edit post"
                                                                  >
-                                                                     <PencilIcon className="w-5 h-5" />
-                                                                 </button>
-                                                             )}
-                                                             <button
-                                                                 onClick={() => handleDeletePost(post.id)}
-                                                                 className="text-red-400 hover:text-red-300"
-                                                                 title="Delete post"
-                                                             >
-                                                                 <XMarkIcon className="w-5 h-5" />
-                                                             </button>
+                                                                     {post.user_name}
+                                                                 </Link>
+                                                                 {' • '}
+                                                                 {formatDate(post.created_at)}
+                                                                 {post.edited_at && (
+                                                                     <span> (Edited {formatDate(post.edited_at)})</span>
+                                                                 )}
+                                                             </div>
                                                          </div>
-                                                     )}
+                                                         {user && post.user_id === user.id && (
+                                                             <div className="flex space-x-2">
+                                                                 {canEditPost(post) && (
+                                                                     <button
+                                                                         onClick={() => handleEditPost(post)}
+                                                                         className="retro-link"
+                                                                         title="Edit post"
+                                                                     >
+                                                                         <PencilIcon className="w-5 h-5" />
+                                                                     </button>
+                                                                 )}
+                                                                 <button
+                                                                     onClick={() => handleDeletePost(post.id)}
+                                                                     className="text-red-400 hover:text-red-300"
+                                                                     title="Delete post"
+                                                                 >
+                                                                     <XMarkIcon className="w-5 h-5" />
+                                                                 </button>
+                                                             </div>
+                                                         )}
+                                                        </div>
                                                     </td>
                                                     <td className="retro-mono text-lg text-cyan-300">{post.comment_count} comments</td>
                                                     <td className="retro-mono text-lg text-gray-400">

@@ -18,7 +18,7 @@
 
 const logger = require('../utils/logger');
 const pool = require('../config/database');
-const { normalizeGenre, expandGenreString } = require('../utils/genres');
+const { normalizeGenre, aliasSourcesFor, expandGenreString, isLikelyJunkGenre } = require('../utils/genres');
 
 // The og:image every page falls back to when it has no picture of its own.
 // Wide on purpose: twitter:card is summary_large_image below, and X crops a
@@ -486,6 +486,13 @@ const STATIC_PAGES = {
         },
     },
 
+    /*
+     * The only page here whose body is worth stating plainly rather than
+     * deriving: it is the page an assistant reads to answer "what is
+     * InternetDJ", and the answers that matter most on it are the two policy
+     * ones. Both are easy to get wrong from the home page alone, so they are
+     * spelled out rather than implied.
+     */
     '/about': {
         title: 'About InternetDJ',
         description: 'InternetDJ has been a home for independent electronic music producers since '
@@ -493,6 +500,68 @@ const STATIC_PAGES = {
         image: FALLBACK_IMAGE,
         url: '/about',
         type: 'website',
+        body: {
+            heading: 'About InternetDJ',
+            paragraphs: [
+                'InternetDJ has been publishing independent electronic music since 1997, when it '
+                    + 'started as a way for artists to share their work without going through a '
+                    + 'record label. It is now a working community of producers, from people '
+                    + 'posting a first beat to people who have been releasing for decades.',
+                'Artists keep every right to what they upload. InternetDJ claims no ownership of '
+                    + 'any music on the site and acts only as a host, so the recording, the '
+                    + 'composition and everything around them stay with the people who made them.',
+                'Music uploaded here is used for AI model training only where the artist has '
+                    + 'explicitly opted that individual track in. Consent is per song, off by '
+                    + 'default, and can be withdrawn.',
+                'The thing the site is built around is written feedback. A track published here is '
+                    + 'meant to be reviewed by other producers in words rather than collect silent '
+                    + 'plays, and a numeric rating is always offered but never required. Plays '
+                    + 'also earn IDJC, the site\u2019s Solana token.',
+            ],
+            facts: [
+                { label: 'Founded', value: '1997' },
+                { label: 'Focus', value: 'Independent electronic music' },
+                { label: 'Rights', value: 'Artists retain all ownership' },
+                { label: 'AI training', value: 'Opt in per song, off by default' },
+                { label: 'Token', value: 'IDJC, on Solana' },
+            ],
+            sections: [
+                {
+                    heading: 'Along the way',
+                    items: [
+                        { text: '1997: InternetDJ launches as a place for independent artists to publish' },
+                        { text: '2005: the browser based music editor arrives' },
+                        { text: '2018: automatic mastering is added' },
+                        { text: '2023: IDJC launches to reward contributions to the community' },
+                    ],
+                },
+                {
+                    heading: 'Elsewhere on InternetDJ',
+                    items: [
+                        { text: 'Publish your music and get feedback', href: '/promote' },
+                        { text: 'The newest uploads from members', href: '/new' },
+                        { text: 'Browse music by genre', href: '/browse' },
+                        { text: 'The producer forum', href: '/forum' },
+                        { text: 'About IDJC, the site token', href: '/idj-coin' },
+                    ],
+                },
+            ],
+        },
+        jsonLd: (base) => ({
+            '@context': 'https://schema.org',
+            '@type': 'AboutPage',
+            name: 'About InternetDJ',
+            url: `${base}/about`,
+            mainEntity: {
+                '@type': 'Organization',
+                '@id': `${base}/#organization`,
+                name: 'InternetDJ',
+                url: base,
+                foundingDate: '1997',
+                description: 'A community for independent electronic music producers, publishing '
+                    + 'since 1997. Artists retain all rights to their work.',
+            },
+        }),
     },
 
     '/discover': {
@@ -593,6 +662,20 @@ const extractMetadata = (urlPath, query = {}) => {
         if (ARTICLE_CATEGORIES[category]) return { type: 'articleCategory', id: category };
     }
 
+    // /new is listed in STATIC_PAGES for its title, description and image, but
+    // its content is the catalogue rather than fixed copy, so it routes to a
+    // fetcher that reads the actual newest uploads. The fetcher falls back to
+    // the static entry if the query fails, so this can only ever add content.
+    if (staticKey === '/new') return { type: 'newReleases', id: 'new' };
+
+    // Same reasoning as /new: the static entry supplies title, description and
+    // image, the fetcher supplies the genre directory that is the actual page.
+    if (staticKey === '/browse') return { type: 'browse', id: 'browse' };
+    if (staticKey === '/discover') return { type: 'discover', id: 'discover' };
+    if (staticKey === '/crates') return { type: 'crates', id: 'crates' };
+    if (staticKey === '/forum') return { type: 'forum', id: 'forum' };
+    if (staticKey === '/collabs') return { type: 'collabs', id: 'collabs' };
+
     if (STATIC_PAGES[staticKey]) return { type: 'staticPage', id: staticKey };
 
     const songMatch = urlPath.match(/^\/song\/(\d+)\/?$/);
@@ -687,7 +770,13 @@ const fetchSongMetadata = async (songId) => {
         const reviews = await pool.query(`
             SELECT r.rating, r.review, p.name AS reviewer
             FROM reviews r
-            LEFT JOIN profiles p ON p.user_id = r.user_id
+            -- reviews.profile_id, NOT reviews.user_id. database/schema.sql
+            -- still declares a user_id column here, but the live table has
+            -- never had one: the join threw 1054 Unknown column and the catch
+            -- below turned that into "no metadata", so every /song/ URL served
+            -- a bare shell with no Open Graph tags at all while profiles and
+            -- crates worked fine. routes/reviews.js joins on profile_id.
+            LEFT JOIN profiles p ON p.id = r.profile_id
             WHERE r.song_id = ?
             ORDER BY r.created_at DESC
             LIMIT 5
@@ -1051,14 +1140,32 @@ const fetchTagMetadata = async (rawTag) => {
         // impossible in SQL. LIKE narrows the scan cheaply and the normalised
         // comparison below does the real filtering — a crawler hit should not
         // cost a full table scan.
+        //
+        // The prefilter has to match how ARTISTS spell a genre, not how the
+        // URL spells it. A /tag/ URL carries the normalised key, "drum bass",
+        // while the column holds free text: "Drum & Bass", "DnB". No stored
+        // value contains the literal substring "drum bass", so the single
+        // LIKE this used to run matched zero rows, returned null without
+        // throwing, and every /tag/ page served a bare shell with no Open
+        // Graph tags. Silent because nothing errored.
+        //
+        // So: every token has to appear, which catches "Drum & Bass" and
+        // "Drum-n-Bass"; or any known alias spelling has to, which catches
+        // "DnB", where token matching cannot help.
+        const tokens = wanted.split(/\s+/).filter(Boolean);
+        if (!tokens.length) return null;
+        const aliases = (aliasSourcesFor(wanted) || []).filter(a => a && a !== wanted);
+        const clauses = [`(${tokens.map(() => 's.genre LIKE ?').join(' AND ')})`]
+            .concat(aliases.map(() => 's.genre LIKE ?'));
+
         const rows = await pool.query(`
             SELECT s.title, s.genre, s.image_url, p.name AS artist
             FROM songs s
             LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.genre LIKE ?
+            WHERE ${clauses.join(' OR ')}
             ORDER BY s.plays DESC
             LIMIT 100
-        `, [`%${rawTag}%`]);
+        `, tokens.map(t => `%${t}%`).concat(aliases.map(a => `%${a}%`)));
 
         const matches = rows.filter(row =>
             expandGenreString(row.genre).some(({ key }) => key === wanted)
@@ -1332,6 +1439,613 @@ const fetchArticleCategoryMetadata = async (categorySlug) => {
     }
 };
 
+/**
+ * /new: the newest uploads.
+ *
+ * This was a STATIC_PAGES entry, which gave it Open Graph tags and nothing
+ * else: no crawler body, so #root arrived empty and the page had to be
+ * rendered to have any content at all. Every other listing page on the site is
+ * in the same position, but /new is the one the sitemap leans on for
+ * discovering songs, so it gets a real body first.
+ *
+ * The sections mirror GET /music/recent, which is what the page itself calls,
+ * with one deliberate omission: that endpoint's third section is ordered by
+ * RAND(). Random content would hand Google a materially different page on every
+ * crawl, which is the opposite of what a listing page should look like to a
+ * crawler, so only the two stable sections are reproduced here.
+ *
+ * The track links matter as much as the track names. /new is the shallowest
+ * path from the home page to an individual song, so these anchors are the
+ * crawl route into the catalogue for a crawler that does not run JavaScript.
+ */
+const NEW_JUST_ADDED_LIMIT = 20;
+const NEW_PLAYED_LATELY_LIMIT = 10;
+const NEW_PLAYED_LATELY_DAYS = 30;
+
+const songListItem = (row) => ({
+    text: row.profile_name
+        ? `${row.title || 'Untitled'} by ${row.profile_name}`
+        : (row.title || 'Untitled'),
+    href: `/song/${row.id}`,
+});
+
+const fetchNewReleasesMetadata = async () => {
+    // Falling back to the static entry rather than null on any failure. null
+    // would strip every Open Graph tag from the page, which is a worse outcome
+    // than losing the body, and it is exactly what the reviews join bug did to
+    // every song URL before it was found.
+    const staticEntry = STATIC_PAGES['/new'];
+
+    try {
+        const justAdded = await pool.query(`
+            SELECT s.id, s.title, s.genre, s.created_at,
+                   p.name AS profile_name
+            FROM songs s
+            LEFT JOIN profiles p ON s.profile_id = p.id
+            ORDER BY s.created_at DESC
+            LIMIT ?
+        `, [NEW_JUST_ADDED_LIMIT]);
+
+        if (!justAdded || !justAdded.length) return staticEntry;
+
+        // Counted inside a window rather than reading songs.plays, so the
+        // section moves week to week instead of pinning the all-time favourites
+        // forever. Same shape as the endpoint the page calls.
+        const playedLately = await pool.query(`
+            SELECT s.id, s.title, p.name AS profile_name
+            FROM (
+                     SELECT sp.song_id, COUNT(*) AS recent_plays
+                     FROM song_plays sp
+                     WHERE sp.played_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                     GROUP BY sp.song_id
+                     ORDER BY recent_plays DESC
+                     LIMIT ?
+                 ) recent
+                     JOIN songs s ON s.id = recent.song_id
+                     LEFT JOIN profiles p ON s.profile_id = p.id
+            ORDER BY recent.recent_plays DESC, s.created_at DESC
+        `, [NEW_PLAYED_LATELY_DAYS, NEW_PLAYED_LATELY_LIMIT]);
+
+        const artists = [...new Set(justAdded.map(r => r.profile_name).filter(Boolean))].slice(0, 3);
+        const genres = [...new Set(
+            justAdded.flatMap(r => (r.genre ? expandGenreString(r.genre).map(g => g.raw) : [])),
+        )].slice(0, 4);
+
+        const sections = [{
+            heading: 'Just added',
+            items: justAdded.map(songListItem),
+        }];
+
+        if (playedLately && playedLately.length) {
+            sections.push({
+                heading: 'Played lately',
+                items: playedLately.map(songListItem),
+            });
+        }
+
+        sections.push({
+            heading: 'Elsewhere on InternetDJ',
+            items: [
+                { text: 'Publish your own tracks and get written feedback', href: '/promote' },
+                { text: 'Browse music by genre', href: '/browse' },
+                { text: 'Crates put together by members', href: '/crates' },
+            ],
+        });
+
+        return {
+            ...staticEntry,
+            description: `The ${justAdded.length} newest tracks uploaded to InternetDJ`
+                + `${artists.length ? `, including work by ${artists.join(', ')}` : ''}`
+                + '. Independent electronic music, updated as members publish.',
+            body: {
+                heading: 'New releases on InternetDJ',
+                paragraphs: [
+                    'The most recent tracks published by InternetDJ members. Every one was '
+                        + 'uploaded by the artist who made it, and every one can be reviewed by '
+                        + 'other producers.',
+                    'Upload is free, and a track here gets written feedback from other producers '
+                        + 'rather than silent plays.',
+                ],
+                facts: [
+                    { label: 'Tracks listed', value: String(justAdded.length) },
+                    { label: 'Genres', value: genres.length ? genres.join(', ') : '' },
+                ],
+                sections,
+            },
+            jsonLd: (base) => ({
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: 'New releases on InternetDJ',
+                url: `${base}/new`,
+                mainEntity: {
+                    '@type': 'ItemList',
+                    numberOfItems: justAdded.length,
+                    itemListElement: justAdded.map((row, i) => ({
+                        '@type': 'ListItem',
+                        position: i + 1,
+                        url: `${base}/song/${row.id}`,
+                        item: {
+                            '@type': 'MusicRecording',
+                            name: row.title || 'Untitled',
+                            url: `${base}/song/${row.id}`,
+                            byArtist: row.profile_name
+                                ? { '@type': 'MusicGroup', name: row.profile_name }
+                                : undefined,
+                        },
+                    })),
+                },
+            }),
+        };
+    } catch (err) {
+        logger.error('OG: error fetching new releases metadata:', err);
+        return staticEntry;
+    }
+};
+
+/**
+ * /browse: the genre directory.
+ *
+ * Mirrors GET /music/by-tags, which is what the page itself calls, minus the
+ * cover thumbnails it has no use for here. The bucketing has to be done in JS
+ * for the same reason it is there: genres are comma separated free text in a
+ * VARCHAR, so one genre arrives spelled a dozen ways and SQL cannot group them.
+ *
+ * This is the second crawl route into the catalogue after /new, and the more
+ * durable one. /new only ever exposes the twenty most recent tracks, so an
+ * older song drops out of it permanently; every genre page stays reachable
+ * from here for as long as a track carries that tag.
+ */
+const fetchBrowseMetadata = async () => {
+    const staticEntry = STATIC_PAGES['/browse'];
+
+    try {
+        // Ordered by plays so that if the row cap is ever reached it is the
+        // best known tracks that shape the directory, matching /music/by-tags.
+        const rows = await pool.query(`
+            SELECT s.genre
+            FROM songs s
+            WHERE s.genre IS NOT NULL AND s.genre != ''
+            ORDER BY s.plays DESC
+        `);
+
+        if (!rows || !rows.length) return staticEntry;
+
+        const buckets = {};
+        rows.forEach((row) => {
+            expandGenreString(row.genre).forEach(({ key, raw }) => {
+                if (!key) return;
+                const bucket = buckets[key] || (buckets[key] = { count: 0, labels: {} });
+                bucket.count += 1;
+                bucket.labels[raw] = (bucket.labels[raw] || 0) + 1;
+            });
+        });
+
+        // isLikelyJunkGenre is the same filter the page applies. Without it the
+        // directory advertises one-off typos as genres, and every one of those
+        // is a thin page that Google would rightly treat as a soft 404.
+        const genres = Object.keys(buckets)
+            .filter(key => !isLikelyJunkGenre(key, buckets[key].count))
+            .map((key) => {
+                const { count, labels } = buckets[key];
+                // The label shown is the spelling artists actually type, not
+                // the normalised grouping key.
+                const label = Object.keys(labels)
+                    .sort((a, b) => labels[b] - labels[a] || b.length - a.length || a.localeCompare(b))[0] || key;
+                return { tag: key, label, count };
+            })
+            .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+        if (!genres.length) return staticEntry;
+
+        const top = genres.slice(0, 5).map(g => g.label);
+
+        return {
+            ...staticEntry,
+            description: `${genres.length} genres of independent electronic music on InternetDJ`
+                + `${top.length ? `, led by ${top.join(', ')}` : ''}`
+                + '. Every track uploaded by the producer who made it.',
+            body: {
+                heading: 'Browse music by genre on InternetDJ',
+                paragraphs: [
+                    'Every genre below is one that InternetDJ members actually tag their tracks '
+                        + 'with. Genres are free text here rather than a fixed list, so the '
+                        + 'directory reflects what producers call their own music.',
+                    'Follow any genre to hear the tracks filed under it, or publish your own for '
+                        + 'free and get written feedback from other producers.',
+                ],
+                facts: [
+                    { label: 'Genres', value: String(genres.length) },
+                    { label: 'Most tagged', value: top.length ? top.join(', ') : '' },
+                ],
+                sections: [
+                    {
+                        heading: 'Genres',
+                        // 100 rather than a tighter cap because the live
+                        // directory currently holds 69 genres, and the whole
+                        // point of this block is to mirror what the page shows
+                        // rather than a truncated version of it. The cap only
+                        // exists so the body cannot grow without bound.
+                        items: genres.slice(0, 100).map(g => ({
+                            text: `${g.label} (${g.count} track${g.count === 1 ? '' : 's'})`,
+                            href: `/tag/${encodeURIComponent(g.tag)}`,
+                        })),
+                    },
+                    {
+                        heading: 'Elsewhere on InternetDJ',
+                        items: [
+                            { text: 'The newest uploads from members', href: '/new' },
+                            { text: 'Publish your own tracks and get feedback', href: '/promote' },
+                            { text: 'Crates put together by members', href: '/crates' },
+                        ],
+                    },
+                ],
+            },
+            jsonLd: (base) => ({
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: 'Browse music by genre on InternetDJ',
+                url: `${base}/browse`,
+                mainEntity: {
+                    '@type': 'ItemList',
+                    numberOfItems: genres.length,
+                    itemListElement: genres.slice(0, 60).map((g, i) => ({
+                        '@type': 'ListItem',
+                        position: i + 1,
+                        name: g.label,
+                        url: `${base}/tag/${encodeURIComponent(g.tag)}`,
+                    })),
+                },
+            }),
+        };
+    } catch (err) {
+        logger.error('OG: error fetching browse metadata:', err);
+        return staticEntry;
+    }
+};
+
+/*
+ * The remaining listing pages.
+ *
+ * Same shape as /new and /browse: the STATIC_PAGES entry supplies title,
+ * description and image, and these supply the content. Each mirrors the
+ * endpoint its page calls closely enough to show the same things, without
+ * reproducing the display-only parts (cover thumbnails, avatars, like counts)
+ * that a crawler body has no use for.
+ *
+ * All four degrade to their static entry rather than null. null would strip
+ * the Open Graph tags as well as the body, which is strictly worse than the
+ * empty bodies these pages had before.
+ */
+
+/** Mirrors GET /music/highest-rated and GET /music/latest, the two lists Discover shows. */
+const fetchDiscoverMetadata = async () => {
+    const staticEntry = STATIC_PAGES['/discover'];
+
+    try {
+        const [topRated, latest] = await Promise.all([
+            pool.query(`
+                SELECT s.id, s.title, p.name AS profile_name,
+                       (SELECT COUNT(*)
+                        FROM playlist_songs ps
+                                 JOIN playlists pl ON ps.playlist_id = pl.id
+                        WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
+                FROM songs s
+                         LEFT JOIN profiles p ON s.profile_id = p.id
+                ORDER BY likes_count DESC, s.plays DESC
+                LIMIT 15
+            `),
+            pool.query(`
+                SELECT s.id, s.title, p.name AS profile_name
+                FROM songs s
+                         LEFT JOIN profiles p ON s.profile_id = p.id
+                ORDER BY s.created_at DESC
+                LIMIT 15
+            `),
+        ]);
+
+        if ((!topRated || !topRated.length) && (!latest || !latest.length)) return staticEntry;
+
+        const sections = [];
+        if (topRated && topRated.length) {
+            sections.push({ heading: 'Most liked', items: topRated.map(songListItem) });
+        }
+        if (latest && latest.length) {
+            sections.push({ heading: 'Recently added', items: latest.map(songListItem) });
+        }
+        sections.push({
+            heading: 'Elsewhere on InternetDJ',
+            items: [
+                { text: 'Browse music by genre', href: '/browse' },
+                { text: 'The newest uploads from members', href: '/new' },
+                { text: 'Publish your own tracks and get feedback', href: '/promote' },
+            ],
+        });
+
+        return {
+            ...staticEntry,
+            body: {
+                heading: 'Discover music on InternetDJ',
+                paragraphs: [
+                    'Tracks other producers have liked, and the most recent uploads. Everything '
+                        + 'here was published by the artist who made it.',
+                    'Reviews are the point of the site: a track is meant to come back with '
+                        + 'written feedback rather than silent plays.',
+                ],
+                sections,
+            },
+            jsonLd: (base) => ({
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: 'Discover music on InternetDJ',
+                url: `${base}/discover`,
+                mainEntity: {
+                    '@type': 'ItemList',
+                    numberOfItems: (topRated || []).length,
+                    itemListElement: (topRated || []).map((row, i) => ({
+                        '@type': 'ListItem',
+                        position: i + 1,
+                        url: `${base}/song/${row.id}`,
+                        item: {
+                            '@type': 'MusicRecording',
+                            name: row.title || 'Untitled',
+                            url: `${base}/song/${row.id}`,
+                            byArtist: row.profile_name
+                                ? { '@type': 'MusicGroup', name: row.profile_name }
+                                : undefined,
+                        },
+                    })),
+                },
+            }),
+        };
+    } catch (err) {
+        logger.error('OG: error fetching discover metadata:', err);
+        return staticEntry;
+    }
+};
+
+/**
+ * Mirrors GET /playlists/public. Crates live in the `playlists` table, and the
+ * per-user "Likes" list is a row in there too, so it has to be excluded the
+ * same way the endpoint excludes it or every member's likes shows up as a crate.
+ */
+const fetchCratesMetadata = async () => {
+    const staticEntry = STATIC_PAGES['/crates'];
+
+    try {
+        const rows = await pool.query(`
+            SELECT p.id, p.name, op.name AS owner_name,
+                   COUNT(ps.song_id) AS song_count
+            FROM playlists p
+                     JOIN profiles op ON op.id = p.profile_id
+                     LEFT JOIN playlist_songs ps ON p.id = ps.playlist_id
+            WHERE p.is_public = TRUE
+              AND LOWER(p.name) <> 'likes'
+            GROUP BY p.id, p.name, op.name
+            HAVING song_count > 0
+            ORDER BY p.updated_at DESC, p.id DESC
+            LIMIT 40
+        `);
+
+        if (!rows || !rows.length) return staticEntry;
+
+        return {
+            ...staticEntry,
+            description: `${rows.length} public crate${rows.length === 1 ? '' : 's'} put together `
+                + 'by InternetDJ members. Playlists of independent electronic music, built by the '
+                + 'people who listen to it.',
+            body: {
+                heading: 'Crates on InternetDJ',
+                paragraphs: [
+                    'A crate is a playlist a member has put together and made public. They are '
+                        + 'built by hand rather than generated, so they tend to be the best way in '
+                        + 'to a corner of the catalogue you have not heard.',
+                    'Any member can build one, and any track on the site can go in it.',
+                ],
+                facts: [
+                    { label: 'Public crates', value: String(rows.length) },
+                ],
+                sections: [
+                    {
+                        heading: 'Public crates',
+                        items: rows.map(row => ({
+                            text: `${row.name || 'Untitled crate'} by ${row.owner_name || 'a member'}`
+                                + ` (${Number(row.song_count)} track${Number(row.song_count) === 1 ? '' : 's'})`,
+                            href: `/crate/${row.id}`,
+                        })),
+                    },
+                    {
+                        heading: 'Elsewhere on InternetDJ',
+                        items: [
+                            { text: 'Browse music by genre', href: '/browse' },
+                            { text: 'The newest uploads from members', href: '/new' },
+                        ],
+                    },
+                ],
+            },
+            jsonLd: (base) => ({
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: 'Crates on InternetDJ',
+                url: `${base}/crates`,
+                mainEntity: {
+                    '@type': 'ItemList',
+                    numberOfItems: rows.length,
+                    itemListElement: rows.map((row, i) => ({
+                        '@type': 'ListItem',
+                        position: i + 1,
+                        name: row.name || 'Untitled crate',
+                        url: `${base}/crate/${row.id}`,
+                    })),
+                },
+            }),
+        };
+    } catch (err) {
+        logger.error('OG: error fetching crates metadata:', err);
+        return staticEntry;
+    }
+};
+
+/**
+ * Mirrors GET /forum/posts. The comment count comes along because "answered or
+ * not" is the one thing worth knowing about a thread from a listing, and it is
+ * cheap next to the rest of that endpoint's per-post subqueries, which exist to
+ * render avatars and last-commenter names and are dropped here.
+ */
+const fetchForumMetadata = async () => {
+    const staticEntry = STATIC_PAGES['/forum'];
+
+    try {
+        const rows = await pool.query(`
+            SELECT fp.id, fp.title, fp.created_at,
+                   p.name AS author_name,
+                   (SELECT COUNT(*) FROM forum_comments fc WHERE fc.post_id = fp.id) AS comment_count
+            FROM forum_posts fp
+                     LEFT JOIN profiles p ON p.user_id = fp.user_id
+            ORDER BY fp.created_at DESC
+            LIMIT 40
+        `);
+
+        if (!rows || !rows.length) return staticEntry;
+
+        return {
+            ...staticEntry,
+            description: `${rows.length} discussion${rows.length === 1 ? '' : 's'} in the `
+                + 'InternetDJ producer forum: production technique, gear, feedback on tracks in '
+                + 'progress, and finding collaborators.',
+            body: {
+                heading: 'The InternetDJ producer forum',
+                paragraphs: [
+                    'Where members of InternetDJ talk about making music: technique, gear, mixing '
+                        + 'problems, and feedback on tracks that are not finished yet.',
+                    'Reading is open to anyone. Posting needs a free account.',
+                ],
+                facts: [
+                    { label: 'Discussions', value: String(rows.length) },
+                ],
+                sections: [
+                    {
+                        heading: 'Recent discussions',
+                        items: rows.map(row => ({
+                            text: `${row.title || 'Untitled'}`
+                                + `${row.author_name ? ` by ${row.author_name}` : ''}`
+                                + `${Number(row.comment_count) ? ` (${Number(row.comment_count)} repl${Number(row.comment_count) === 1 ? 'y' : 'ies'})` : ''}`,
+                            href: `/forum/post/${row.id}`,
+                        })),
+                    },
+                    {
+                        heading: 'Elsewhere on InternetDJ',
+                        items: [
+                            { text: 'Publish your music and get feedback', href: '/promote' },
+                            { text: 'Find a collaborator', href: '/collabs' },
+                        ],
+                    },
+                ],
+            },
+            jsonLd: (base) => ({
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: 'The InternetDJ producer forum',
+                url: `${base}/forum`,
+                mainEntity: {
+                    '@type': 'ItemList',
+                    numberOfItems: rows.length,
+                    itemListElement: rows.map((row, i) => ({
+                        '@type': 'ListItem',
+                        position: i + 1,
+                        name: row.title || 'Untitled',
+                        url: `${base}/forum/post/${row.id}`,
+                    })),
+                },
+            }),
+        };
+    } catch (err) {
+        logger.error('OG: error fetching forum metadata:', err);
+        return staticEntry;
+    }
+};
+
+/**
+ * Mirrors GET /collabs/public.
+ *
+ * Deliberately unlinked, unlike every other listing here: App.js has no public
+ * route for a single collaboration, only /collabs and the tokenised
+ * /collabs/invite/:token. Linking to a URL that does not exist would manufacture
+ * exactly the soft 404s this whole exercise is about, so these stay as text.
+ */
+const fetchCollabsMetadata = async () => {
+    const staticEntry = STATIC_PAGES['/collabs'];
+
+    try {
+        const rows = await pool.query(`
+            SELECT c.id, c.title, c.description,
+                   p.name AS owner_name,
+                   COUNT(ct.id) AS track_count
+            FROM collaborations c
+                     LEFT JOIN profiles p ON c.profile_id = p.id
+                     LEFT JOIN collaboration_tracks ct ON ct.collaboration_id = c.id
+            WHERE c.is_public = 1
+            GROUP BY c.id, c.title, c.description, p.name
+            ORDER BY COALESCE(MAX(ct.created_at), c.updated_at, c.created_at) DESC
+            LIMIT 40
+        `);
+
+        if (!rows || !rows.length) return staticEntry;
+
+        return {
+            ...staticEntry,
+            description: `${rows.length} open collaboration${rows.length === 1 ? '' : 's'} on `
+                + 'InternetDJ. Producers looking for someone to finish a track with.',
+            body: {
+                heading: 'Open collaborations on InternetDJ',
+                paragraphs: [
+                    'Producers on InternetDJ post tracks they want help finishing: a loop that '
+                        + 'needs drums, a bed that needs a vocal, a mix that needs another pair of '
+                        + 'ears.',
+                    'Anyone with a free account can start one or join one.',
+                ],
+                facts: [
+                    { label: 'Open collaborations', value: String(rows.length) },
+                ],
+                sections: [
+                    {
+                        heading: 'Open collaborations',
+                        items: rows.map(row => ({
+                            text: `${row.title || 'Untitled'}`
+                                + `${row.owner_name ? ` by ${row.owner_name}` : ''}`
+                                + `${Number(row.track_count) ? ` (${Number(row.track_count)} track${Number(row.track_count) === 1 ? '' : 's'})` : ''}`,
+                        })),
+                    },
+                    {
+                        heading: 'Elsewhere on InternetDJ',
+                        items: [
+                            { text: 'The producer forum', href: '/forum' },
+                            { text: 'Publish your music and get feedback', href: '/promote' },
+                        ],
+                    },
+                ],
+            },
+            jsonLd: (base) => ({
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: 'Open collaborations on InternetDJ',
+                url: `${base}/collabs`,
+                mainEntity: {
+                    '@type': 'ItemList',
+                    numberOfItems: rows.length,
+                    itemListElement: rows.map((row, i) => ({
+                        '@type': 'ListItem',
+                        position: i + 1,
+                        name: row.title || 'Untitled',
+                    })),
+                },
+            }),
+        };
+    } catch (err) {
+        logger.error('OG: error fetching collabs metadata:', err);
+        return staticEntry;
+    }
+};
+
 const FETCHERS = {
     staticPage: fetchStaticPageMetadata,
     song: fetchSongMetadata,
@@ -1341,6 +2055,12 @@ const FETCHERS = {
     tag: fetchTagMetadata,
     article: fetchArticleMetadata,
     articleCategory: fetchArticleCategoryMetadata,
+    newReleases: fetchNewReleasesMetadata,
+    browse: fetchBrowseMetadata,
+    discover: fetchDiscoverMetadata,
+    crates: fetchCratesMetadata,
+    forum: fetchForumMetadata,
+    collabs: fetchCollabsMetadata,
 };
 
 /**

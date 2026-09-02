@@ -1,0 +1,31 @@
+; internetdj.co - BIND zone export, captured 2026-08-31 from the live
+; GoDaddy nameservers (ns43/ns44.domaincontrol.com) before migrating DNS
+; hosting to Cloudflare.
+;
+; Cloudflare imports this file directly:
+;   DNS > Records > Import and Export > Import DNS records
+;
+; Deliberately NOT included: the two `www` A records that GoDaddy's
+; forwarding service answers with (3.33.251.168, 15.197.225.128). They are
+; broken - see dns/README.md. Recreate www as a Cloudflare redirect rule
+; instead, not as these addresses.
+
+;; Apex -> Fly.io anycast
+internetdj.co.                    600   IN  A      37.16.13.92
+internetdj.co.                    600   IN  AAAA   2a09:8280:1::73:fe2:0
+
+;; Google Search Console site verification. Losing this record drops
+;; verified access to the property, so it must survive the move.
+internetdj.co.                    3600  IN  TXT    "google-site-verification=GAMsQCGn882p8uC39pmsMWWxGCGO11mF8pM7evSAnVw"
+
+;; Mailgun sending domain. backend/utils/notifications.js sends every
+;; transactional message as noreply@$MAILGUN_DOMAIN, and MAILGUN_DOMAIN is
+;; mail.internetdj.co - so all five records below are load bearing. Drop any
+;; one of them and password resets and email verification start failing SPF
+;; or DKIM and land in spam, silently and without an application error.
+mail.internetdj.co.               3600  IN  MX     10 mxa.mailgun.org.
+mail.internetdj.co.               3600  IN  MX     10 mxb.mailgun.org.
+mail.internetdj.co.               3600  IN  TXT    "v=spf1 include:mailgun.org ~all"
+k1._domainkey.mail.internetdj.co. 3600  IN  TXT    "k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDQnxicy/3IvyNkmloVaZDkhmu09kJItTywzi6lf13smhimCck6b85In+9iss6wt8yAIpVf5hb+GV8lCcCUDsv8/iXi4nAhCQxT3fZZblNql4m0qELM4crqsBRhbdpZS9gpNbpR7bWwxRphZc0qlq6RncCt+bXWA33Y1BdxSz6o6QIDAQAB"
+email.mail.internetdj.co.         3600  IN  CNAME  mailgun.org.
+_dmarc.mail.internetdj.co.        3600  IN  TXT    "v=DMARC1; p=none; pct=100; fo=1; ri=3600; rua=mailto:f78f1056@dmarc.mailgun.org,mailto:15eb098a@inbox.ondmarc.com; ruf=mailto:f78f1056@dmarc.mailgun.org,mailto:15eb098a@inbox.ondmarc.com;"

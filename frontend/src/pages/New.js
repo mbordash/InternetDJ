@@ -79,21 +79,39 @@ function GenreLinks({ genre }) {
 function SongRow({ song, meta, currentSong, isPlaying, onPlay, togglePlayPause }) {
     return (
         <tr>
-            <td className="px-4 py-2 flex items-center space-x-2">
-                <SongArtwork
-                    song={song}
-                    sizeClass="w-12 h-12"
-                    iconClass="w-4 h-4"
-                    currentSong={currentSong}
-                    isPlaying={isPlaying}
-                    onPlay={onPlay}
-                    togglePlayPause={togglePlayPause}
-                />
-                <div className="flex items-center space-x-2 flex-1">
+            {/* The flex lives on the inner div, never on the td. display:flex
+                on a table cell takes it out of the table layout algorithm, so
+                the table-fixed column width above stops constraining it and a
+                long title pushes into the Genre column instead of truncating.
+                min-w-0 is what actually lets the clamp work: a flex item's
+                default min-width is auto, which refuses to shrink below its
+                content.
+
+                The title clamps at two lines rather than one, because a track
+                name here routinely carries a remix or edit in brackets and one
+                line cuts it off mid-parenthesis. line-clamp sets
+                display:-webkit-box, so the `block` class it replaced had to
+                go: two display utilities on one element is a coin toss decided
+                by stylesheet order. break-words is for the one title that is a
+                single unbroken string longer than the column: the clamp hides
+                the overflow but will not break a word, so without it that
+                title is hard-cut mid-glyph with no ellipsis. The artist below
+                stays on one line. */}
+            <td className="px-4 py-2">
+                <div className="flex items-center space-x-2 min-w-0">
+                    <SongArtwork
+                        song={song}
+                        sizeClass="w-12 h-12"
+                        iconClass="w-4 h-4"
+                        currentSong={currentSong}
+                        isPlaying={isPlaying}
+                        onPlay={onPlay}
+                        togglePlayPause={togglePlayPause}
+                    />
                     <div className="min-w-0 flex-1">
                         <Link
                             to={`/song/${song.id}`}
-                            className="retro-display text-xs text-white hover:text-cyan-200 block truncate"
+                            className="retro-display text-xs text-white hover:text-cyan-200 line-clamp-2 break-words"
                             title={song.title}
                         >
                             {song.title}
@@ -207,7 +225,7 @@ function RailRow({ song, meta, currentSong, isPlaying, onPlay, togglePlayPause }
             <div className="min-w-0 flex-1">
                 <Link
                     to={`/song/${song.id}`}
-                    className="retro-display text-[0.65rem] text-white hover:text-cyan-200 block truncate"
+                    className="retro-display text-[0.65rem] text-white hover:text-cyan-200 line-clamp-2 break-words"
                     title={song.title}
                 >
                     {song.title}

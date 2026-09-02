@@ -1,5 +1,3 @@
-const { Worker } = require('bullmq');
-const Redis = require('ioredis');
 const fs = require('fs');
 const tmp = require('tmp');
 const { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
@@ -10,17 +8,8 @@ const { buildPublicFileUrl, extractObjectKey } = require('../utils/storage');
 const { analyzeAudio } = require('../utils/audioAnalysis');
 const { buildMasteringPlan } = require('../utils/masteringPlan');
 const { renderMaster } = require('../utils/masteringRender');
-const { MASTER_QUEUE_NAME, PREVIEW_PREFIX } = require('../utils/masteringQueue');
-
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const redisConnection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,  // Required for BullMQ with ioredis
-    retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        logger.info(`Retrying Redis connection: attempt ${times}, delay ${delay}ms`);
-        return delay;
-    },
-});
+const { runWorker } = require('../utils/jobQueue');
+const { MASTER_QUEUE_NAME, PREVIEW_PREFIX, LEASE_MS } = require('../utils/masteringQueue');
 
 // One at a time on purpose. Each job is two or three full ffmpeg passes over
 // the track, and the app runs on a single shared CPU - a second concurrent job
@@ -94,7 +83,7 @@ async function cacheAnalysis(songId, mp3Url, analysis) {
     }
 }
 
-const worker = new Worker(MASTER_QUEUE_NAME, async (job) => {
+runWorker(MASTER_QUEUE_NAME, async (job) => {
     const { jobId, songId, userId } = job.data;
     const startedAt = Date.now();
     logger.info('Mastering worker received job', { jobId, songId, userId });
@@ -104,7 +93,7 @@ const worker = new Worker(MASTER_QUEUE_NAME, async (job) => {
 
     try {
         // The artist can cancel while the job is still waiting in line. Cancel
-        // marks the row failed but cannot pull the job back out of Redis, so
+        // marks the row failed but does not pull the job out of the queue, so
         // without this check the worker would process it anyway and overwrite
         // the cancellation with a finished master.
         const claimed = await pool.query(
@@ -215,11 +204,8 @@ const worker = new Worker(MASTER_QUEUE_NAME, async (job) => {
             }
         }
     }
-}, { connection: redisConnection, concurrency: CONCURRENCY });
-
-worker.on('ready', () => logger.info(`Mastering worker ready (concurrency ${CONCURRENCY})`));
-worker.on('completed', (job) => logger.info('Mastering job completed', { jobId: job.data?.jobId }));
-worker.on('failed', (job, err) => logger.error('Mastering job failed', { jobId: job?.data?.jobId, err: err.message }));
-worker.on('error', (err) => logger.error('Mastering worker error', err));
-
-module.exports = worker;
+}, {
+    concurrency: CONCURRENCY,
+    leaseMs: LEASE_MS,
+    onReady: () => logger.info(`Mastering worker ready (concurrency ${CONCURRENCY})`),
+});

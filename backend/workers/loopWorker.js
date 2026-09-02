@@ -1,5 +1,3 @@
-const { Worker } = require('bullmq');
-const Redis = require('ioredis');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
@@ -10,25 +8,8 @@ const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require('../config/tigris');
 const logger = require('../utils/logger');
 const { buildPublicFileUrl } = require('../utils/storage');
-
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const redisConnection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,  // Required for BullMQ with ioredis
-    retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000); // Exponential backoff: 50ms, 100ms, ..., up to 2s
-        logger.info(`Retrying Redis connection: attempt ${times}, delay ${delay}ms`);
-        return delay;
-    },
-    reconnectOnError: (err) => {
-        const targetError = 'READONLY'; // Retry on read-only errors (e.g., connected to replica)
-        if (err.message.includes(targetError)) {
-            return true; // Reconnect and resend command
-        }
-        return false;
-    }
-});
-
-logger.info('Worker started with Redis connection:', redisUrl); // Log on startup
+const { runWorker } = require('../utils/jobQueue');
+const { LOOP_QUEUE_NAME, LEASE_MS } = require('../utils/loopQueue');
 
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
@@ -50,7 +31,7 @@ const trimToLength = (inputPath, outputPath, seconds) => new Promise((resolve, r
 
 logger.info('Initializing loop worker...'); // Log startup
 
-const worker = new Worker('loop-gen', async (job) => {
+runWorker(LOOP_QUEUE_NAME, async (job) => {
     logger.info('Worker received job', { jobId: job.id, data: job.data });
 
     const { loopId, fullPrompt, duration } = job.data;
@@ -161,9 +142,7 @@ const worker = new Worker('loop-gen', async (job) => {
             }
         });
     }
-}, { connection: redisConnection });
-
-worker.on('ready', () => logger.info('Loop worker is ready and listening for jobs'));
-worker.on('completed', (job) => logger.info(`Loop job completed`, { jobId: job.id, loopId: job.data.loopId }));
-worker.on('failed', (job, err) => logger.error(`Loop job failed`, { jobId: job.id, loopId: job.data.loopId, err: err.message }));
-worker.on('error', (err) => logger.error('Loop worker error', err));
+}, {
+    leaseMs: LEASE_MS,
+    onReady: () => logger.info('Loop worker is ready and listening for jobs'),
+});

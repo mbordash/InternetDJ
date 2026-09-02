@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useId, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
+import { AdjustmentsHorizontalIcon, ChevronDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { MUSICAL_KEYS, camelotOf, compatibleKeys } from '../utils/musicalKeys';
 
 // Tempo, key and rating filters, shared by Browse and Search so the two behave
@@ -141,6 +142,48 @@ const ratingLabel = (filters) => {
 };
 
 /**
+ * What is currently being filtered on, one entry per dimension, each with the
+ * patch that switches it back off.
+ *
+ * This is what the collapsed bar shows. Without it, closing the panel would
+ * hide the fact that a filter is narrowing the list at all, which is how a
+ * catalogue comes to look empty for no visible reason - especially on Browse,
+ * where the filters can arrive already set from a link on a song page.
+ */
+const describeFilters = (filters) => {
+    const chips = [];
+
+    if (filters.bpmMin && filters.bpmMax) {
+        chips.push({ id: 'tempo', label: `${filters.bpmMin}\u2013${filters.bpmMax} BPM` });
+    } else if (filters.bpmMin) {
+        chips.push({ id: 'tempo', label: `${filters.bpmMin} BPM and up` });
+    } else if (filters.bpmMax) {
+        chips.push({ id: 'tempo', label: `up to ${filters.bpmMax} BPM` });
+    }
+    if (chips.length) chips[0].patch = { bpmMin: '', bpmMax: '' };
+
+    if (filters.key) {
+        chips.push({
+            id: 'key',
+            label: filters.keyMode === 'exact'
+                ? `${filters.key} only`
+                : `${filters.key} and keys that mix`,
+            patch: { key: '' },
+        });
+    }
+
+    if (filters.ratingMin || filters.ratingMax) {
+        chips.push({
+            id: 'rating',
+            label: `rated ${ratingLabel(filters)}`,
+            patch: { ratingMin: '', ratingMax: '' },
+        });
+    }
+
+    return chips;
+};
+
+/**
  * Small labelled chip listing a track's detected tempo and key.
  *
  * With `linked`, each chip is a way into the catalogue rather than a label:
@@ -202,7 +245,20 @@ TrackMetaChips.propTypes = {
     linked: PropTypes.bool,
 };
 
+/**
+ * Tempo, key and rating filters, collapsed behind a single bar by default.
+ *
+ * Fully expanded this panel runs to most of a phone screen, and on Browse and
+ * Search it sits directly above the listings it is meant to help you read - so
+ * open by default it pushed the music itself below the fold. Closed, it is one
+ * row: a Filters button, a chip for each filter actually in force, and the
+ * result count. Everything the panel did is still one click away, and nothing
+ * about what is currently being filtered is hidden while it is shut.
+ */
 const TrackFilters = ({ filters, onChange, resultCount = null, missing = null, busy = false }) => {
+    const [open, setOpen] = useState(false);
+    const panelId = useId();
+
     const set = (patch) => onChange({ ...filters, ...patch });
 
     const presetActive = (preset) =>
@@ -212,21 +268,101 @@ const TrackFilters = ({ filters, onChange, resultCount = null, missing = null, b
         ? compatibleKeys(filters.key).filter(key => key !== filters.key)
         : [];
 
+    const active = hasActiveFilters(filters);
+    const summary = describeFilters(filters);
+
     return (
-        <div className="retro-panel retro-cut p-5 space-y-4">
-            <div className="flex items-baseline justify-between gap-4 flex-wrap">
-                <h2 className="retro-display text-base retro-glow-cyan">Find tracks by tempo, key &amp; rating</h2>
-                {hasActiveFilters(filters) && (
+        <div className="retro-panel retro-cut px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <button
                         type="button"
-                        onClick={() => onChange(EMPTY_FILTERS)}
-                        className="retro-link retro-mono text-lg underline"
+                        onClick={() => setOpen(!open)}
+                        aria-expanded={open}
+                        aria-controls={panelId}
+                        className="retro-chip inline-flex items-center gap-2 px-3 py-1.5"
                     >
-                        Clear
+                        <AdjustmentsHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+                        <span>Filters</span>
+                        <ChevronDownIcon
+                            className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+                            aria-hidden="true"
+                        />
                     </button>
-                )}
+
+                    {/* Each chip names a filter in force and takes it back off,
+                        so narrowing can be undone one dimension at a time
+                        without opening the panel to hunt for the control. */}
+                    {summary.map(chip => (
+                        <span
+                            key={chip.id}
+                            className="retro-chip inline-flex items-center gap-1.5 px-3 py-1.5"
+                        >
+                            {chip.label}
+                            <button
+                                type="button"
+                                onClick={() => set(chip.patch)}
+                                aria-label={`Remove the ${chip.label} filter`}
+                                className="retro-link -mr-1 p-0.5"
+                            >
+                                <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </span>
+                    ))}
+
+                    {!active && !open && (
+                        <span className="retro-mono text-lg text-gray-400">
+                            Narrow by tempo, key &amp; rating
+                        </span>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-4 retro-mono text-lg">
+                    {(busy || resultCount !== null) && (
+                        <span className="text-gray-300" aria-live="polite">
+                            {busy ? 'Searching\u2026' : `${resultCount} track${resultCount === 1 ? '' : 's'} found.`}
+                        </span>
+                    )}
+                    {active && (
+                        <button
+                            type="button"
+                            onClick={() => onChange(EMPTY_FILTERS)}
+                            className="retro-link underline"
+                        >
+                            Clear all
+                        </button>
+                    )}
+                </div>
             </div>
 
+            {/* Missing data is not the same as no match, and saying so keeps the
+                catalogue from looking smaller than it is. Shown outside the
+                collapsible body because it explains the results, not the
+                controls, and is the answer to "where did my track go". */}
+            {active && !busy && (missing?.key > 0 || missing?.bpm > 0 || missing?.rating > 0) && (
+                <div className="retro-mono text-lg text-gray-400 mt-3 space-y-1">
+                    {missing?.key > 0 && (
+                        <p>
+                            {missing.key} track{missing.key === 1 ? ' has' : 's have'} no detected key yet and
+                            {missing.key === 1 ? ' is' : ' are'} not shown. Artists can set it in Manage Songs.
+                        </p>
+                    )}
+                    {missing?.bpm > 0 && (
+                        <p>
+                            {missing.bpm} track{missing.bpm === 1 ? ' has' : 's have'} no detected tempo yet and
+                            {missing.bpm === 1 ? ' is' : ' are'} not shown.
+                        </p>
+                    )}
+                    {missing?.rating > 0 && (
+                        <p>
+                            {missing.rating} track{missing.rating === 1 ? ' has' : 's have'} not been rated yet and
+                            {missing.rating === 1 ? ' is' : ' are'} not shown. Ratings come from comments.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <div id={panelId} hidden={!open} className="space-y-4 mt-4 pt-4 border-t border-cyan-400/20">
             <div>
                 <span className="retro-label">Tempo</span>
                 <div className="flex flex-wrap gap-2 mt-1">
@@ -366,32 +502,7 @@ const TrackFilters = ({ filters, onChange, resultCount = null, missing = null, b
                     A track's score is the average of the ratings its comments carried.
                 </p>
             </div>
-
-            {(busy || resultCount !== null) && (
-                <div className="retro-mono text-lg text-gray-300 border-t border-cyan-400/20 pt-3 space-y-1">
-                    <p>{busy ? 'Searching…' : `${resultCount} track${resultCount === 1 ? '' : 's'} found.`}</p>
-                    {/* Missing data is not the same as no match, and saying so
-                        keeps the catalogue from looking smaller than it is. */}
-                    {!busy && missing?.key > 0 && (
-                        <p className="text-gray-400">
-                            {missing.key} track{missing.key === 1 ? ' has' : 's have'} no detected key yet and
-                            {missing.key === 1 ? ' is' : ' are'} not shown. Artists can set it in Manage Songs.
-                        </p>
-                    )}
-                    {!busy && missing?.bpm > 0 && (
-                        <p className="text-gray-400">
-                            {missing.bpm} track{missing.bpm === 1 ? ' has' : 's have'} no detected tempo yet and
-                            {missing.bpm === 1 ? ' is' : ' are'} not shown.
-                        </p>
-                    )}
-                    {!busy && missing?.rating > 0 && (
-                        <p className="text-gray-400">
-                            {missing.rating} track{missing.rating === 1 ? ' has' : 's have'} not been rated yet and
-                            {missing.rating === 1 ? ' is' : ' are'} not shown. Ratings come from comments.
-                        </p>
-                    )}
-                </div>
-            )}
+            </div>
         </div>
     );
 };

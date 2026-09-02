@@ -1,7 +1,12 @@
-const { Queue } = require('bullmq');
-const Redis = require('ioredis');
+const { addJob } = require('./jobQueue');
 
 const MASTER_QUEUE_NAME = 'auto-master';
+
+// A master is several full ffmpeg passes over a track on a shared CPU. The
+// lease has to be long enough that a slow one is never mistaken for a dead
+// worker, but the worker heartbeats while it renders, so this is only the
+// window after a crash before the job goes back in line.
+const LEASE_MS = 30 * 60 * 1000;
 
 // Preview renders live under their own prefix so the cleanup cron can sweep
 // the ones nobody kept without ever touching published song audio.
@@ -23,17 +28,12 @@ const ASSUMED_DURATION_SEC = 240;
 
 const MIN_ESTIMATE_SEC = 20;
 
-let queue = null;
-let connection = null;
-
-function getQueue() {
-    if (!queue) {
-        connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-            maxRetriesPerRequest: null,
-        });
-        queue = new Queue(MASTER_QUEUE_NAME, { connection });
-    }
-    return queue;
+/**
+ * Hand a mastering job to the worker. The mastering_jobs row is written first
+ * by the caller and is the real record; this only puts it in line.
+ */
+async function enqueueMasteringJob({ jobId, songId, userId }) {
+    return addJob(MASTER_QUEUE_NAME, { jobId, songId, userId });
 }
 
 /**
@@ -105,9 +105,10 @@ async function estimateWait(db, job) {
 }
 
 module.exports = {
-    getQueue,
+    enqueueMasteringJob,
     estimateWait,
     MASTER_QUEUE_NAME,
     PREVIEW_PREFIX,
     ACTIVE_STATUSES,
+    LEASE_MS,
 };

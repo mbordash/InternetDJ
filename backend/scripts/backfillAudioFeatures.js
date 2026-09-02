@@ -24,24 +24,26 @@
  *              answer to "why is the tempo blank on THIS track".
  *   --reset-stuck
  *              put 'queued' and 'analyzing' rows back to 'pending'. Use when
- *              jobs were queued but never ran: redis on this deployment warns
- *              that its eviction policy is not "noeviction", which means it is
- *              allowed to drop queued jobs under memory pressure, and a song
- *              whose job vanished stays 'queued' forever - a status the sweep
- *              deliberately does not touch, because it cannot tell a dropped
- *              job from one that is about to be picked up.
+ *              jobs were queued but never ran, which now means the song's row
+ *              says 'queued' while nothing matching it is left in job_queue -
+ *              a status the sweep deliberately does not touch on its own,
+ *              because it cannot tell a lost job from one that is about to be
+ *              picked up.
  *
  * Bounded by --limit (default 200) on purpose: run it a few times and watch,
- * rather than dumping the whole catalogue into Redis at once. Queued backfill
- * jobs sit at a lower priority than fresh uploads, so a sweep never makes a
- * member wait on their own upload.
+ * rather than dumping the whole catalogue into the queue at once. Queued
+ * backfill jobs sit at a lower priority than fresh uploads, so a sweep never
+ * makes a member wait on their own upload.
  *
  * Safe to re-run: songs are marked 'queued' as they are enqueued, so a second
  * run continues rather than queueing everything twice.
  */
 const pool = require('../config/database');
 const { out, warnOut, errOut, finish, pad } = require('../utils/cli');
-const { enqueueSongAnalysis, getQueue, closeQueue, ANALYSIS_QUEUE_NAME } = require('../utils/analysisQueue');
+const {
+    enqueueSongAnalysis, closeQueue, ANALYSIS_QUEUE_NAME,
+    getAnalysisCounts, getAnalysisFailures,
+} = require('../utils/analysisQueue');
 const { analyzeSong } = require('../utils/songAnalysis');
 
 const DEFAULT_LIMIT = 200;
@@ -81,7 +83,7 @@ function parseArgs(argv) {
     return args;
 }
 
-/** Counts straight from the songs table, so this works with no Redis at all. */
+/** Counts straight from the songs table: what is stored, not what is queued. */
 async function reportDatabase() {
     const rows = await pool.query(
         `SELECT analysis_status AS status, COUNT(*) AS count
@@ -110,16 +112,23 @@ async function reportDatabase() {
     return rows;
 }
 
-/** Counts from Redis, which is what says whether anything is consuming jobs. */
+/**
+ * Counts from the job_queue table, which is what says whether anything is
+ * consuming jobs. Completed jobs are deleted rather than counted, so unlike the
+ * old Redis-backed report there is no "completed" total to lean on; what stands
+ * in for it is the songs table above, where a drained queue shows up as rows
+ * moving to 'done'.
+ */
 async function reportQueue() {
     out('');
     out(`Queue "${ANALYSIS_QUEUE_NAME}"`);
     let counts;
     try {
-        counts = await getQueue().getJobCounts('waiting', 'active', 'delayed', 'completed', 'failed', 'paused');
+        counts = await getAnalysisCounts();
     } catch (err) {
-        errOut(`  could not reach redis: ${err.message}`);
-        errOut('  Without redis, queued analysis cannot run. Use --inline to analyse without it.');
+        errOut(`  could not read the job queue: ${err.message}`);
+        errOut('  If the job_queue table is missing, run:');
+        errOut('    node backend/scripts/migrateJobQueue.js');
         return null;
     }
 
@@ -127,19 +136,20 @@ async function reportQueue() {
         out(`  ${pad(name, 18)} ${value}`);
     }
 
-    const failed = await getQueue().getFailed(0, 4);
+    const failed = await getAnalysisFailures(4);
     if (failed.length) {
         out('  recent failures:');
         for (const job of failed) {
-            out(`    song ${pad(job.data?.songId, 8)} ${job.failedReason || 'unknown reason'}`);
+            out(`    song ${pad(job.data?.songId, 8)} ${job.last_error || 'unknown reason'}`);
         }
     }
 
     // The whole point of this command: say plainly whether work is stuck.
     out('');
-    if (counts.waiting > 0 && counts.active === 0 && counts.completed === 0) {
-        warnOut(`${counts.waiting} job(s) are waiting and nothing has ever been processed.`);
-        warnOut('That means no analysis worker is consuming this queue. Check that');
+    if (counts.waiting > 0 && counts.active === 0) {
+        warnOut(`${counts.waiting} job(s) are due and nothing has picked them up.`);
+        warnOut('Either the analysis worker is not running, or it has only just');
+        warnOut('started. Re-run --status: if the number has not moved, check that');
         warnOut('"analysisworker" is listed under [processes] in fly.toml and that its');
         warnOut('machine is running (fly status). Defining [processes] makes fly ignore');
         warnOut('the dockerfile CMD, so a worker missing from that list never starts.');
@@ -148,6 +158,8 @@ async function reportQueue() {
         out(`${counts.waiting} job(s) still waiting, ${counts.active} in progress. A worker is running; re-run --status to watch it drain.`);
     } else if (counts.active > 0) {
         out(`${counts.active} job(s) in progress, none waiting.`);
+    } else if (counts.delayed > 0) {
+        out(`${counts.delayed} job(s) waiting on a retry backoff, none due yet.`);
     } else {
         out('Queue is empty.');
     }

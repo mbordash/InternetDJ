@@ -166,75 +166,77 @@ function Search() {
                                         key={song.id}
                                         className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'}
                                     >
-                                        <td className="px-4 py-2 flex items-center space-x-2">
-                                            <button
-                                                onClick={() => {
-                                                    if (currentSong?.id === song.id) {
-                                                        togglePlayPause();
-                                                    } else {
-                                                        handleSongPlay(song);
-                                                    }
-                                                }}
-                                                className="focus:outline-none"
-                                            >
-                                                {currentSong?.id === song.id && isPlaying ? (
-                                                    <PauseIcon className="w-8 h-8 text-white hover:text-gray-300" />
-                                                ) : (
-                                                    <PlayIcon className="w-8 h-8 text-white hover:text-gray-300" />
-                                                )}
-                                            </button>
-                                            <div className="flex items-center space-x-2">
-                                                {song.image_url ? (
-                                                    <img
-                                                        src={song.image_url}
-                                                        alt={song.title}
-                                                        className="w-12 h-12 rounded-md object-cover"
-                                                        onError={(e) => {
-                                                            console.error(
-                                                                `Failed to load song image for song ${song.id}:`,
-                                                                song.image_url
-                                                            );
-                                                            e.target.style.display = 'none';
-                                                            e.target.nextSibling.style.display = 'block';
-                                                        }}
-                                                        loading="lazy"
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        className="w-12 h-12 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300"
-                                                        style={{ display: song.image_url ? 'none' : 'flex' }}
-                                                    >
-                                                        ?
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <Link
-                                                        to={`/song/${song.id}`}
-                                                        className="retro-link"
-                                                    >
-                                                        {song.title}
-                                                    </Link>
-                                                    <TrackMetaChips
-                                                        bpm={song.bpm}
-                                                        musicalKey={song.musical_key}
-                                                        rating={song.avg_rating}
-                                                        className="my-1"
-                                                    />
-                                                    <div className="retro-mono text-lg text-gray-400">
-                                                        <Link
-                                                            to={
-                                                                song.profile_id
-                                                                    ? profilePath(song)
-                                                                    : '#'
-                                                            }
-                                                            className={
-                                                                song.profile_id
-                                                                        ? 'retro-link'
-                                                                    : 'text-gray-500 cursor-not-allowed'
-                                                            }
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center space-x-2 min-w-0">
+                                                <button
+                                                    onClick={() => {
+                                                        if (currentSong?.id === song.id) {
+                                                            togglePlayPause();
+                                                        } else {
+                                                            handleSongPlay(song);
+                                                        }
+                                                    }}
+                                                    className="focus:outline-none shrink-0"
+                                                >
+                                                    {currentSong?.id === song.id && isPlaying ? (
+                                                        <PauseIcon className="w-8 h-8 text-white hover:text-gray-300" />
+                                                    ) : (
+                                                        <PlayIcon className="w-8 h-8 text-white hover:text-gray-300" />
+                                                    )}
+                                                </button>
+                                                <div className="flex items-center space-x-2 min-w-0">
+                                                    {song.image_url ? (
+                                                        <img
+                                                            src={song.image_url}
+                                                            alt={song.title}
+                                                            className="w-12 h-12 rounded-md object-cover shrink-0"
+                                                            onError={(e) => {
+                                                                console.error(
+                                                                    `Failed to load song image for song ${song.id}:`,
+                                                                    song.image_url
+                                                                );
+                                                                e.target.style.display = 'none';
+                                                                e.target.nextSibling.style.display = 'block';
+                                                            }}
+                                                            loading="lazy"
+                                                        />
+                                                    ) : (
+                                                        <div
+                                                            className="w-12 h-12 shrink-0 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300"
+                                                            style={{ display: song.image_url ? 'none' : 'flex' }}
                                                         >
-                                                            {song.profile_name || 'Unknown Artist'}
+                                                            ?
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <Link
+                                                            to={`/song/${song.id}`}
+                                                            className="retro-link"
+                                                        >
+                                                            {song.title}
                                                         </Link>
+                                                        <TrackMetaChips
+                                                            bpm={song.bpm}
+                                                            musicalKey={song.musical_key}
+                                                            rating={song.avg_rating}
+                                                            className="my-1"
+                                                        />
+                                                        <div className="retro-mono text-lg text-gray-400">
+                                                            <Link
+                                                                to={
+                                                                    song.profile_id
+                                                                        ? profilePath(song)
+                                                                        : '#'
+                                                                }
+                                                                className={
+                                                                    song.profile_id
+                                                                            ? 'retro-link'
+                                                                        : 'text-gray-500 cursor-not-allowed'
+                                                                }
+                                                            >
+                                                                {song.profile_name || 'Unknown Artist'}
+                                                            </Link>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -275,22 +277,24 @@ function Search() {
                                         key={profile.id}
                                         className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/5'}
                                     >
-                                        <td className="px-4 py-2 flex items-center space-x-2">
-                                            <img
-                                                src={profile.picture_url || getDefaultAvatar(profile.id || profile.name)}
-                                                alt={profile.name}
-                                                className="w-12 h-12 rounded-md object-cover"
-                                                onError={(e) => {
-                                                    e.currentTarget.src = getDefaultAvatar(profile.id || profile.name);
-                                                }}
-                                                loading="lazy"
-                                            />
-                                            <Link
-                                                to={profilePath(profile)}
-                                                className="retro-link"
-                                            >
-                                                {profile.name}
-                                            </Link>
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center space-x-2 min-w-0">
+                                                <img
+                                                    src={profile.picture_url || getDefaultAvatar(profile.id || profile.name)}
+                                                    alt={profile.name}
+                                                    className="w-12 h-12 rounded-md object-cover shrink-0"
+                                                    onError={(e) => {
+                                                        e.currentTarget.src = getDefaultAvatar(profile.id || profile.name);
+                                                    }}
+                                                    loading="lazy"
+                                                />
+                                                <Link
+                                                    to={profilePath(profile)}
+                                                    className="retro-link"
+                                                >
+                                                    {profile.name}
+                                                </Link>
+                                            </div>
                                         </td>
                                         <td className="retro-mono text-lg text-gray-300 px-4 py-2">{profile.genre || 'Unknown'}</td>
                                         <td className="retro-mono text-lg text-gray-300 px-4 py-2">{formatDate(profile.created_at)}</td>

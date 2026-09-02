@@ -43,6 +43,7 @@ import Collabs from './pages/Collabs';
 import Settings from './pages/Settings';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import NotFound from './pages/NotFound';
 import './styles.css';
 import './styles/backgrounds.css';
 import './styles/audioPlayer.css';
@@ -106,6 +107,15 @@ function Layout() {
                         promise source separation, which is not what it does. Anything
                         already pointing at the old path still lands. */}
                     <Route path="/stems" element={<Navigate to="/loops" replace />} />
+                    {/* Last, so it only catches what nothing above claimed.
+                        Without it an unknown path rendered an empty page, and
+                        the server had no signal that the path was dead either;
+                        both halves are why these URLs were being reported as
+                        soft 404s. The matching status code is set in
+                        backend/middleware/notFound.js, and the STATIC_ROUTES
+                        set there mirrors this list by hand. Adding a route
+                        above must mean adding it there too. */}
+                    <Route path="*" element={<NotFound />} />
                 </Routes>
             </main>
             <Footer />

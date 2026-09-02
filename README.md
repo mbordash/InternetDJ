@@ -85,7 +85,6 @@ See `backend/.env.example` for the full list. The main variables are:
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`
 - `RECAPTCHA_SECRET_KEY`
-- `REDIS_URL`
 - `REPLICATE_API_TOKEN`
 - `IDJC_MINT_ADDRESS`, `IDJC_CLAIM_AMOUNT`, `IDJC_CLAIM_CAMPAIGN`
 - `SOLANA_RPC_URL`
@@ -189,7 +188,6 @@ fly secrets set \
   AWS_REGION=auto \
   BUCKET_NAME=your-bucket-name \
   PUBLIC_BUCKET_URL=https://your-bucket-name.fly.storage.tigris.dev \
-  REDIS_URL=redis://replace-me \
   FFMPEG_CONCURRENCY_LIMIT=1 \
   -a your-app-name
 ```

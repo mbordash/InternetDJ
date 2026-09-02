@@ -19,7 +19,8 @@ const errOut = (...args) => console.error(...args);
  * a pipe rather than a terminal - which is exactly what it is over
  * `fly ssh console`. So instead of exiting, close the things holding the event
  * loop open and let node exit on its own, which flushes properly on the way
- * out. `closers` are extra teardown functions (a queue, a redis connection).
+ * out. `closers` are extra teardown functions for anything holding the loop open
+ * besides the database pool, which this closes itself.
  */
 async function finish(code = 0, closers = []) {
     process.exitCode = code;

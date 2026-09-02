@@ -80,5 +80,6 @@ RUN cd backend && npm ci --production
 # Expose port 5000
 EXPOSE 5000
 
-# Start Supercronic, worker, and server (removed redis-server start)
+# Start Supercronic, the three workers, and the server. Only used outside fly:
+# defining [processes] in fly.toml makes fly ignore this CMD entirely.
 CMD ["sh", "-c", "supercronic /app/crontab & node backend/workers/loopWorker.js & node backend/workers/masterWorker.js & node backend/workers/analysisWorker.js & node backend/server.js"]

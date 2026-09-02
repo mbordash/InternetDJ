@@ -451,10 +451,11 @@ const DISALLOWED_PATHS = [
         '/confirm-google-relink',
         '/settings',
     ]],
-    ['Owner-only management views behind the public pages they manage.', [
+    ['Owner-only management views behind the public pages they manage.\n# /playlists is a member\'s own mixtapes: signed out it renders nothing but\n# "You must be logged in", which is the same empty shell for every visitor.', [
         '/profile/*/songs-manager',
         '/profile/*/collaborations',
         '/collabs/invite/',
+        '/playlists',
     ]],
     ['The multitrack sampler is a tool, not a document. The loop generator is not\n# in this group: it is a public landing page people search for by name.', [
         '/projects',
@@ -471,14 +472,53 @@ const DISALLOWED_PATHS = [
         '/articles/submit',
         '/articles/queue',
     ]],
-    [null, [
+    // The Allow lines here are load bearing and were learned the hard way.
+    //
+    // /api/ was blocked outright, which reads as obviously correct: JSON is not
+    // a page and should not be in the index. But this is a client rendered
+    // site, and Google indexes the RENDERED DOM, not the HTML that arrives.
+    // ogMetaTags injects a good server side body for crawlers, then React boots,
+    // empties #root, and refetches. With /api/ blocked every one of those
+    // fetches failed, React painted an error over the perfectly good content
+    // the server had just sent, and Google indexed the error. That is what
+    // filled Search Console with soft 404s.
+    //
+    // Google's URL inspector names the symptom directly:
+    //   "Googlebot blocked by robots.txt  XHR  /api/profile/47"
+    //
+    // Allow wins over Disallow when it is the more specific match, so the
+    // listed prefixes stay fetchable while everything else under /api/ stays
+    // blocked. Deliberately absent: /api/auth, /api/projects, /api/proxy,
+    // /api/notifications, /api/sample-library, /api/solana, /api/eq. None is
+    // needed to render a public page.
+    //
+    // Written without trailing slashes on purpose: `/api/playlists` has to
+    // match both the bare collection and `/api/playlists/by-profile/47`, and a
+    // trailing slash would miss the first. Being slightly broad costs crawl
+    // budget; being too narrow costs the render, which is the bug being fixed.
+    //
+    // Keeping the JSON itself out of the index is handled by the
+    // `X-Robots-Tag: noindex` header set in server.js, which is the correct
+    // tool for that job. robots.txt controls fetching, not indexing, and using
+    // it to mean "do not index" is what broke rendering here.
+    ['Read endpoints the public pages render from. See the note in sitemap.js:\n# blocking these broke rendering and produced soft 404s.', [
         '/api/',
+    ], [
+        '/api/articles',
+        '/api/collabs',
+        '/api/forum',
+        '/api/idjc',
+        '/api/music',
+        '/api/playlists',
+        '/api/profile',
+        '/api/reviews',
     ]],
 ];
 
 const renderDisallows = () => DISALLOWED_PATHS
-    .map(([comment, paths]) => {
-        const lines = paths.map(p => `Disallow: ${p}`);
+    .map(([comment, paths, allows]) => {
+        const lines = paths.map(p => `Disallow: ${p}`)
+            .concat((allows || []).map(p => `Allow: ${p}`));
         return comment ? `# ${comment}\n${lines.join('\n')}` : lines.join('\n');
     })
     .join('\n\n');

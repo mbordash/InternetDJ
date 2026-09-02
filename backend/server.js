@@ -27,6 +27,7 @@ const http = require('http');
 const fs = require('fs');
 const initializeSocket = require('./socket');
 const { isCrawler, extractMetadata, fetchMetadata, injectOGMetaTags } = require('./middleware/ogMetaTags');
+const { resolvePageStatus } = require('./middleware/notFound');
 require('dotenv').config();
 
 const app = express();
@@ -182,6 +183,17 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+// robots.txt now allows Googlebot to fetch the read endpoints the pages render
+// from, because blocking them meant React could not rehydrate and Google
+// indexed the resulting error state as a soft 404. Fetchable is not the same as
+// indexable though, so the JSON says so itself: X-Robots-Tag is the header that
+// actually keeps these responses out of the index, and unlike a robots.txt
+// Disallow it does not also break rendering.
+app.use('/api/', (req, res, next) => {
+    res.set('X-Robots-Tag', 'noindex');
+    next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
@@ -217,9 +229,13 @@ logger.debug('Serving static files from:', staticPath);
 // which is what it already does for every other path.
 app.use(express.static(staticPath, { index: false }));
 
-const sendHtml200 = (res, html) => {
+// statusCode is a parameter because this used to be hard coded to 200 for
+// every path on the domain, which is what made deleted songs and paths that
+// never existed look identical to real pages and filled Search Console with
+// soft 404s. See middleware/notFound.js.
+const sendHtml = (res, html, statusCode = 200) => {
     const payload = Buffer.from(html, 'utf8');
-    res.status(200);
+    res.status(statusCode);
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.set('Content-Length', payload.byteLength.toString());
     res.set('Accept-Ranges', 'none');
@@ -251,21 +267,37 @@ app.get(/(.*)/, async (req, res) => {
                     
                     const baseUrl = `${req.protocol}://${req.get('host')}`;
                     const modifiedHtml = injectOGMetaTags(data, ogMetadata, baseUrl);
-                    sendHtml200(res, modifiedHtml);
+                    // Metadata came back, so there is a real row behind this
+                    // URL and no existence check is needed to know it is 200.
+                    sendHtml(res, modifiedHtml, 200);
                 });
                 return;
             }
         }
     }
     
-    // Default: serve index.html as a full-body 200 response
+    // Reaching here means either an ordinary visitor, or a crawler this
+    // request could not be given a share card for. Either way it is the point
+    // where a URL naming something real has to be told apart from one that
+    // does not, since the shell that goes back is byte identical either way.
+    //
+    // resolvePageStatus already fails open internally; the catch is a second
+    // net so that a bug in the resolver can only ever cost a status code, and
+    // never turn the whole site into 404s.
+    let statusCode = 200;
+    try {
+        if (await resolvePageStatus(req.path) === 'missing') statusCode = 404;
+    } catch (err) {
+        logger.error('404 resolution failed, serving 200:', err);
+    }
+
     fs.readFile(filePath, 'utf8', (err, data) => {
         if (err) {
             logger.error('Error serving index.html:', err);
             res.status(500).json({ error: 'Failed to serve frontend' });
             return;
         }
-        sendHtml200(res, data);
+        sendHtml(res, data, statusCode);
     });
 });
 

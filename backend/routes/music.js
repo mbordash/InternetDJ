@@ -48,7 +48,7 @@ const buildDownloadFilename = (title) => {
 
 const { getRunningJobs, incrementRunningJobs, decrementRunningJobs } = require('../utils/concurrency');
 const { randomUUID } = require('crypto');
-const { getQueue, estimateWait, ACTIVE_STATUSES } = require('../utils/masteringQueue');
+const { enqueueMasteringJob, estimateWait, ACTIVE_STATUSES } = require('../utils/masteringQueue');
 const { enqueueSongAnalysis } = require('../utils/analysisQueue');
 const { parseEditableBpm, parseEditableKey, compatibleKeys, camelotOf, isMusicalKey } = require('../utils/musicalKeys');
 const { rankCandidates, TEMPO_LOOSE } = require('../utils/trackMatching');
@@ -1201,7 +1201,7 @@ router.post('/upload', authenticate, async (req, res) => {
         const songId = Number(result.insertId);
 
         // Detect tempo and key in the background. The row stays 'pending' if
-        // this fails, which is what the backfill sweep looks for, so a Redis
+        // this fails, which is what the backfill sweep looks for, so a queue
         // blip delays the reading rather than losing it.
         if (await enqueueSongAnalysis(songId)) {
             await pool.query(
@@ -2181,7 +2181,7 @@ router.post('/master/analyze/:songId', authenticate, async (req, res) => {
             [jobId, songId, userId, 'queued']
         );
 
-        await getQueue().add('master-song', { jobId, songId, userId });
+        await enqueueMasteringJob({ jobId, songId, userId });
         logger.info('Queued analyzed mastering job', { jobId, songId, userId });
 
         const rows = await pool.query('SELECT * FROM mastering_jobs WHERE id = ?', [jobId]);

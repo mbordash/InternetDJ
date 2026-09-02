@@ -1,17 +1,11 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const { Queue } = require('bullmq');
-const Redis = require('ioredis');
 const authenticate = require('../middleware/authenticate');
 const pool = require('../config/database');
 const logger = require('../utils/logger');
 const { MUSICAL_KEYS } = require('../utils/musicalKeys');
+const { enqueueLoopGeneration } = require('../utils/loopQueue');
 const router = express.Router();
-
-const redisConnection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-logger.info('Redis connection for loops route:', process.env.REDIS_URL); // Log on startup
-
-const loopQueue = new Queue('loop-gen', { connection: redisConnection });
 
 const LOOP_TYPES = ['bass', 'synth', 'effects', 'drums'];
 const MIN_BPM = 60;
@@ -104,7 +98,7 @@ router.post('/generate', authenticate, async (req, res) => { // authenticate opt
         logger.info('Loop inserted into DB successfully', { loopId });
 
         logger.info('Adding loop to queue', { loopId, fullPrompt });
-        await loopQueue.add('generate-loop', { loopId, fullPrompt, duration: requestedDuration });
+        await enqueueLoopGeneration({ loopId, fullPrompt, duration: requestedDuration });
         logger.info('Loop added to queue successfully', { loopId });
 
         res.json({
