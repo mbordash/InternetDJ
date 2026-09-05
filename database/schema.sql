@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS `loops` (
   `status` enum('queued','generating','ready','failed') DEFAULT 'queued',
   `bpm` int(11) DEFAULT 128,
   `key` varchar(20) DEFAULT 'C minor',
-  `duration` int(11) DEFAULT 30,
+  `duration` float DEFAULT 30,
   `url` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
@@ -392,6 +392,7 @@ CREATE TABLE IF NOT EXISTS `project_samples` (
   `fade_out` float NOT NULL DEFAULT 0,
   `trim_start` float NOT NULL DEFAULT 0,
   `trim_end` float DEFAULT NULL,
+  `volume` float NOT NULL DEFAULT 1,
   PRIMARY KEY (`id`),
   KEY `idx_project_samples_track` (`track_id`),
   CONSTRAINT `fk_project_samples_track` FOREIGN KEY (`track_id`) REFERENCES `tracks` (`id`) ON DELETE CASCADE

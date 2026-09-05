@@ -3,8 +3,10 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import * as Tone from 'tone';
 
-const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuration }) => {
-    const timeScale = 120 / bpm;
+// One beat, in timeline units, at every tempo. See utils/timeline.js.
+const BEAT_UNITS = 0.5;
+
+const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, timelineDuration, registerPlayhead }) => {
     const rowHeight = 15; // Match PianoRoll's row height
     const notesList = [
         'C5', 'B4', 'A#4', 'A4', 'G#4', 'G4', 'F#4', 'F4', 'E4', 'D#4', 'D4', 'C#4',
@@ -12,7 +14,11 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
     ]; // Match PianoRoll's note range
     const gridHeight = notesList.length * rowHeight; // 24 * 15 = 360px
     const gridWidth = timelineDuration * zoom;
-    const pixelsPerSecond = zoom * timeScale;
+    // Notes and the grid are both in timeline units, so this must not scale with
+    // tempo. Multiplying by timeScale drew the notes at the wrong x against a
+    // playhead measured in units, at every tempo but 120. The editor's PianoRoll
+    // has always used bare zoom.
+    const pixelsPerSecond = zoom;
 
     return (
         <div
@@ -33,11 +39,11 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
                         style={{ top: `${index * rowHeight}px` }}
                     />
                 ))}
-                {/* Time Grid Lines */}
-                {Array.from({ length: Math.ceil(timelineDuration / timeScale) }, (_, i) => {
-                    const realTime = i * 1; // 1-second intervals
-                    const scaledTime = realTime * timeScale;
-                    const pixelPosition = scaledTime * zoom;
+                {/* Beat lines. Musical, like the editor's grid, so they hold their
+                    position across a tempo change instead of sliding against the
+                    notes drawn on top of them. */}
+                {Array.from({ length: Math.ceil(timelineDuration / BEAT_UNITS) }, (_, i) => {
+                    const pixelPosition = i * BEAT_UNITS * zoom;
                     return (
                         <div
                             key={`time-grid-${i}`}
@@ -68,7 +74,8 @@ const ReadOnlyPianoRoll = ({ track, playheadPosition, zoom, bpm, timelineDuratio
                 {/* Playhead */}
                 <div
                     className="absolute top-0 bottom-0 w-[4px] bg-[#ef4444] z-10"
-                    style={{ left: `${playheadPosition * zoom}px` }}
+                    ref={registerPlayhead}
+                    style={{ left: 0, transform: `translate3d(${playheadPosition * zoom}px, 0, 0)` }}
                 />
             </div>
         </div>
@@ -82,8 +89,8 @@ ReadOnlyPianoRoll.propTypes = {
         track_type: PropTypes.string.isRequired,
     }).isRequired,
     playheadPosition: PropTypes.number.isRequired,
+    registerPlayhead: PropTypes.func,
     zoom: PropTypes.number.isRequired,
-    bpm: PropTypes.number.isRequired,
     timelineDuration: PropTypes.number.isRequired,
 };
 

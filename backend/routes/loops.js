@@ -25,15 +25,55 @@ const LOOP_DESCRIPTORS = {
     effects: 'solo sound design texture',
 };
 
+/**
+ * Strip negations before the words reach the model.
+ *
+ * MusicGen conditions on a text embedding and has no notion of negation, so
+ * "no drums" is read as "drums": the word is in the conditioning and the model
+ * has no way to invert it. Asking for a bass line with "no drums" is a reliable
+ * way to be handed a bass line with drums, which is exactly what happened.
+ *
+ * Cutting the clause out is better than passing it through, because what
+ * remains is a positive description, and "solo <instrument>" from the
+ * descriptor already carries the isolation the member was reaching for. The
+ * clause is removed rather than rewritten: guessing at an opposite ("no drums"
+ * becoming "drumless"?) invents a brief the member did not write.
+ */
+const NEGATION = /\b(?:no|without|not|avoid|exclude|minus|except|omit|absolutely no|nothing but(?= ))\s+[^,.;]+/gi;
+
+const stripNegations = (text) => text
+    .replace(NEGATION, ' ')
+    .replace(/\s*[-–—]{1,2}\s*/g, ' ')   // leftover dashes from "bass only -- no drums"
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s*,\s*,/g, ',')
+    .replace(/^[\s,;.]+|[\s,;.]+$/g, '')
+    .trim();
+
 // The member's own words go first, where they carry the most weight. Key is
 // meaningless for an unpitched drum kit, so it is left off there.
 const buildLoopPrompt = (type, prompt, bpm, key) => {
-    const parts = [prompt.trim(), LOOP_DESCRIPTORS[type], `${bpm} BPM`];
+    const parts = [stripNegations(prompt), LOOP_DESCRIPTORS[type], `${bpm} BPM`];
     if (type !== 'drums') {
         parts.push(`in ${key}`);
     }
     return parts.filter(Boolean).join(', ');
 };
+
+const BAR_CHOICES = [1, 2, 4, 8];
+
+/**
+ * How long a loop should be, in seconds, for a number of bars at a tempo.
+ *
+ * The picker used to ask for seconds, and a loop trimmed to a round number of
+ * seconds is a musical length only by accident: four seconds at 128 BPM is 2.13
+ * bars. Butt-joining two copies of that lands off the beat every time, which is
+ * how it was noticed. Bars are what a loop actually is, so bars are what the
+ * request carries and the trim honours.
+ *
+ * Four beats to the bar. The sampler assumes 4/4 throughout, in its grid, its
+ * bar markers and its pattern repeat.
+ */
+const barsToSeconds = (bars, bpm) => (bars * 4 * 60) / bpm;
 
 const clampInt = (value, min, max, fallback) => {
     const n = Math.round(Number(value));
@@ -45,7 +85,7 @@ const clampInt = (value, min, max, fallback) => {
 router.post('/generate', authenticate, async (req, res) => { // authenticate optional
     logger.info('Received POST /api/loops/generate request'); // Log entry
 
-    const { type, prompt, duration = MAX_DURATION } = req.body;
+    const { type, prompt } = req.body;
     // The key is interpolated into the model prompt and stored in a VARCHAR(20),
     // so only accept one the picker actually offers.
     const key = MUSICAL_KEYS.includes(req.body.key) ? req.body.key : 'C minor';
@@ -61,15 +101,21 @@ router.post('/generate', authenticate, async (req, res) => { // authenticate opt
         return res.status(400).json({ error: 'Describe the sound you want first' });
     }
 
-    if (Number(duration) > MAX_DURATION) {
-        logger.error('Duration exceeds limit:', duration);
-        return res.status(400).json({ error: `Duration cannot exceed ${MAX_DURATION} seconds` });
-    }
-
     // The tempo reaches us as a string from a <select>, and an out-of-range or
     // missing value used to fall through into the prompt verbatim.
     const requestedBpm = clampInt(req.body.bpm, MIN_BPM, MAX_BPM, 120);
-    const requestedDuration = clampInt(duration, 2, MAX_DURATION, MAX_DURATION);
+
+    const requestedBars = BAR_CHOICES.includes(Number(req.body.bars)) ? Number(req.body.bars) : 2;
+    // Kept to two decimals: ffmpeg takes fractional seconds, and the whole point
+    // is that the length is exact rather than rounded to something tidy.
+    const requestedDuration = Math.round(barsToSeconds(requestedBars, requestedBpm) * 100) / 100;
+
+    if (requestedDuration > MAX_DURATION) {
+        logger.error('Bar length exceeds the ceiling', { requestedBars, requestedBpm, requestedDuration });
+        return res.status(400).json({
+            error: `${requestedBars} bars at ${requestedBpm} BPM is ${requestedDuration}s, over the ${MAX_DURATION}s limit. Pick fewer bars or a faster tempo.`,
+        });
+    }
 
     try {
         // Check daily limit

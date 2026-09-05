@@ -1,12 +1,13 @@
 import React, { createContext, useState, useRef, useEffect } from 'react';
-import API_URL from '../utils/api';
+import { toPlayableUrl } from '../utils/playableUrl';
 
 export const AudioPlayerContext = createContext();
 
 // All playback goes through the backend audio proxy so the shared element
-// stays CORS-clean — required for the Web Audio EQ graph to output sound.
-export const toPlayableUrl = (url) =>
-    url ? `${API_URL}/proxy/audio?url=${encodeURIComponent(url)}` : '';
+// stays CORS-clean, which the Web Audio EQ graph needs to output sound at all.
+// Moved to utils/playableUrl.js so the multitrack sampler can use it too;
+// re-exported here because several components already import it from this file.
+export { toPlayableUrl };
 
 const createSharedAudio = () => {
     const audio = new Audio();

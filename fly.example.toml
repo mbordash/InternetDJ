@@ -25,7 +25,7 @@ primary_region = "iad"
 # migrations to the end of the chain: schema.sql alone is not enough, since it
 # only runs when the database container initialises from empty.
 [deploy]
-  release_command = 'sh -c "node backend/scripts/migrateCoinEvents.js && node backend/scripts/migrateAiTrainingConsent.js && node backend/scripts/migrateStemsToLoops.js && node backend/scripts/migrateProfileSlugs.js && node backend/scripts/migrateArticles.js && node backend/scripts/migrateJobQueue.js && node backend/scripts/applyRecoveredImages.js && node backend/scripts/migrateReviewReplies.js && node backend/scripts/migrateSongVisibility.js && node backend/scripts/migrateReleases.js && node backend/scripts/migrateProjectSampleCascade.js"'
+  release_command = 'sh -c "node backend/scripts/migrateCoinEvents.js && node backend/scripts/migrateAiTrainingConsent.js && node backend/scripts/migrateStemsToLoops.js && node backend/scripts/migrateProfileSlugs.js && node backend/scripts/migrateArticles.js && node backend/scripts/migrateJobQueue.js && node backend/scripts/applyRecoveredImages.js && node backend/scripts/migrateReviewReplies.js && node backend/scripts/migrateSongVisibility.js && node backend/scripts/migrateReleases.js && node backend/scripts/migrateProjectSampleCascade.js && node backend/scripts/migrateClipVolume.js && node backend/scripts/migrateLoopDurationPrecision.js"'
 
 [build]
 dockerfile = "dockerfile"

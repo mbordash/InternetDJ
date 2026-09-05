@@ -21,8 +21,16 @@ const LoopGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
     const [type, setType] = useState('bass');
     const [prompt, setPrompt] = useState('');
     const [loopKey, setLoopKey] = useState('C minor');
-    const [duration, setDuration] = useState(4);
+    // Bars, not seconds. A loop trimmed to a round number of seconds is only a
+    // musical length by coincidence: four seconds at 128 BPM is 2.13 bars, so
+    // butt-joining two copies of it lands off the beat every time. Bars convert
+    // to seconds against the loop's own tempo, which is what makes a duplicate
+    // sit exactly where the ear expects.
+    const [bars, setBars] = useState(2);
     const [loopBpm, setLoopBpm] = useState(Math.round(bpm) || 128);
+    const barSeconds = (4 * 60) / (loopBpm || 128);
+    const duration = Math.round(bars * barSeconds * 100) / 100;
+    const tooLong = duration > 10;
     const [dailyRemaining, setDailyRemaining] = useState(null);
     const [status, setStatus] = useState('idle'); // idle | generating | ready | applying
     const [readyLoop, setReadyLoop] = useState(null);
@@ -76,7 +84,7 @@ const LoopGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
             const token = localStorage.getItem('token');
             const res = await axios.post(
                 `${API_URL}/loops/generate`,
-                { type, prompt, bpm: loopBpm, key: loopKey, duration },
+                { type, prompt, bpm: loopBpm, key: loopKey, bars },
                 { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
             );
             const { loopId } = res.data;
@@ -188,8 +196,14 @@ const LoopGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                             onChange={(e) => setPrompt(e.target.value)}
                             disabled={isBusy}
                             placeholder="e.g. 'deep rolling line with sub hits'"
+                            aria-describedby="loop-gen-prompt-hint"
                             className="w-full px-3 py-2 bg-[#1d0a38] border border-cyan-400/30 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
                         />
+                        <p id="loop-gen-prompt-hint" className="retro-mono text-base text-gray-400 mt-1">
+                            Say what you want, not what you don&apos;t. The model has no way to
+                            take something away, so &quot;no drums&quot; only makes drums more
+                            likely. The track type already asks for that instrument alone.
+                        </p>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div>
@@ -218,21 +232,32 @@ const LoopGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                             </select>
                         </div>
                         <div>
-                            <label className="retro-label" htmlFor="loop-gen-duration">Length (sec)</label>
+                            <label className="retro-label" htmlFor="loop-gen-bars">Length (bars)</label>
                             <select
-                                id="loop-gen-duration"
-                                value={duration}
-                                onChange={(e) => setDuration(Number(e.target.value))}
+                                id="loop-gen-bars"
+                                value={bars}
+                                onChange={(e) => setBars(Number(e.target.value))}
                                 disabled={isBusy}
                                 className="retro-field w-full disabled:opacity-50"
                             >
-                                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => <option key={d} value={d}>{d}</option>)}
+                                {[1, 2, 4, 8].map(b => (
+                                    <option key={b} value={b} disabled={b * barSeconds > 10}>
+                                        {b} {b === 1 ? 'bar' : 'bars'}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>
                     <p className="retro-mono text-base text-gray-400">
-                        BPM defaults to this project&apos;s tempo so the loop lines up. It will drop at the playhead ({startSeconds.toFixed(1)}s).
+                        BPM defaults to this project&apos;s tempo so the loop lines up.{' '}
+                        {bars} {bars === 1 ? 'bar' : 'bars'} at {loopBpm} BPM is {duration.toFixed(2)}s.
+                        It will drop at the playhead ({startSeconds.toFixed(1)}s).
                     </p>
+                    {tooLong && (
+                        <p className="retro-mono text-base text-yellow-300">
+                            That is longer than the ten second ceiling. Pick fewer bars, or a faster tempo.
+                        </p>
+                    )}
                     {dailyRemaining !== null && (
                         <p className="text-sm text-gray-300">You have {dailyRemaining} loop{dailyRemaining === 1 ? '' : 's'} left today.</p>
                     )}
@@ -251,7 +276,7 @@ const LoopGenerateModal = ({ track, bpm, startTime, onClose, onApply }) => {
                     <button onClick={onClose} className="px-4 py-2 bg-[#1d0a38] rounded-lg text-sm hover:bg-gray-600">Cancel</button>
                     <button
                         onClick={handleGenerate}
-                        disabled={isBusy || !prompt.trim() || (dailyRemaining !== null && dailyRemaining <= 0)}
+                        disabled={isBusy || !prompt.trim() || (dailyRemaining !== null && dailyRemaining <= 0) || tooLong}
                         className="px-4 py-2 bg-purple-600 rounded-lg text-sm font-semibold hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {status === 'generating' ? 'Generating…' : readyLoop ? '🎲 Regenerate' : '✨ Generate'}

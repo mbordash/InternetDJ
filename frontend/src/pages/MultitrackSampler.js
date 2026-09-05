@@ -1,9 +1,8 @@
-import React, { useEffect, useState, useContext, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useContext, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import WaveSurfer from 'wavesurfer.js';
 import { AuthContext } from '../context/AuthContext';
 import * as lamejs from '@breezystack/lamejs';
 import * as Tone from 'tone';
@@ -12,8 +11,10 @@ import TrackSettingsModal from '../components/TrackSettingsModal';
 import TrackEffectsModal from '../components/TrackEffectsModal';
 import MidiGenerateModal from '../components/MidiGenerateModal';
 import LoopGenerateModal from '../components/LoopGenerateModal';
-import synthConfigs from '../config/synthConfigs';
 import API_URL from '../utils/api';
+import useProjectPlayback from '../hooks/useProjectPlayback';
+import { loadSampleDurations, getToneBuffer } from '../utils/audioBuffers';
+import ClipWaveform from '../components/ClipWaveform';
 
 const ItemTypes = {
     SAMPLE: 'sample',
@@ -43,10 +44,15 @@ const PASTEL_COLORS = [
 // longer to play — the song slows down, the ruler stays put. At 120 BPM
 // timeScale is exactly 1 and units and real seconds coincide.
 //
-// Stored in UNITS: playheadPosition, timelineDuration, audio clip start_time.
-// Stored in REAL SECONDS: audio file/clip durations, fade lengths, MIDI note
-// start_time and duration, and anything handed to an AudioContext.
+// Stored in UNITS: playheadPosition, timelineDuration, audio clip start_time,
+// and MIDI note start_time and duration.
+// Stored in REAL SECONDS: audio file/clip durations, fade lengths, and anything
+// handed to an AudioContext or the Tone transport.
 // Convert at the boundary; never add one to the other.
+//
+// This comment used to list MIDI note times as real seconds, which is wrong and
+// contradicted the code three lines of scrolling away. Notes are musical: they
+// keep their bar position when the tempo changes, exactly like clips.
 const unitsToReal = (timelineUnits, timeScale) => timelineUnits * timeScale;
 const realToUnits = (realSeconds, timeScale) => realSeconds / timeScale;
 
@@ -58,45 +64,6 @@ const getClipTimes = (sample, fullDuration) => {
 };
 
 const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, timeScale, isLoadingDurations, waveformColor, trackVolume, onClipEdit, isSelected, onSelect, onDuplicate }) => {
-    const waveformRef = useRef(null);
-    const wavesurfer = useRef(null);
-    const abortController = useRef(new AbortController());
-
-    useEffect(() => {
-        if (sample && waveformRef.current) {
-            wavesurfer.current = WaveSurfer.create({
-                container: waveformRef.current,
-                waveColor: '#4B5563',
-                progressColor: '#1F2937',
-                height: 40,
-                barWidth: 2,
-                normalize: true,
-            });
-
-            wavesurfer.current.load(sample.mp3_url, null, { signal: abortController.current.signal }).catch(err => {
-                if (err.name !== 'AbortError') {
-                    console.warn('Error loading WaveSurfer audio:', err.message);
-                }
-            });
-
-            // Apply track volume (multiplied by sample volume if needed)
-            wavesurfer.current.setVolume((sample.volume ?? 1) * trackVolume);
-
-            return () => {
-                if (wavesurfer.current) {
-                    try {
-                        abortController.current.abort();
-                        wavesurfer.current.destroy();
-                    } catch (err) {
-                        console.warn('Error destroying WaveSurfer:', err.message);
-                    }
-                    wavesurfer.current = null;
-                }
-            };
-        }
-    }, [sample.id, volume, trackVolume]);
-
-
     const [{ isDragging }, drag] = useDrag({
         type: ItemTypes.SAMPLE,
         item: () => {
@@ -122,7 +89,7 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, timeScal
         }
     };
 
-    const { effDuration } = getClipTimes(sample, duration);
+    const { trimStart, trimEnd, effDuration } = getClipTimes(sample, duration);
     const hasClipEdits = (sample.trim_start || 0) > 0 || sample.trim_end != null || (sample.fade_in || 0) > 0 || (sample.fade_out || 0) > 0;
     // effDuration is real seconds; the block is drawn on the timeline-units axis
     const blockWidth = realToUnits(effDuration, timeScale) * zoom;
@@ -141,13 +108,21 @@ const SampleBlock = ({ sample, trackId, onDrag, volume, zoom, duration, timeScal
             }}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
-            title="Double-click to edit fades and trim"
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); handleDoubleClick(e); }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-pressed={isSelected}
+            aria-label={`Clip at ${sample.start_time.toFixed(2)}${isSelected ? ', selected' : ''}`}
+            title="Double-click to edit fades and trim. Select and use arrow keys to nudge, with Shift for fine steps."
         >
-            {isLoadingDurations ? (
-                <div className="flex-1 h-10 bg-cyan-400/10 animate-pulse" />
-            ) : (
-                <div ref={waveformRef} className={`flex-1 h-10 ${waveformColor}`} />
-            )}
+            <ClipWaveform
+                url={sample.mp3_url}
+                from={trimStart}
+                to={trimEnd}
+                className={waveformColor}
+            />
             {hasClipEdits && !isLoadingDurations && (
                 <span className="absolute top-0 right-1 text-[10px] text-cyan-300 pointer-events-none" title="Clip has fades/trim">✂</span>
             )}
@@ -197,54 +172,36 @@ const SampleDeleteDropZone = ({ onDelete, isLoadingDurations }) => {
 };
 
 const DraggableSample = ({ sample, name, sampleId }) => {
-    const waveformRef = useRef(null);
-    const wavesurfer = useRef(null);
-    const abortController = useRef(new AbortController());
+    const playerRef = useRef(null);
     const [isPlaying, setIsPlaying] = useState(false);
 
-    useEffect(() => {
-        if (sample && waveformRef.current) {
-            wavesurfer.current = WaveSurfer.create({
-                container: waveformRef.current,
-                waveColor: '#4B5563',
-                progressColor: '#1F2937',
-                height: 40,
-                barWidth: 2,
-                normalize: true,
-            });
-
-            wavesurfer.current.load(sample.mp3_url, null, { signal: abortController.current.signal }).catch(err => {
-                if (err.name !== 'AbortError') {
-                    console.warn('Error loading WaveSurfer audio for library sample:', err.message);
-                }
-            });
-
-            wavesurfer.current.on('play', () => setIsPlaying(true));
-            wavesurfer.current.on('pause', () => setIsPlaying(false));
-
-            return () => {
-                if (wavesurfer.current) {
-                    try {
-                        abortController.current.abort();
-                        wavesurfer.current.destroy();
-                    } catch (err) {
-                        console.warn('Error destroying WaveSurfer:', err.message);
-                    }
-                    wavesurfer.current = null;
-                }
-            };
-        }
+    // Preview playback, on the same buffer the timeline and the drawing use, so
+    // auditioning a library sample costs no extra download.
+    useEffect(() => () => {
+        try { playerRef.current?.stop(); } catch (_) { /* not started */ }
+        try { playerRef.current?.dispose(); } catch (_) { /* already gone */ }
+        playerRef.current = null;
     }, [sample.id]);
 
-    const handlePlay = () => {
-        if (wavesurfer.current) {
-            try {
-                wavesurfer.current.playPause().catch(err => {
-                    console.warn('Error playing/pausing WaveSurfer for library sample:', err.message);
-                });
-            } catch (err) {
-                console.warn('Error playing/pausing WaveSurfer:', err.message);
+    const handlePlay = async () => {
+        try {
+            if (playerRef.current && playerRef.current.state === 'started') {
+                playerRef.current.stop();
+                setIsPlaying(false);
+                return;
             }
+            await Tone.start();
+            if (!playerRef.current) {
+                const buffer = await getToneBuffer(sample.mp3_url);
+                const player = new Tone.Player(buffer).toDestination();
+                player.onstop = () => setIsPlaying(false);
+                playerRef.current = player;
+            }
+            playerRef.current.start();
+            setIsPlaying(true);
+        } catch (err) {
+            console.warn('Error previewing library sample:', err.message);
+            setIsPlaying(false);
         }
     };
 
@@ -272,12 +229,12 @@ const DraggableSample = ({ sample, name, sampleId }) => {
                 {isPlaying ? '❚❚' : '▶'}
             </button>
             <div className="flex-1">{name}</div>
-            <div ref={waveformRef} className="w-24 h-10" />
+            <ClipWaveform url={sample.mp3_url} className="w-24 flex-none text-gray-400" />
         </div>
     );
 };
 
-const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isLoadingDurations, waveformColor, bpm, isSnapping, timelineDuration, playheadPosition, trackVolume, onClipEdit, selectedSampleId, onSelectSample, onDuplicateClip }) => {
+const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isLoadingDurations, waveformColor, bpm, isSnapping, timelineDuration, playheadPosition, trackVolume, onClipEdit, selectedSampleId, onSelectSample, onDuplicateClip, registerPlayhead }) => {
     const timelineRef = useRef(null);
 
     const [{ isOver }, drop] = useDrop({
@@ -396,7 +353,8 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
             {/* Playhead bar */}
             <div
                 className="absolute top-0 bottom-0 w-1 bg-red-500"
-                style={{ left: `${playheadPosition * zoom}px` }}
+                ref={registerPlayhead}
+                style={{ left: 0, transform: `translate3d(${playheadPosition * zoom}px, 0, 0)` }}
             />
         </div>
     );
@@ -407,6 +365,7 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
     const [fadeOut, setFadeOut] = useState(clip.fade_out || 0);
     const [trimStart, setTrimStart] = useState(clip.trim_start || 0);
     const [trimEnd, setTrimEnd] = useState(clip.trim_end != null ? clip.trim_end : '');
+    const [volume, setVolume] = useState(clip.volume ?? 1);
     const [validationError, setValidationError] = useState(null);
 
     const handleSave = () => {
@@ -414,6 +373,11 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
         const fo = Number(fadeOut) || 0;
         const ts = Number(trimStart) || 0;
         const te = trimEnd === '' || trimEnd === null ? null : Number(trimEnd);
+        const vol = Number(volume);
+        if (!Number.isFinite(vol) || vol < 0 || vol > 4) {
+            setValidationError('Volume must be between 0 and 4');
+            return;
+        }
         if (fi < 0 || fo < 0 || ts < 0) {
             setValidationError('Values cannot be negative');
             return;
@@ -426,7 +390,7 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
             setValidationError(`Trim start must be less than the sample length (${fullDuration.toFixed(2)}s)`);
             return;
         }
-        onSave(clip.id, { fade_in: fi, fade_out: fo, trim_start: ts, trim_end: te });
+        onSave(clip.id, { fade_in: fi, fade_out: fo, trim_start: ts, trim_end: te, volume: vol });
         onClose();
     };
 
@@ -440,6 +404,28 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
                     {clip.name}{fullDuration ? ` — ${fullDuration.toFixed(2)}s` : ''}
                 </p>
                 {validationError && <p className="text-red-400 text-sm mb-3">{validationError}</p>}
+                <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1" htmlFor="clip-volume">
+                        Clip volume
+                        <span className="ml-2 text-gray-400 font-normal">
+                            {Math.round((Number(volume) || 0) * 100)}%
+                        </span>
+                    </label>
+                    <input
+                        id="clip-volume"
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.01"
+                        value={volume}
+                        onChange={(e) => setVolume(Number(e.target.value))}
+                        className="w-full"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                        This clip only, on top of the track fader. For the one hit that came
+                        in louder than the rest of the take.
+                    </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="block text-sm font-medium mb-1">Fade In (s)</label>
@@ -476,6 +462,41 @@ const ClipSettingsModal = ({ clip, fullDuration, onClose, onSave }) => {
         </div>
     );
 };
+
+/**
+ * Playhead lines, moved without re-rendering.
+ *
+ * The engine calls back on every animation frame; every line registered here
+ * gets a transform written straight to the DOM. React still renders the line's
+ * resting position, which is what shows while stopped, paused or just seeked,
+ * and the callback takes over while the transport runs.
+ *
+ * Elements are pruned by `isConnected` rather than by an unregister callback,
+ * because a ref callback in React 18 cannot return a cleanup and lanes mount
+ * and unmount as tracks come and go.
+ */
+function usePlayheadLines(zoom) {
+    const elements = useRef(new Set());
+    const zoomRef = useRef(zoom);
+    zoomRef.current = zoom;
+
+    const register = useCallback((el) => {
+        if (el) elements.current.add(el);
+    }, []);
+
+    const onFrame = useCallback((units) => {
+        const x = units * zoomRef.current;
+        elements.current.forEach((el) => {
+            if (!el.isConnected) {
+                elements.current.delete(el);
+                return;
+            }
+            el.style.transform = `translate3d(${x}px, 0, 0)`;
+        });
+    }, []);
+
+    return { register, onFrame };
+}
 
 const MultiTrackSampler = () => {
     const { projectId } = useParams();
@@ -553,9 +574,6 @@ const MultiTrackSampler = () => {
     // WaveSurfer instances live in refs that a re-render does not touch.
     const [loadError, setLoadError] = useState(null);
     const [notice, setNotice] = useState(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
-    const [playheadPosition, setPlayheadPosition] = useState(0);
     const [isSnapping, setIsSnapping] = useState(true);
     const [history, setHistory] = useState([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -563,38 +581,75 @@ const MultiTrackSampler = () => {
     const [zoom, setZoom] = useState(100);
     const [sampleDurations, setSampleDurations] = useState({});
     const [isLoadingDurations, setIsLoadingDurations] = useState(false);
+    // Export used to borrow isLoadingDurations as its busy flag, which is how a
+    // render came to blank every waveform on the timeline. The drawing no
+    // longer reads either flag, but the two states mean different things and
+    // are worth keeping apart.
+    const [isExporting, setIsExporting] = useState(false);
     const [isPublic, setIsPublic] = useState(false);
     const [timelineDuration, setTimelineDuration] = useState(30 * (120 / 120));
     const fileInputRef = useRef(null);
-    const wavesurfersRef = useRef({});
-    const audioContextRef = useRef(null);
-    const playbackTimerRef = useRef(null);
-    const startTimeRef = useRef(0);
-    const fallbackCounterRef = useRef(0);
-    const isPlayingRef = useRef(false);
     const topTimelineRef = useRef(null);
-    const synthRef = useRef(null);
-    const toneTransportRef = useRef(Tone.Transport);
     const [trackVolumes, setTrackVolumes] = useState({});
     const [trackPans, setTrackPans] = useState({});
     const [soloTracks, setSoloTracks] = useState({});
+    // Declared above the playback hook, which reads it.
+    const [metronomeOn, setMetronomeOn] = useState(false);
+
+    // Playback, shared with the public player. See hooks/useProjectPlayback.js.
+    //
+    // The mix is passed explicitly here rather than derived from the track rows,
+    // because in the editor all four of volume, pan, mute and solo are live
+    // controls whose current values live in this component's state. The public
+    // player has no such controls and lets the hook read the rows instead.
+    const { register: registerPlayhead, onFrame: movePlayheads } = usePlayheadLines(zoom);
+
+    const {
+        isPlaying,
+        isPaused,
+        playheadPosition,
+        toggle,
+        stop: handleStop,
+        seek: handleSeek,
+    } = useProjectPlayback({
+        tracks,
+        projectSamples,
+        sampleDurations,
+        bpm,
+        timelineDuration,
+        // Memoised on purpose. The hook reapplies the mix whenever this object
+        // changes identity, and the playhead sets state every animation frame,
+        // so a fresh literal here would push volume, pan and mute onto every
+        // player and every synth sixty times a second while a project plays.
+        mix: useMemo(() => ({
+            trackVolumes,
+            trackPans,
+            mutedTrackIds: tracks.filter(t => t.is_muted).map(t => t.id),
+            soloTrackIds: Object.entries(soloTracks).filter(([, on]) => on).map(([id]) => Number(id)),
+        }), [trackVolumes, trackPans, tracks, soloTracks]),
+        metronome: metronomeOn,
+        onError: setNotice,
+        onFrame: movePlayheads,
+    });
     const [selectedClip, setSelectedClip] = useState(null);
     const [selectedSampleId, setSelectedSampleId] = useState(null);
-    const midiPanners = useRef({});
+    // Mirrored for the keydown listener, which is bound once and would
+    // otherwise read whatever the selection was when it was bound.
+    const selectedSampleIdRef = useRef(null);
     const [selectedTrack, setSelectedTrack] = useState(null);
-    const midiGains = useRef({});
     const [minimizedTracks, setMinimizedTracks] = useState({});
     const [selectedTrackForEffects, setSelectedTrackForEffects] = useState(null);
     const [selectedTrackForGenerate, setSelectedTrackForGenerate] = useState(null);
     const [selectedTrackForLoop, setSelectedTrackForLoop] = useState(null);
-    const effectsNodes = useRef({});
-    const [metronomeOn, setMetronomeOn] = useState(false);
     const metronomeRef = useRef(false);
-    const metronomeSynthRef = useRef(null);
-    const metronomeNextBeatRef = useRef(0);
+    // Space and S reach playback through refs, so the keydown listener does not
+    // have to be rebound every time these change identity.
     const playAllRef = useRef(null);
     const stopRef = useRef(null);
     const duplicateSelectedRef = useRef(null);
+    const nudgeSelectedRef = useRef(null);
+
+    useEffect(() => { selectedSampleIdRef.current = selectedSampleId; }, [selectedSampleId]);
     const deleteSelectedRef = useRef(null);
     const initializedTracks = useRef(new Set());
 
@@ -611,7 +666,6 @@ const MultiTrackSampler = () => {
 
     // Initialize minimized state for MIDI tracks
     useEffect(() => {
-        console.log('Initializing minimizedTracks, tracks:', tracks);
         setMinimizedTracks(prev => {
             const newMinimized = { ...prev };
             tracks.forEach(track => {
@@ -620,21 +674,39 @@ const MultiTrackSampler = () => {
                     initializedTracks.current.add(track.id);
                 }
             });
-            console.log('Initialized minimizedTracks:', newMinimized);
             return newMinimized;
         });
     }, [tracks]);
 
-    useEffect(() => {
-        const initialVolumes = {};
-        const initialPans = {};
+    // Levels and pans, derived from the track rows.
+    //
+    // Keyed on a signature rather than on `tracks`, because `tracks` also
+    // changes on every MIDI note edit, and rebuilding and re-setting both maps
+    // for a note that moved by a sixteenth is two renders for nothing.
+    const derivedMix = useMemo(() => {
+        const volumes = {};
+        const pans = {};
         tracks.forEach(track => {
-            initialVolumes[track.id] = track.volume ?? 1;
-            initialPans[track.id] = track.pan ?? 0;
+            volumes[track.id] = track.volume ?? 1;
+            pans[track.id] = track.pan ?? 0;
         });
-        setTrackVolumes(initialVolumes);
-        setTrackPans(initialPans);
+        return {
+            volumes,
+            pans,
+            signature: tracks.map(t => `${t.id}:${volumes[t.id]}:${pans[t.id]}`).join('|'),
+        };
     }, [tracks]);
+
+    // Read through a ref so the signature is the only dependency: the memo hands
+    // back fresh objects on every tracks change, and listing them here would
+    // re-run this exactly as often as keying on `tracks` did.
+    const derivedMixRef = useRef(derivedMix);
+    derivedMixRef.current = derivedMix;
+
+    useEffect(() => {
+        setTrackVolumes(derivedMixRef.current.volumes);
+        setTrackPans(derivedMixRef.current.pans);
+    }, [derivedMix.signature]);
 
     // A track is audible unless muted, or another track is soloed and this one isn't
     const isTrackAudible = (trackId) => {
@@ -646,48 +718,6 @@ const MultiTrackSampler = () => {
     };
 
     const getEffectiveTrackGain = (trackId) => (isTrackAudible(trackId) ? (trackVolumes[trackId] ?? 1) : 0);
-
-    // Schedule fade-in/out gain envelope for a clip that just started playing at clipOffset seconds into it
-    const scheduleClipFades = (ws, sample, clipOffset, effDuration) => {
-        if (!ws.fadeGain) return;
-        const g = ws.fadeGain.gain;
-        const now = ws.fadeGain.context.currentTime;
-        const fadeIn = Math.min(sample.fade_in || 0, effDuration);
-        const fadeOut = Math.min(sample.fade_out || 0, effDuration);
-        const remaining = Math.max(0, effDuration - clipOffset);
-        g.cancelScheduledValues(now);
-        let startValue = 1;
-        if (fadeIn > 0 && clipOffset < fadeIn) startValue = clipOffset / fadeIn;
-        g.setValueAtTime(Math.max(0, Math.min(1, startValue)), now);
-        const fadeInEnd = fadeIn > clipOffset ? now + (fadeIn - clipOffset) : now;
-        if (fadeIn > 0 && clipOffset < fadeIn) {
-            g.linearRampToValueAtTime(1, fadeInEnd);
-        }
-        if (fadeOut > 0 && remaining > 0) {
-            const fadeOutStart = Math.max(now + remaining - fadeOut, fadeInEnd);
-            g.setValueAtTime(1, fadeOutStart);
-            g.linearRampToValueAtTime(0, now + remaining);
-        }
-    };
-
-    // Live-apply mix changes (volume/pan/mute/solo) to any playing audio
-    useEffect(() => {
-        Object.values(wavesurfersRef.current).forEach(ws => {
-            if (!ws.instance) return;
-            const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
-            if (!sample) return;
-            const gain = (sample.volume ?? 1) * getEffectiveTrackGain(sample.track_id);
-            ws.instance.setVolume(gain);
-            if (ws.gainNode) ws.gainNode.gain.value = gain;
-            if (ws.panner) ws.panner.pan.value = trackPans[sample.track_id] ?? 0;
-        });
-        Object.entries(midiGains.current).forEach(([trackId, gainNode]) => {
-            gainNode.gain.value = getEffectiveTrackGain(Number(trackId));
-        });
-        Object.entries(midiPanners.current).forEach(([trackId, panner]) => {
-            panner.pan.value = trackPans[Number(trackId)] ?? 0;
-        });
-    }, [tracks, soloTracks, trackVolumes, trackPans, projectSamples]);
 
     const handleToggleMute = async (trackId) => {
         const track = tracks.find(t => t.id === trackId);
@@ -739,10 +769,12 @@ const MultiTrackSampler = () => {
             const target = e.target;
             const tag = target?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
-            if (e.ctrlKey && e.key === 'z') {
+            const accel = e.ctrlKey || e.metaKey; // Cmd on a Mac, Ctrl elsewhere
+            if (accel && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
                 e.preventDefault();
                 undo();
-            } else if (e.ctrlKey && e.key === 'y') {
+            } else if (accel && ((e.key === 'y' || e.key === 'Y') || ((e.key === 'z' || e.key === 'Z') && e.shiftKey))) {
+                // Ctrl+Y is the Windows redo; Cmd+Shift+Z is the Mac one.
                 e.preventDefault();
                 redo();
             } else if ((e.key === 'd' || e.key === 'D') && (e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -751,6 +783,12 @@ const MultiTrackSampler = () => {
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
                 deleteSelectedRef.current?.();
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                // Only when a clip is selected, so the arrows still scroll the
+                // timeline the rest of the time.
+                if (!selectedSampleIdRef.current) return;
+                e.preventDefault();
+                nudgeSelectedRef.current?.(e.key === 'ArrowRight' ? 1 : -1, e.shiftKey);
             } else if (e.key === 'Escape') {
                 setSelectedSampleId(null);
             } else if (e.code === 'Space' && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -765,65 +803,33 @@ const MultiTrackSampler = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [history, historyIndex]);
 
+    // Clip lengths, shared with the public player. A clip whose row already
+    // carries a duration is taken as read, so an established project costs no
+    // network at all. The rest come from the shared buffer cache, which is the
+    // same decode the waveform drawing and playback use, so a missing duration
+    // costs one fetch for all three. See utils/audioBuffers.js.
     useEffect(() => {
-        const loadDurations = async () => {
-            if (projectSamples.length === 0) {
-                setSampleDurations({});
-                return;
-            }
+        let cancelled = false;
+        if (projectSamples.length === 0) {
+            setSampleDurations({});
+            return undefined;
+        }
+        const everythingCached = projectSamples.every(sample => {
+            const cached = Number(sample.duration);
+            return Number.isFinite(cached) && cached > 0;
+        });
+        // Only block the transport when something actually has to be fetched.
+        if (!everythingCached) setIsLoadingDurations(true);
 
-            const newSampleDurations = {};
-            const missing = [];
-            projectSamples.forEach(sample => {
-                const cached = Number(sample.duration);
-                if (Number.isFinite(cached) && cached > 0) {
-                    newSampleDurations[sample.id] = cached;
-                } else {
-                    missing.push(sample);
-                }
-            });
+        loadSampleDurations(projectSamples)
+            .then(({ durations }) => { if (!cancelled) setSampleDurations(durations); })
+            .catch(err => {
+                console.error('Error loading clip durations:', err.message);
+                if (!cancelled) setSampleDurations({});
+            })
+            .finally(() => { if (!cancelled) setIsLoadingDurations(false); });
 
-            // All durations cached in the DB — no decoding needed
-            if (missing.length === 0) {
-                setSampleDurations(newSampleDurations);
-                return;
-            }
-
-            setIsLoadingDurations(true);
-
-            try {
-                await Promise.all(missing.map(async sample => {
-                    const ws = WaveSurfer.create({
-                        container: document.createElement('div'),
-                        waveColor: '#4B5563',
-                        progressColor: '#1F2937',
-                        height: 40,
-                        barWidth: 2,
-                        normalize: true,
-                    });
-
-                    try {
-                        await ws.load(sample.mp3_url);
-                        const duration = ws.getDuration();
-                        newSampleDurations[sample.id] = duration;
-                    } catch (err) {
-                        console.warn(`Error loading duration for sample ${sample.id}:`, err.message);
-                        newSampleDurations[sample.id] = 0;
-                    } finally {
-                        ws.destroy();
-                    }
-                }));
-
-                setSampleDurations(newSampleDurations);
-            } catch (err) {
-                console.error('Error loading durations:', err.message);
-                setSampleDurations(newSampleDurations);
-            } finally {
-                setIsLoadingDurations(false);
-            }
-        };
-
-        loadDurations();
+        return () => { cancelled = true; };
     }, [projectSamples]);
 
     useEffect(() => {
@@ -873,7 +879,6 @@ const MultiTrackSampler = () => {
                     is_polyphonic: typeof track.is_polyphonic === 'undefined' ? false : !!track.is_polyphonic,
                     midi_notes: track.midi_notes == null ? [] : track.midi_notes,
                 }));
-                console.log('Fetched tracks:', normalizedTracks);
                 setProject(project || null);
                 setTracks(Array.isArray(normalizedTracks) ? normalizedTracks : []);
                 setProjectSamples(Array.isArray(projectSamples) ? projectSamples : []);
@@ -898,69 +903,29 @@ const MultiTrackSampler = () => {
         if (user) fetchProject();
     }, [projectId, user]);
 
-    useEffect(() => {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        return () => {
-            if (audioContextRef.current) {
-                try {
-                    if (audioContextRef.current.state !== 'closed') {
-                        audioContextRef.current.suspend();
-                    }
-                    audioContextRef.current.close();
-                } catch (err) {
-                    console.warn('Error closing AudioContext:', err.message);
-                }
-            }
-            if (playbackTimerRef.current) {
-                cancelAnimationFrame(playbackTimerRef.current);
-            }
-            Object.values(wavesurfersRef.current).forEach(ws => {
-                try {
-                    ws.instance.destroy();
-                } catch (err) {
-                    console.warn('Error destroying WaveSurfer:', err.message);
-                }
-            });
-            wavesurfersRef.current = {};
-            try {
-                toneTransportRef.current.cancel();
-            } catch (err) {
-                console.warn('Error cancelling Tone transport:', err.message);
-            }
-            // NOTE: Do NOT close Tone.context here. It is a shared singleton used
-            // across the whole app/page. Closing it (especially under React 18
-            // StrictMode double-invoke in dev) leaves Tone with a permanently
-            // closed AudioContext, which causes "Cannot resume a closed
-            // AudioContext" on the next Tone.start() call.
-        };
-    }, []);
 
     const handleEffectsChange = async (trackId, newEffectsSettings) => {
         const previousTrack = tracks.find(t => t.id === trackId);
         const previousSettings = {
             effects_settings: previousTrack?.effects_settings || {}
         };
-        console.log('handleEffectsChange called with:', { trackId, newEffectsSettings });
 
         // Optimistically update local state
         setTracks(prev => {
             const updatedTracks = prev.map(t =>
                 t.id === trackId ? { ...t, effects_settings: newEffectsSettings } : t
             );
-            console.log('Optimistic tracks update:', updatedTracks.find(t => t.id === trackId).effects_settings);
             return updatedTracks;
         });
 
         try {
             const token = localStorage.getItem('token');
             const payload = { effects_settings: newEffectsSettings };
-            console.log('Sending payload to backend:', payload);
             const response = await axios.put(
                 `${API_URL}/projects/${projectId}/tracks/${trackId}`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            console.log('Backend response:', response.data);
 
             // Refresh project data
             const projectResponse = await axios.get(`${API_URL}/projects/${projectId}`, {
@@ -972,7 +937,6 @@ const MultiTrackSampler = () => {
                 is_polyphonic: typeof track.is_polyphonic === 'undefined' ? false : !!track.is_polyphonic,
                 midi_notes: track.midi_notes == null ? [] : track.midi_notes,
             }));
-            console.log('Refreshed tracks:', normalizedTracks.find(t => t.id === trackId).effects_settings); // Debug log
             setTracks(normalizedTracks);
             setProject(project);
             setProjectSamples(projectSamples);
@@ -990,20 +954,17 @@ const MultiTrackSampler = () => {
                 const revertedTracks = prev.map(t =>
                     t.id === trackId ? { ...t, effects_settings: previousSettings.effects_settings } : t
                 );
-                console.log('Reverted tracks update:', revertedTracks.find(t => t.id === trackId).effects_settings);
                 return revertedTracks;
             });
         }
     };
 
     const toggleTrackMinimize = (trackId) => {
-        console.log('Toggling minimize for trackId:', trackId, 'Current state:', minimizedTracks[trackId]);
         setMinimizedTracks(prev => {
             const newState = {
                 ...prev,
                 [trackId]: prev[trackId] === undefined ? true : !prev[trackId], // Default to minimized
             };
-            console.log('New minimizedTracks:', newState);
             return newState;
         });
     };
@@ -1067,30 +1028,9 @@ const MultiTrackSampler = () => {
         // Optimistically update local state
         if (settings.volume !== undefined) {
             setTrackVolumes(prev => ({ ...prev, [trackId]: settings.volume }));
-            if (midiGains.current[trackId]) {
-                midiGains.current[trackId].gain.setValueAtTime(settings.volume, Tone.now());
-            }
-            // Update volume for any active audio samples on this track
-            Object.values(wavesurfersRef.current).forEach(ws => {
-                if (ws.instance?.trackId === trackId) {
-                    const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
-                    ws.instance.setVolume((sample?.volume ?? 1) * settings.volume);
-                    if (ws.gainNode) {
-                        ws.gainNode.gain.setValueAtTime((sample?.volume ?? 1) * settings.volume, Tone.now());
-                    }
-                }
-            });
         }
         if (settings.pan !== undefined) {
             setTrackPans(prev => ({ ...prev, [trackId]: settings.pan }));
-            if (midiPanners.current[trackId]) {
-                midiPanners.current[trackId].pan.value = settings.pan;
-            }
-            Object.values(wavesurfersRef.current).forEach(ws => {
-                if (ws.instance?.trackId === trackId && ws.panner) {
-                    ws.panner.pan.value = settings.pan;
-                }
-            });
         }
         setTracks(prev =>
             prev.map(t =>
@@ -1121,17 +1061,6 @@ const MultiTrackSampler = () => {
             // Revert optimistic updates on error
             setTrackVolumes(prev => ({ ...prev, [trackId]: previousSettings.volume }));
             setTrackPans(prev => ({ ...prev, [trackId]: previousSettings.pan }));
-            if (midiPanners.current[trackId]) {
-                midiPanners.current[trackId].pan.value = previousSettings.pan;
-            }
-            if (midiGains.current[trackId]) {
-                midiGains.current[trackId].gain.setValueAtTime(previousSettings.volume, Tone.now());
-            }
-            Object.values(wavesurfersRef.current).forEach(ws => {
-                if (ws.gainNode && ws.instance?.trackId === trackId) {
-                    ws.gainNode.gain.setValueAtTime(previousSettings.volume, Tone.now());
-                }
-            });
             setTracks(prev =>
                 prev.map(t =>
                     t.id === trackId
@@ -1215,19 +1144,6 @@ const MultiTrackSampler = () => {
                 )
             );
             setTrackVolumes(prev => ({ ...prev, [trackId]: newVolume }));
-            if (midiGains.current[trackId]) {
-                midiGains.current[trackId].gain.setValueAtTime(newVolume, Tone.now());
-            }
-            // Apply live volume to any playing samples on this track
-            Object.values(wavesurfersRef.current).forEach(ws => {
-                if (ws.instance?.trackId === trackId) {
-                    const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
-                    ws.instance.setVolume((sample?.volume ?? 1) * newVolume);
-                    if (ws.gainNode) {
-                        ws.gainNode.gain.setValueAtTime(newVolume, Tone.now());
-                    }
-                }
-            });
         } catch (err) {
             console.error('Update volume error:', err.response?.data || err.message);
             setNotice(`Failed to save volume: ${err.response?.data?.error || err.message}`);
@@ -1331,7 +1247,7 @@ const MultiTrackSampler = () => {
 
     const handleExport = async () => {
         try {
-            setIsLoadingDurations(true);
+            setIsExporting(true);
             const timeScale = 120 / bpm;
             let totalRealSeconds = unitsToReal(timelineDuration, timeScale);
 
@@ -1465,7 +1381,7 @@ const MultiTrackSampler = () => {
             console.error('Export error:', err.message);
             setNotice('Failed to export project: ' + err.message);
         } finally {
-            setIsLoadingDurations(false);
+            setIsExporting(false);
         }
     };
 
@@ -1474,73 +1390,115 @@ const MultiTrackSampler = () => {
         setHistoryIndex(prev => prev + 1);
     };
 
-    const undo = () => {
-        if (historyIndex >= 0) {
-            const action = history[historyIndex];
-            switch (action.type) {
-                case 'addSample':
-                    setProjectSamples(prev => prev.filter(s => s.id !== action.data.id));
-                    break;
-                case 'deleteSample':
-                    setProjectSamples(prev => [...prev, action.data]);
-                    break;
-                case 'dragSample':
-                    setProjectSamples(prev =>
-                        prev
-                            .filter(s => s.id !== action.data.newSample.id)
-                            .concat(action.data.originalSample)
-                    );
-                    break;
-                case 'addTrack':
-                    setTracks(prev => prev.filter(t => t.id !== action.data.id));
-                    break;
-                case 'deleteTrack':
-                    setTracks(prev => [...prev, action.data.track]);
-                    setProjectSamples(prev => [...prev, ...action.data.samples]);
-                    break;
-                case 'midiChange':
-                    saveMidiNotes(action.data.trackId, action.data.prevNotes);
-                    break;
-                default:
-                    break;
-            }
-            setHistoryIndex(prev => prev - 1);
+    /**
+     * Undo and redo, against the server.
+     *
+     * These used to change local state only. Everything except a MIDI edit was
+     * a lie that a page reload exposed: undoing a delete showed a clip whose
+     * row was gone, and undoing an add hid one the server still had. The label
+     * above the timeline says changes save automatically, so undo has to save
+     * too, or it should not be offered.
+     *
+     * Track add and delete are no longer recorded. A deleted track now takes
+     * its clips with it through a foreign key, and an undo that restored the
+     * track on screen while the rows stayed deleted was worse than no undo,
+     * because it looked like it had worked. Bringing a track and all its clips
+     * back is a real feature rather than a history entry, and is not attempted.
+     *
+     * Recreating a clip gives it a new id, so the history entry is rewritten
+     * with the id that now exists. Without that a later redo would chase a row
+     * that is not there.
+     */
+    const historyBusyRef = useRef(false);
+
+    const authHeaders = () => ({
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+
+    /** Move a clip to a stored position, on screen and on the server. */
+    const applyClipPosition = async (sampleId, position) => {
+        setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...position } : s)));
+        await axios.put(
+            `${API_URL}/projects/${projectId}/samples/${sampleId}`,
+            position,
+            authHeaders()
+        );
+    };
+
+    /** Put a removed clip back, and hand back the id it returned with. */
+    const recreateClip = async (sample) => {
+        const response = await axios.post(
+            `${API_URL}/projects/${projectId}/samples`,
+            {
+                track_id: sample.track_id,
+                sample_id: sample.sample_id,
+                start_time: sample.start_time,
+                fade_in: sample.fade_in || 0,
+                fade_out: sample.fade_out || 0,
+                trim_start: sample.trim_start || 0,
+                trim_end: sample.trim_end ?? null,
+                volume: sample.volume ?? 1,
+            },
+            authHeaders()
+        );
+        setProjectSamples(prev => [...prev, response.data]);
+        return response.data;
+    };
+
+    const removeClip = async (sampleId) => {
+        setProjectSamples(prev => prev.filter(s => s.id !== sampleId));
+        await axios.delete(`${API_URL}/projects/${projectId}/samples/${sampleId}`, authHeaders());
+    };
+
+    /** Rewrite a history entry after a recreate handed back a different id. */
+    const rememberNewId = (index, sample) => {
+        setHistory(prev => prev.map((entry, i) => (i === index ? { ...entry, data: sample } : entry)));
+    };
+
+    const runHistoryStep = async (action, index, forward) => {
+        switch (action.type) {
+            case 'addSample':
+                if (forward) rememberNewId(index, await recreateClip(action.data));
+                else await removeClip(action.data.id);
+                break;
+            case 'deleteSample':
+                if (forward) await removeClip(action.data.id);
+                else rememberNewId(index, await recreateClip(action.data));
+                break;
+            case 'dragSample':
+                await applyClipPosition(action.data.sampleId, forward ? action.data.after : action.data.before);
+                break;
+            case 'midiChange':
+                saveMidiNotes(action.data.trackId, forward ? action.data.newNotes : action.data.prevNotes);
+                break;
+            default:
+                break;
         }
     };
 
-    const redo = () => {
-        if (historyIndex < history.length - 1) {
-            const action = history[historyIndex + 1];
-            switch (action.type) {
-                case 'addSample':
-                    setProjectSamples(prev => [...prev, action.data]);
-                    break;
-                case 'deleteSample':
-                    setProjectSamples(prev => prev.filter(s => s.id !== action.data.id));
-                    break;
-                case 'dragSample':
-                    setProjectSamples(prev =>
-                        prev
-                            .filter(s => s.id !== action.data.originalSample.id)
-                            .concat(action.data.newSample)
-                    );
-                    break;
-                case 'addTrack':
-                    setTracks(prev => [...prev, action.data]);
-                    break;
-                case 'deleteTrack':
-                    setTracks(prev => prev.filter(t => t.id !== action.data.track.id));
-                    setProjectSamples(prev => prev.filter(s => !action.data.samples.some(ds => ds.id === s.id)));
-                    break;
-                case 'midiChange':
-                    saveMidiNotes(action.data.trackId, action.data.newNotes);
-                    break;
-                default:
-                    break;
-            }
-            setHistoryIndex(prev => prev + 1);
+    const stepHistory = async (direction) => {
+        if (historyBusyRef.current) return;
+        const forward = direction === 'redo';
+        const index = forward ? historyIndex + 1 : historyIndex;
+        if (forward ? index >= history.length : index < 0) return;
+
+        historyBusyRef.current = true;
+        try {
+            await runHistoryStep(history[index], index, forward);
+            setHistoryIndex(prev => (forward ? prev + 1 : prev - 1));
+            setNotice(null);
+        } catch (err) {
+            console.error(`${direction} failed:`, err.response?.data || err.message);
+            // The index stays put, so the same step can be retried rather than
+            // the history quietly drifting out of step with the server.
+            setNotice(`Could not ${direction}: ${err.response?.data?.error || err.message}`);
+        } finally {
+            historyBusyRef.current = false;
         }
     };
+
+    const undo = () => stepHistory('undo');
+    const redo = () => stepHistory('redo');
 
     // Grow the timeline when content lands near its end.
     // Both args are in timeline units. Audio clip lengths are real seconds, so
@@ -1556,13 +1514,11 @@ const MultiTrackSampler = () => {
     };
 
     const handleNotesChange = (trackId, newNotes) => {
-        console.log('handleNotesChange called for Track ID:', trackId, 'Notes:', newNotes);
         setTracks(prev => {
             const updatedTracks = prev.map(track => ({
                 ...track,
                 midi_notes: track.id === trackId ? newNotes : track.midi_notes,
             }));
-            console.log('Updated tracks:', updatedTracks);
             return updatedTracks;
         });
     };
@@ -1631,718 +1587,17 @@ const MultiTrackSampler = () => {
         setNotice(null);
     };
 
-    const handlePlayAll = async () => {
-        if (isPlayingRef.current) {
-            try {
-                Object.values(wavesurfersRef.current).forEach(ws => {
-                    try {
-                        if (ws.instance.isPlaying()) ws.instance.pause();
-                    } catch (err) {
-                        console.warn('Error pausing WaveSurfer:', err);
-                    }
-                });
+    // Play, pause, stop and seek all live in useProjectPlayback now, along with
+    // the transport, the per-clip players, the synths and the playhead loop.
+    // See hooks/useProjectPlayback.js: this page and the public player were
+    // running two copies of it, and the copies had stopped agreeing.
+    // Not gated on the duration probe. Clip length at play time comes from the
+    // decoded buffer; the probe only feeds pre-play layout, and waiting on it
+    // meant one stalled probe made the project unplayable.
+    const handlePlayAllClick = () => toggle();
 
-                if (audioContextRef.current && audioContextRef.current.state === 'running') {
-                    await audioContextRef.current.suspend();
-                }
-
-                toneTransportRef.current.pause();
-                toneTransportRef.current.cancel();
-
-                if (playbackTimerRef.current) {
-                    cancelAnimationFrame(playbackTimerRef.current);
-                    playbackTimerRef.current = null;
-                }
-
-                // Dispose of effect nodes
-                Object.values(effectsNodes.current).forEach(trackEffects => {
-                    Object.values(trackEffects).forEach(effect => effect.dispose());
-                });
-                effectsNodes.current = {};
-
-                setIsPlaying(false);
-                isPlayingRef.current = false;
-                setIsPaused(true);
-            } catch (err) {
-                console.error('Error pausing playback:', err.message);
-                setNotice('Failed to pause playback');
-            }
-        } else {
-            setIsPlaying(true);
-            isPlayingRef.current = true;
-
-            // Defensive guard: if Tone's shared AudioContext has been closed
-            // (e.g. by a prior unmount or React 18 StrictMode double-invoke),
-            // calling Tone.start() will throw "Cannot resume a closed
-            // AudioContext". Swap in a fresh Tone context before starting.
-            try {
-                const rawCtx = Tone.context && Tone.context.rawContext;
-                if (!Tone.context || (rawCtx && rawCtx.state === 'closed')) {
-                    Tone.setContext(new Tone.Context());
-                }
-            } catch (err) {
-                console.warn('Error verifying Tone context, recreating:', err.message);
-                try { Tone.setContext(new Tone.Context()); } catch (_) {}
-            }
-
-            try {
-                await Tone.start();
-            } catch (err) {
-                console.warn('Tone.start() failed, recreating Tone context and retrying:', err.message);
-                try {
-                    Tone.setContext(new Tone.Context());
-                    await Tone.start();
-                } catch (err2) {
-                    console.error('Failed to start Tone audio:', err2);
-                    setNotice('Failed to start audio. Please click Play again.');
-                    setIsPlaying(false);
-                    isPlayingRef.current = false;
-                    return;
-                }
-            }
-
-            if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioContextRef.current.state === 'suspended') {
-                try {
-                    await audioContextRef.current.resume();
-                } catch (err) {
-                    console.error('Error resuming AudioContext:', err);
-                    setNotice('Failed to resume audio context');
-                    setIsPlaying(false);
-                    isPlayingRef.current = false;
-                    return;
-                }
-            }
-
-            const timeScale = 120 / bpm;
-            // Compared against the playhead below, so keep it in timeline units
-            let maxDuration = timelineDuration;
-
-            // A true resume requires loaded players; a seek from stopped state
-            // (isPaused set but nothing loaded) must take the fresh-play path.
-            const canResume = isPaused && Object.keys(wavesurfersRef.current).length > 0;
-            const startPos = playheadPosition; // scaled timeline seconds
-
-            if (!canResume) {
-                wavesurfersRef.current = {};
-                toneTransportRef.current.cancel();
-                effectsNodes.current = {};
-                const playPromises = [];
-
-                for (const sample of projectSamples) {
-                    const wsInstance = WaveSurfer.create({
-                        container: document.createElement('div'),
-                        waveColor: '#4B5563',
-                        progressColor: '#1F2937',
-                        height: 40,
-                        barWidth: 2,
-                        normalize: true,
-                        backend: 'WebAudio',
-                        audioContext: Tone.context.rawContext,
-                    });
-                    wsInstance.sampleId = sample.id;
-                    wsInstance.trackId = sample.track_id;
-
-                    const effectiveGain = (sample.volume ?? 1) * getEffectiveTrackGain(sample.track_id);
-                    const gainNode = new Tone.Gain(effectiveGain);
-                    // Track/sample volume via the player's own gain; fades and pan are
-                    // inserted into the player's private AudioContext on 'ready'.
-                    wsInstance.setVolume(effectiveGain);
-
-                    // Initialize effects for the track
-                    const trackEffects = {};
-                    const track = tracks.find(t => t.id === sample.track_id);
-                    const effectsSettings = track?.effects_settings || {};
-                    if (effectsSettings.reverb) {
-                        trackEffects.reverb = new Tone.Reverb({
-                            decay: effectsSettings.reverb.decay,
-                            wet: effectsSettings.reverb.wet
-                        });
-                    }
-                    if (effectsSettings.delay) {
-                        trackEffects.delay = new Tone.FeedbackDelay({
-                            delayTime: effectsSettings.delay.delayTime,
-                            wet: effectsSettings.delay.wet
-                        });
-                    }
-                    if (effectsSettings.distortion) {
-                        trackEffects.distortion = new Tone.Distortion({
-                            distortion: effectsSettings.distortion.distortion,
-                            wet: effectsSettings.distortion.wet
-                        });
-                    }
-                    effectsNodes.current[sample.track_id] = trackEffects;
-
-                    // Connect effects chain: source -> effects -> gain -> destination
-                    let lastNode = gainNode;
-                    if (trackEffects.reverb) {
-                        gainNode.connect(trackEffects.reverb);
-                        lastNode = trackEffects.reverb;
-                    }
-                    if (trackEffects.delay) {
-                        lastNode.connect(trackEffects.delay);
-                        lastNode = trackEffects.delay;
-                    }
-                    if (trackEffects.distortion) {
-                        lastNode.connect(trackEffects.distortion);
-                        lastNode = trackEffects.distortion;
-                    }
-                    lastNode.toDestination();
-
-                    wavesurfersRef.current[sample.id] = {
-                        instance: wsInstance,
-                        ready: false,
-                        gainNode,
-                        fadeGain: null,
-                        panner: null,
-                        routed: false,
-                    };
-
-                    const promise = new Promise((resolve) => {
-                        wsInstance.on('ready', () => {
-                            try {
-                                wavesurfersRef.current[sample.id].ready = true;
-                                // WaveSurfer v7's WebAudio backend runs in its own private
-                                // AudioContext, so fade/pan nodes must be created from that
-                                // same context and terminate at its destination.
-                                const media = wsInstance.getMediaElement();
-                                if (media && typeof media.getGainNode === 'function') {
-                                    const playerGain = media.getGainNode();
-                                    const playerCtx = playerGain.context;
-                                    const fadeGain = playerCtx.createGain();
-                                    const panner = playerCtx.createStereoPanner();
-                                    panner.pan.value = trackPans[sample.track_id] ?? 0;
-                                    playerGain.disconnect();
-                                    playerGain.connect(fadeGain);
-                                    fadeGain.connect(panner);
-                                    panner.connect(playerCtx.destination);
-                                    wavesurfersRef.current[sample.id].fadeGain = fadeGain;
-                                    wavesurfersRef.current[sample.id].panner = panner;
-                                    wavesurfersRef.current[sample.id].routed = true;
-                                } else {
-                                    console.warn(`WaveSurfer output node not available for sample ${sample.id}; pan/fades disabled`);
-                                }
-
-                                const fullDuration = sampleDurations[sample.id] || wsInstance.getDuration();
-                                const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                                const sampleStart = sample.start_time;
-
-                                // Prep only — playback of t=0 clips begins after ALL
-                                // samples are loaded, so audio and playhead start together.
-                                if (sampleStart < maxDuration && effDuration > 0) {
-                                    wsInstance.seekTo(fullDuration ? Math.min(trimStart / fullDuration, 1) : 0);
-                                }
-                                resolve();
-                            } catch (err) {
-                                console.warn(`Error processing sample ${sample.id}:`, err);
-                                resolve();
-                            }
-                        });
-                        wsInstance.on('error', err => {
-                            console.warn(`WaveSurfer error for sample ${sample.id}:`, err);
-                            resolve();
-                        });
-
-                        wsInstance.load(sample.mp3_url).catch(err => {
-                            console.warn(`Error loading sample ${sample.id}:`, err);
-                            resolve();
-                        });
-                    });
-
-                    playPromises.push(promise);
-                }
-
-                tracks.forEach(track => {
-                    if (track.track_type === 'midi' && Array.isArray(track.midi_notes)) {
-                        if (!track.id) {
-                            console.warn('Track missing ID:', track);
-                            return;
-                        }
-                        const gainNode = midiGains.current[track.id] || new Tone.Gain(getEffectiveTrackGain(track.id));
-                        gainNode.gain.value = getEffectiveTrackGain(track.id);
-                        midiGains.current[track.id] = gainNode;
-
-                        const instrumentType = track.instrument_type || 'synth';
-                        const config = synthConfigs[instrumentType] || synthConfigs.synth;
-                        const { SynthClass, params } = config;
-                        let synthParams;
-                        if (instrumentType === 'drumsampler') {
-                            synthParams = {
-                                urls: params.urls,
-                                baseUrl: params.baseUrl || '',
-                                onload: params.onload,
-                            };
-                        } else {
-                            // Merge saved settings over the instrument's defaults so
-                            // characteristic params (e.g. oscillator type) are kept
-                            synthParams = track.synth_settings
-                                ? {
-                                    ...params,
-                                    ...track.synth_settings.synthParams,
-                                    envelope: { ...params.envelope, ...track.synth_settings.envelope },
-                                    voice0: { ...params.voice0, ...track.synth_settings.voice0 },
-                                    voice1: track.synth_settings.voice0 ? { ...params.voice1, detune: -track.synth_settings.voice0.detune } : params.voice1,
-                                }
-                                : params;
-                        }
-
-                        // Initialize effects for MIDI track
-                        const trackEffects = {};
-                        const effectsSettings = track.effects_settings || {};
-                        if (effectsSettings.reverb) {
-                            trackEffects.reverb = new Tone.Reverb({
-                                decay: effectsSettings.reverb.decay,
-                                wet: effectsSettings.reverb.wet
-                            });
-                        }
-                        if (effectsSettings.delay) {
-                            trackEffects.delay = new Tone.FeedbackDelay({
-                                delayTime: effectsSettings.delay.delayTime,
-                                wet: effectsSettings.delay.wet
-                            });
-                        }
-                        if (effectsSettings.distortion) {
-                            trackEffects.distortion = new Tone.Distortion({
-                                distortion: effectsSettings.distortion.distortion,
-                                wet: effectsSettings.distortion.wet
-                            });
-                        }
-                        effectsNodes.current[track.id] = trackEffects;
-
-                        // Connect effects chain: synth -> effects -> gain -> pan -> destination
-                        let synth;
-                        if (instrumentType === 'drumsampler') {
-                            synth = new Tone.Sampler(synthParams).connect(gainNode);
-                        } else {
-                            const isPolyphonic = track.is_polyphonic || false;
-                            synth = isPolyphonic
-                                ? new Tone.PolySynth(SynthClass, { maxPolyphony: 8, ...synthParams }).connect(gainNode)
-                                : new SynthClass(synthParams).connect(gainNode);
-                        }
-
-                        let lastNode = gainNode;
-                        if (trackEffects.reverb) {
-                            gainNode.connect(trackEffects.reverb);
-                            lastNode = trackEffects.reverb;
-                        }
-                        if (trackEffects.delay) {
-                            lastNode.connect(trackEffects.delay);
-                            lastNode = trackEffects.delay;
-                        }
-                        if (trackEffects.distortion) {
-                            lastNode.connect(trackEffects.distortion);
-                            lastNode = trackEffects.distortion;
-                        }
-                        const midiPanner = midiPanners.current[track.id] || new Tone.Panner(trackPans[track.id] ?? 0);
-                        midiPanner.pan.value = trackPans[track.id] ?? 0;
-                        midiPanners.current[track.id] = midiPanner;
-                        lastNode.connect(midiPanner);
-                        midiPanner.toDestination();
-
-                        // Note times are musical units; the transport is real seconds
-                        track.midi_notes.forEach(note => {
-                            toneTransportRef.current.schedule(time => {
-                                synth.triggerAttackRelease(note.note, unitsToReal(note.duration, timeScale), time);
-                            }, unitsToReal(note.start_time, timeScale));
-                        });
-                    }
-                });
-
-                try {
-                    await Promise.all(playPromises);
-                } catch (err) {
-                    console.error('Error initializing samples:', err);
-                    setNotice('Failed to initialize samples');
-                    setIsPlaying(false);
-                    isPlayingRef.current = false;
-                    return;
-                }
-
-                startTimeRef.current = audioContextRef.current.currentTime - unitsToReal(startPos, timeScale);
-                setPlayheadPosition(startPos);
-
-                // Everything is loaded — start clips under the playhead in the same
-                // instant the playhead clock starts, so audio and UI stay in sync.
-                Object.values(wavesurfersRef.current).forEach(ws => {
-                    try {
-                        if (!ws.ready) return;
-                        const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
-                        if (!sample) return;
-                        const fullDuration = sampleDurations[sample.id] || ws.instance.getDuration();
-                        const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                        const clipStart = sample.start_time;
-                        const clipLength = realToUnits(effDuration, timeScale);
-                        if (clipStart <= startPos && startPos < clipStart + clipLength && effDuration > 0) {
-                            // Offset into the audio file is real seconds, not units
-                            const clipOffset = unitsToReal(startPos - clipStart, timeScale);
-                            ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
-                            ws.instance.play().catch(err => {
-                                console.warn(`Error playing sample ${sample.id}:`, err);
-                            });
-                            scheduleClipFades(ws, sample, clipOffset, effDuration);
-                        }
-                    } catch (err) {
-                        console.warn('Error starting sample at playhead:', err);
-                    }
-                });
-
-                toneTransportRef.current.start(undefined, unitsToReal(startPos, timeScale));
-            } else {
-                Object.values(wavesurfersRef.current).forEach(ws => {
-                    try {
-                        if (!ws.ready) return;
-                        const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
-                        if (!sample) return;
-                        const effGain = (sample.volume ?? 1) * getEffectiveTrackGain(sample.track_id);
-                        ws.instance.setVolume(effGain);
-                        if (ws.gainNode) ws.gainNode.gain.value = effGain;
-                        if (ws.panner) ws.panner.pan.value = trackPans[sample.track_id] ?? 0;
-                        const fullDuration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
-                        const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                        const startTime = sample.start_time;
-                        const endTime = startTime + realToUnits(effDuration, timeScale);
-
-                        if (playheadPosition >= startTime && playheadPosition < endTime) {
-                            const clipOffset = unitsToReal(playheadPosition - startTime, timeScale);
-                            ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
-                            ws.instance.play().catch(err => {
-                                console.warn(`Error resuming sample ${ws.instance.sampleId}:`, err);
-                            });
-                            scheduleClipFades(ws, sample, clipOffset, effDuration);
-                        }
-                    } catch (err) {
-                        console.warn('Error resuming WaveSurfer:', err);
-                    }
-                });
-
-                // Re-initialize effects for audio sample tracks (disposed on pause)
-                projectSamples.forEach(sample => {
-                    const ws = wavesurfersRef.current[sample.id];
-                    if (!ws?.gainNode) return;
-                    const track = tracks.find(t => t.id === sample.track_id);
-                    const effectsSettings = track?.effects_settings || {};
-                    const gainNode = ws.gainNode;
-
-                    // Disconnect from previous destination/effects before rewiring
-                    gainNode.disconnect();
-
-                    const trackEffects = {};
-                    if (effectsSettings.reverb) {
-                        trackEffects.reverb = new Tone.Reverb({
-                            decay: effectsSettings.reverb.decay,
-                            wet: effectsSettings.reverb.wet
-                        });
-                    }
-                    if (effectsSettings.delay) {
-                        trackEffects.delay = new Tone.FeedbackDelay({
-                            delayTime: effectsSettings.delay.delayTime,
-                            wet: effectsSettings.delay.wet
-                        });
-                    }
-                    if (effectsSettings.distortion) {
-                        trackEffects.distortion = new Tone.Distortion({
-                            distortion: effectsSettings.distortion.distortion,
-                            wet: effectsSettings.distortion.wet
-                        });
-                    }
-                    effectsNodes.current[sample.track_id] = trackEffects;
-
-                    let lastNode = gainNode;
-                    if (trackEffects.reverb) {
-                        gainNode.connect(trackEffects.reverb);
-                        lastNode = trackEffects.reverb;
-                    }
-                    if (trackEffects.delay) {
-                        lastNode.connect(trackEffects.delay);
-                        lastNode = trackEffects.delay;
-                    }
-                    if (trackEffects.distortion) {
-                        lastNode.connect(trackEffects.distortion);
-                        lastNode = trackEffects.distortion;
-                    }
-                    lastNode.toDestination();
-                });
-
-                toneTransportRef.current.cancel();
-                tracks.forEach(track => {
-                    if (track.track_type === 'midi' && Array.isArray(track.midi_notes)) {
-                        if (!track.id) {
-                            console.warn('Track missing ID:', track);
-                            return;
-                        }
-                        const gainNode = midiGains.current[track.id] || new Tone.Gain(getEffectiveTrackGain(track.id));
-                        gainNode.gain.value = getEffectiveTrackGain(track.id);
-                        midiGains.current[track.id] = gainNode;
-
-                        const instrumentType = track.instrument_type || 'synth';
-                        const config = synthConfigs[instrumentType] || synthConfigs.synth;
-                        const { SynthClass, params } = config;
-                        let synthParams;
-                        if (instrumentType === 'drumsampler') {
-                            synthParams = {
-                                urls: params.urls,
-                                baseUrl: params.baseUrl || '',
-                                onload: params.onload,
-                            };
-                        } else {
-                            // Merge saved settings over the instrument's defaults so
-                            // characteristic params (e.g. oscillator type) are kept
-                            synthParams = track.synth_settings
-                                ? {
-                                    ...params,
-                                    ...track.synth_settings.synthParams,
-                                    envelope: { ...params.envelope, ...track.synth_settings.envelope },
-                                    voice0: { ...params.voice0, ...track.synth_settings.voice0 },
-                                    voice1: track.synth_settings.voice0 ? { ...params.voice1, detune: -track.synth_settings.voice0.detune } : params.voice1,
-                                }
-                                : params;
-                        }
-
-                        // Reinitialize effects for MIDI track
-                        const trackEffects = {};
-                        const effectsSettings = track.effects_settings || {};
-                        if (effectsSettings.reverb) {
-                            trackEffects.reverb = new Tone.Reverb({
-                                decay: effectsSettings.reverb.decay,
-                                wet: effectsSettings.reverb.wet
-                            });
-                        }
-                        if (effectsSettings.delay) {
-                            trackEffects.delay = new Tone.FeedbackDelay({
-                                delayTime: effectsSettings.delay.delayTime,
-                                wet: effectsSettings.delay.wet
-                            });
-                        }
-                        if (effectsSettings.distortion) {
-                            trackEffects.distortion = new Tone.Distortion({
-                                distortion: effectsSettings.distortion.distortion,
-                                wet: effectsSettings.distortion.wet
-                            });
-                        }
-                        effectsNodes.current[track.id] = trackEffects;
-
-                        // Connect effects chain
-                        let synth;
-                        if (instrumentType === 'drumsampler') {
-                            synth = new Tone.Sampler(synthParams).connect(gainNode);
-                        } else {
-                            const isPolyphonic = track.is_polyphonic || false;
-                            synth = isPolyphonic
-                                ? new Tone.PolySynth(SynthClass, { maxPolyphony: 8, ...synthParams }).connect(gainNode)
-                                : new SynthClass(synthParams).connect(gainNode);
-                        }
-
-                        let lastNode = gainNode;
-                        if (trackEffects.reverb) {
-                            gainNode.connect(trackEffects.reverb);
-                            lastNode = trackEffects.reverb;
-                        }
-                        if (trackEffects.delay) {
-                            lastNode.connect(trackEffects.delay);
-                            lastNode = trackEffects.delay;
-                        }
-                        if (trackEffects.distortion) {
-                            lastNode.connect(trackEffects.distortion);
-                            lastNode = trackEffects.distortion;
-                        }
-                        const midiPanner = midiPanners.current[track.id] || new Tone.Panner(trackPans[track.id] ?? 0);
-                        midiPanner.pan.value = trackPans[track.id] ?? 0;
-                        midiPanners.current[track.id] = midiPanner;
-                        lastNode.connect(midiPanner);
-                        midiPanner.toDestination();
-
-                        // Note times are musical units; the transport is real seconds
-                        track.midi_notes.forEach(note => {
-                            if (note.start_time >= playheadPosition) {
-                                toneTransportRef.current.schedule(time => {
-                                    synth.triggerAttackRelease(note.note, unitsToReal(note.duration, timeScale), time);
-                                }, unitsToReal(note.start_time, timeScale));
-                            }
-                        });
-                    }
-                });
-
-                startTimeRef.current = audioContextRef.current.currentTime - unitsToReal(playheadPosition, timeScale);
-                // Start the transport AT the playhead offset (a '+delay' start would
-                // postpone MIDI instead of skipping to the right position)
-                toneTransportRef.current.start(undefined, unitsToReal(playheadPosition, timeScale));
-                setIsPaused(false);
-            }
-
-            const updatePlayhead = () => {
-                if (!isPlayingRef.current) return;
-
-                let scaledElapsed;
-                if (audioContextRef.current.state === 'running') {
-                    const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
-                    scaledElapsed = realToUnits(elapsed, timeScale);
-                    fallbackCounterRef.current = scaledElapsed;
-                } else {
-                    fallbackCounterRef.current += realToUnits(0.016, timeScale);
-                    scaledElapsed = fallbackCounterRef.current;
-                    console.warn('AudioContext suspended, using fallback counter:', scaledElapsed.toFixed(3), 's');
-                }
-                setPlayheadPosition(scaledElapsed);
-
-                // Metronome: fire clicks as the playhead crosses beat boundaries
-                const beatScaled = realToUnits(60 / bpm, timeScale); // always 0.5 units
-                while (scaledElapsed >= metronomeNextBeatRef.current * beatScaled) {
-                    if (metronomeRef.current) {
-                        try {
-                            let clickSynth = metronomeSynthRef.current;
-                            if (!clickSynth || clickSynth.disposed || clickSynth.context !== Tone.getContext()) {
-                                try { clickSynth?.dispose(); } catch (_) {}
-                                clickSynth = new Tone.Synth({
-                                    oscillator: { type: 'square' },
-                                    envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.05 },
-                                    volume: -10,
-                                }).toDestination();
-                                metronomeSynthRef.current = clickSynth;
-                            }
-                            const isBarStart = metronomeNextBeatRef.current % 4 === 0;
-                            clickSynth.triggerAttackRelease(isBarStart ? 'C6' : 'C5', '32n');
-                        } catch (err) {
-                            console.warn('Metronome click error:', err.message);
-                        }
-                    }
-                    metronomeNextBeatRef.current += 1;
-                }
-
-                Object.values(wavesurfersRef.current).forEach(ws => {
-                    try {
-                        if (!ws.instance || !ws.ready) return;
-                        const sample = projectSamples.find(s => s.id === ws.instance.sampleId);
-                        if (!sample) return;
-                        const fullDuration = sampleDurations[ws.instance.sampleId] || ws.instance.getDuration();
-                        const { trimStart, effDuration } = getClipTimes(sample, fullDuration);
-                        const startTime = sample.start_time;
-                        const endTime = startTime + realToUnits(effDuration, timeScale);
-
-                        if (scaledElapsed >= startTime && scaledElapsed < endTime && !ws.instance.isPlaying()) {
-                            const clipOffset = unitsToReal(scaledElapsed - startTime, timeScale);
-                            ws.instance.seekTo(fullDuration ? Math.min((trimStart + clipOffset) / fullDuration, 1) : 0);
-                            ws.instance.play().catch(err => {
-                                console.warn(`Error playing sample ${ws.instance.sampleId}:`, err);
-                            });
-                            scheduleClipFades(ws, sample, clipOffset, effDuration);
-                        } else if (ws.instance.isPlaying() && (scaledElapsed < startTime || scaledElapsed >= endTime)) {
-                            ws.instance.pause();
-                        }
-                    } catch (err) {
-                        console.warn('Error controlling WaveSurfer playback:', err);
-                    }
-                });
-
-                if (scaledElapsed >= maxDuration) {
-                    handleStop();
-                    return;
-                }
-
-                playbackTimerRef.current = requestAnimationFrame(updatePlayhead);
-            };
-
-            // Initialize the next metronome beat index from the current playhead
-            const beatScaledInit = realToUnits(60 / bpm, timeScale);
-            metronomeNextBeatRef.current = Math.max(0, Math.ceil((playheadPosition / beatScaledInit) - 1e-6));
-
-            playbackTimerRef.current = requestAnimationFrame(updatePlayhead);
-        }
-    };
-
-    const handlePlayAllClick = () => {
-        if (!isLoadingDurations) {
-            handlePlayAll();
-        }
-    };
-
-    const handleStop = () => {
-        Object.values(wavesurfersRef.current).forEach(ws => {
-            try {
-                if (ws.instance.isPlaying()) {
-                    ws.instance.stop();
-                }
-                ws.instance.destroy();
-            } catch (err) {
-                console.warn('Error pausing or destroying WaveSurfer:', err.message);
-            }
-        });
-        wavesurfersRef.current = {};
-
-        // Dispose of effect nodes
-        Object.values(effectsNodes.current).forEach(trackEffects => {
-            Object.values(trackEffects).forEach(effect => effect.dispose());
-        });
-        effectsNodes.current = {};
-
-        setIsPlaying(false);
-        isPlayingRef.current = false;
-        setIsPaused(false);
-        setPlayheadPosition(0);
-        startTimeRef.current = 0;
-        fallbackCounterRef.current = 0;
-        if (playbackTimerRef.current) {
-            cancelAnimationFrame(playbackTimerRef.current);
-            playbackTimerRef.current = null;
-        }
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.suspend().catch(err => {
-                console.warn('Error suspending AudioContext:', err.message);
-            });
-        }
-        toneTransportRef.current.stop();
-        toneTransportRef.current.cancel();
-    };
-
-    // Keep keyboard shortcuts pointing at the latest closures
     playAllRef.current = handlePlayAllClick;
     stopRef.current = handleStop;
-    duplicateSelectedRef.current = () => {
-        if (selectedSampleId) handleDuplicateSample(selectedSampleId);
-    };
-    deleteSelectedRef.current = () => {
-        if (selectedSampleId) {
-            handleDeleteSample(selectedSampleId);
-            setSelectedSampleId(null);
-        }
-    };
-
-    const handleSeek = async (seekTime) => {
-        if (isPlayingRef.current) {
-            try {
-                Object.values(wavesurfersRef.current).forEach(ws => {
-                    try {
-                        if (ws.instance.isPlaying()) {
-                            ws.instance.pause();
-                        }
-                    } catch (err) {
-                        console.warn('Error pausing WaveSurfer:', err.message);
-                    }
-                });
-
-                if (audioContextRef.current && audioContextRef.current.state === 'running') {
-                    await audioContextRef.current.suspend();
-                }
-
-                if (playbackTimerRef.current) {
-                    cancelAnimationFrame(playbackTimerRef.current);
-                    playbackTimerRef.current = null;
-                }
-
-                setIsPlaying(false);
-                isPlayingRef.current = false;
-                setIsPaused(true);
-                console.log('Paused: playheadPosition=', seekTime);
-            } catch (err) {
-                console.error('Error pausing playback:', err.message);
-                setNotice('Failed to pause playback');
-            }
-        }
-
-        setPlayheadPosition(seekTime);
-        setIsPaused(true);
-    };
 
     const handleTopTimelineClick = (e) => {
         if (!topTimelineRef.current) return;
@@ -2378,7 +1633,6 @@ const MultiTrackSampler = () => {
             );
             setTracks(prev => {
                 const updatedTracks = [...prev, response.data];
-                pushToHistory({ type: 'addTrack', data: response.data });
                 return updatedTracks;
             });
             setNewTrackName('');
@@ -2391,20 +1645,15 @@ const MultiTrackSampler = () => {
     };
 
     const handleDeleteTrack = async (trackId) => {
-        let samplesToDelete = projectSamples.filter(s => s.track_id === trackId);
         try {
             const token = localStorage.getItem('token');
+            // The clips go with it in the database, through
+            // fk_project_samples_track, so the local state mirrors that rather
+            // than deleting them one by one.
             await axios.delete(`${API_URL}/projects/${projectId}/tracks/${trackId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            setTracks(prev => {
-                const deletedTrack = prev.find(t => t.id === trackId);
-                if (deletedTrack) {
-                    pushToHistory({ type: 'deleteTrack', data: { track: deletedTrack, samples: samplesToDelete } });
-                    return prev.filter(t => t.id !== trackId);
-                }
-                return prev;
-            });
+            setTracks(prev => prev.filter(t => t.id !== trackId));
             setProjectSamples(prev => prev.filter(s => s.track_id !== trackId));
             setNotice(null);
         } catch (err) {
@@ -2582,9 +1831,19 @@ const MultiTrackSampler = () => {
         // trim controls), after which the exact join lands on the grid by itself.
         // Sub-millisecond rounding, since chained copies build on the previous
         // copy's stored start and coarse rounding would compound.
-        const newStartTime = Math.round(
-            (original.start_time + realToUnits(effDuration, timeScale)) * 10000
-        ) / 10000;
+        let offset = realToUnits(effDuration, timeScale);
+        if (isSnapping) {
+            // Pull the join onto the grid, but only when it is already within a
+            // breath of it. This absorbs the drift that survives encoding and
+            // trimming, so a loop that measures 3.749s instead of 3.75 still
+            // butt-joins on the beat. A clip that is genuinely an odd length
+            // stays exactly where it lands: snapping that would be re-timing the
+            // audio, not repairing it.
+            const grid = 0.125; // a 1/16 note, in timeline units
+            const snapped = Math.round(offset / grid) * grid;
+            if (snapped > 0 && Math.abs(snapped - offset) <= 0.06) offset = snapped;
+        }
+        const newStartTime = Math.round((original.start_time + offset) * 10000) / 10000;
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
@@ -2614,6 +1873,65 @@ const MultiTrackSampler = () => {
         }
     };
 
+    /**
+     * Nudge the selected clip along the timeline with the arrow keys.
+     *
+     * Beat-matching a sample against a MIDI part is a job of small repeated
+     * adjustments, and dragging with a mouse cannot do small: at 100 pixels to
+     * the unit, one screen pixel is a hundredth of a beat and the pointer moves
+     * in whole pixels only when your hand cooperates.
+     *
+     * Plain arrow moves by the grid, honouring the same Snap toggle the drag
+     * handler uses, so a nudged clip lands where a dragged one would. Shift
+     * moves by a hundredth of a unit, which is roughly ten milliseconds at 120
+     * BPM: too small to see, which is the point.
+     *
+     * Saved with PUT rather than the delete-and-recreate the drag handler uses,
+     * so the clip keeps its id and a failed save cannot lose it.
+     */
+    const nudgeSelectedSample = async (direction, fine) => {
+        const sample = projectSamples.find(s => s.id === selectedSampleId);
+        if (!sample) return;
+
+        const step = fine ? 0.01 : (isSnapping ? 0.125 : 0.05); // 1/16 note is 0.125 units
+        const previous = sample.start_time;
+        const next = Math.max(0, Math.round((previous + direction * step) * 10000) / 10000);
+        if (next === previous) return;
+
+        setProjectSamples(prev => prev.map(s => (
+            s.id === sample.id ? { ...s, start_time: next } : s
+        )));
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_URL}/projects/${projectId}/samples/${sample.id}`,
+                { start_time: next },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+        } catch (err) {
+            console.error('Nudge clip error:', err.response?.data || err.message);
+            setNotice('Failed to move clip: ' + (err.response?.data?.error || err.message));
+            setProjectSamples(prev => prev.map(s => (
+                s.id === sample.id ? { ...s, start_time: previous } : s
+            )));
+        }
+    };
+
+    // Keep the keyboard shortcuts pointing at the latest closures. These sit
+    // below the handlers they call so the reference is obvious; playAllRef and
+    // stopRef are assigned next to playback for the same reason.
+    duplicateSelectedRef.current = () => {
+        if (selectedSampleId) handleDuplicateSample(selectedSampleId);
+    };
+    deleteSelectedRef.current = () => {
+        if (selectedSampleId) {
+            handleDeleteSample(selectedSampleId);
+            setSelectedSampleId(null);
+        }
+    };
+    nudgeSelectedRef.current = nudgeSelectedSample;
+
     // Repeat a MIDI track's pattern: append a copy of all notes one pattern-length later
     const handleRepeatMidiPattern = async (trackId) => {
         const track = tracks.find(t => t.id === trackId);
@@ -2641,46 +1959,49 @@ const MultiTrackSampler = () => {
         }
     };
 
-    const handleDragSample = async (sampleId, newTrackId, newStartTime) => {        try {
-            const newTrack = tracks.find(t => t.id === newTrackId);
-            if (newTrack.track_type === 'midi') {
-                setNotice('Cannot drag samples to MIDI tracks');
-                return;
-            }
+    /**
+     * Move a clip: to a new position, a new track, or both.
+     *
+     * One PUT, keeping the clip's id. This used to delete the row and create
+     * another, which meant a failed create lost the clip outright, and left
+     * undo pointing at an id that no longer existed. The id surviving is what
+     * makes undo below able to put the clip back by simply moving it again.
+     */
+    const handleDragSample = async (sampleId, newTrackId, newStartTime) => {
+        const original = projectSamples.find(s => s.id === sampleId);
+        if (!original) return;
+
+        const newTrack = tracks.find(t => t.id === newTrackId);
+        if (newTrack?.track_type === 'midi') {
+            setNotice('Cannot drag samples to MIDI tracks');
+            return;
+        }
+
+        const before = { track_id: original.track_id, start_time: original.start_time };
+        const after = { track_id: newTrackId, start_time: newStartTime };
+        if (before.track_id === after.track_id && before.start_time === after.start_time) return;
+
+        // Trim and fade carry with the clip, so its on-screen length is the
+        // effective length rather than the file's.
+        const { effDuration } = getClipTimes(original, sampleDurations[sampleId] || 0);
+
+        setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...after } : s)));
+        extendTimelineIfNeeded(newStartTime, realToUnits(effDuration, 120 / bpm));
+
+        try {
             const token = localStorage.getItem('token');
-            await axios.delete(`${API_URL}/projects/${projectId}/samples/${sampleId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const originalSample = projectSamples.find(s => s.id === sampleId);
-            if (!originalSample) {
-                throw new Error('Sample not found');
-            }
-            // Trim/fade settings carry over to the new clip, so its on-screen
-            // length is the original's effective length
-            const { effDuration: draggedLength } = getClipTimes(originalSample, sampleDurations[sampleId] || 0);
-            const response = await axios.post(
-                `${API_URL}/projects/${projectId}/samples`,
-                {
-                    track_id: newTrackId,
-                    sample_id: originalSample.sample_id,
-                    start_time: newStartTime,
-                    fade_in: originalSample.fade_in || 0,
-                    fade_out: originalSample.fade_out || 0,
-                    trim_start: originalSample.trim_start || 0,
-                    trim_end: originalSample.trim_end ?? null,
-                },
+            const response = await axios.put(
+                `${API_URL}/projects/${projectId}/samples/${sampleId}`,
+                after,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            setProjectSamples(prev => {
-                const updatedSamples = prev.filter(s => s.id !== sampleId).concat(response.data);
-                pushToHistory({ type: 'dragSample', data: { originalSample, newSample: response.data } });
-                extendTimelineIfNeeded(newStartTime, realToUnits(draggedLength, 120 / bpm));
-                return updatedSamples;
-            });
+            setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...response.data } : s)));
+            pushToHistory({ type: 'dragSample', data: { sampleId, before, after } });
             setNotice(null);
         } catch (err) {
             console.error('Drag sample error:', err.response?.data || err.message);
             setNotice('Failed to reposition sample: ' + (err.response?.data?.error || err.message));
+            setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...before } : s)));
         }
     };
 
@@ -2845,7 +2166,7 @@ const MultiTrackSampler = () => {
                         disabled={isLoadingDurations}
                         className={`retro-btn min-w-[100px] px-4 py-2 text-[0.6rem]`}
                     >
-                        {isLoadingDurations ? 'Loading...' : isPlaying ? 'Pause' : playheadPosition > 0 ? 'Resume' : 'Play All'}
+                        {isPlaying ? 'Pause' : playheadPosition > 0 ? 'Resume' : 'Play All'}
                     </button>
                     <button
                         onClick={handleStop}
@@ -2870,10 +2191,10 @@ const MultiTrackSampler = () => {
                     </button>
                     <button
                         onClick={handleExport}
-                        disabled={isLoadingDurations}
-                        className={`retro-btn retro-btn--hot px-4 py-2 text-[0.6rem]`}
+                        disabled={isExporting}
+                        className={`retro-btn retro-btn--hot px-4 py-2 text-[0.6rem] disabled:opacity-50`}
                     >
-                        Export MP3
+                        {isExporting ? 'Exporting...' : 'Export MP3'}
                     </button>
                     <input
                         type="number"
@@ -2986,7 +2307,6 @@ const MultiTrackSampler = () => {
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    console.log('Opening track settings for track:', track.id);
                                                     setSelectedTrack(track);
                                                 }}
                                                 className="bg-[#1d0a38] text-gray-200 hover:bg-[#2a1152] rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2999,7 +2319,6 @@ const MultiTrackSampler = () => {
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     const currentTrack = tracks.find(t => t.id === track.id); // Get latest track
-                                                    console.log('Opening effects modal for track:', currentTrack.id, 'effects_settings:', currentTrack.effects_settings); // Debug log
                                                     setSelectedTrackForEffects(currentTrack);
                                                 }}
                                                 className="bg-[#1d0a38] text-gray-200 hover:bg-[#2a1152] rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3100,7 +2419,8 @@ const MultiTrackSampler = () => {
                                 })}
                                 <div
                                     className="absolute top-0 bottom-0 w-1 bg-red-500 z-20"
-                                    style={{ left: `${playheadPosition * zoom}px` }}
+                                    ref={registerPlayhead}
+                                    style={{ left: 0, transform: `translate3d(${playheadPosition * zoom}px, 0, 0)` }}
                                 />
                             </div>
                             {tracks.map((track, index) => {
@@ -3124,6 +2444,7 @@ const MultiTrackSampler = () => {
                                                 track={track}
                                                 projectId={projectId}
                                                 playheadPosition={playheadPosition}
+                                                registerPlayhead={registerPlayhead}
                                                 zoom={zoom}
                                                 bpm={bpm}
                                                 isSnapping={isSnapping}
@@ -3152,6 +2473,7 @@ const MultiTrackSampler = () => {
                                                 selectedSampleId={selectedSampleId}
                                                 onSelectSample={setSelectedSampleId}
                                                 onDuplicateClip={handleDuplicateSample}
+                                                registerPlayhead={registerPlayhead}
                                             />
                                         )}
                                     </div>

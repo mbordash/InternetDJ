@@ -52,11 +52,15 @@ router.get('/public/:projectId', async (req, res) => {
             return res.status(404).json({ error: `Public project ${projectId} not found` });
         }
         const tracks = await pool.query(
-            'SELECT id, name, track_order, track_type, midi_notes, instrument_type, is_polyphonic, synth_settings, volume, pan, is_muted FROM tracks WHERE project_id = ? ORDER BY track_order',
+            // effects_settings is part of the arrangement, not an editing
+            // convenience: without it a visitor hears every track dry while the
+            // artist hears reverb, delay and distortion. The public player can
+            // apply them now, so it needs to be told what they are.
+            'SELECT id, name, track_order, track_type, midi_notes, instrument_type, is_polyphonic, synth_settings, effects_settings, volume, pan, is_muted FROM tracks WHERE project_id = ? ORDER BY track_order',
             [projectId]
         );
         const projectSamples = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, ps.volume, sl.mp3_url, sl.name, sl.duration
              FROM project_samples ps
                       JOIN sample_library sl ON ps.sample_id = sl.id
              WHERE ps.track_id IN (SELECT id FROM tracks WHERE project_id = ?)`,
@@ -100,6 +104,20 @@ router.get('/public/:projectId', async (req, res) => {
                         synthSettings = null;
                     }
                 }
+                // Stored as JSON text, so it arrives as a string from the
+                // driver and has to be parsed before the player can read it,
+                // the same way midi_notes and synth_settings are.
+                let effectsSettings = {};
+                if (track.effects_settings) {
+                    try {
+                        effectsSettings = typeof track.effects_settings === 'string'
+                            ? JSON.parse(track.effects_settings)
+                            : track.effects_settings;
+                    } catch (e) {
+                        console.error(`Failed to parse effects_settings for track ${track.id}:`, e.message);
+                        effectsSettings = {};
+                    }
+                }
                 return {
                     id: Number(track.id),
                     name: track.name,
@@ -109,6 +127,7 @@ router.get('/public/:projectId', async (req, res) => {
                     instrument_type: track.instrument_type || 'synth',
                     is_polyphonic: Boolean(track.is_polyphonic),
                     synth_settings: synthSettings,
+                    effects_settings: effectsSettings,
                     volume: track.volume == null ? 1.0 : Number(track.volume),
                     pan: track.pan == null ? 0 : Number(track.pan),
                     is_muted: Boolean(track.is_muted),
@@ -123,6 +142,7 @@ router.get('/public/:projectId', async (req, res) => {
                 fade_out: Number(sample.fade_out) || 0,
                 trim_start: Number(sample.trim_start) || 0,
                 trim_end: sample.trim_end == null ? null : Number(sample.trim_end),
+                volume: sample.volume == null ? 1 : Number(sample.volume),
                 mp3_url: sample.mp3_url,
                 name: sample.name,
                 duration: sample.duration == null ? null : Number(sample.duration),
@@ -206,7 +226,7 @@ router.get('/:projectId', authenticate, async (req, res) => {
             [projectId]
         );
         const projectSamples = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, ps.volume, sl.mp3_url, sl.name, sl.duration
              FROM project_samples ps
                       JOIN sample_library sl ON ps.sample_id = sl.id
              WHERE ps.track_id IN (SELECT id FROM tracks WHERE project_id = ?)`,
@@ -305,6 +325,7 @@ router.get('/:projectId', authenticate, async (req, res) => {
                 fade_out: Number(sample.fade_out) || 0,
                 trim_start: Number(sample.trim_start) || 0,
                 trim_end: sample.trim_end == null ? null : Number(sample.trim_end),
+                volume: sample.volume == null ? 1 : Number(sample.volume),
                 duration: sample.duration == null ? null : Number(sample.duration),
             })),
             librarySamples: librarySamples.map(sample => ({
@@ -689,6 +710,14 @@ router.put('/:projectId/tracks/:trackId', authenticate, async (req, res) => {
 // Validate optional per-clip fade/trim fields; returns { error } or normalized values
 function validateClipFields(body) {
     const out = {};
+    if (body.volume !== undefined) {
+        // Above 1 is a boost, which is legitimate on a quiet take, but the
+        // ceiling keeps a typo from arriving as a wall of clipping.
+        if (typeof body.volume !== 'number' || !isFinite(body.volume) || body.volume < 0 || body.volume > 4) {
+            return { error: 'volume must be a number between 0 and 4' };
+        }
+        out.volume = body.volume;
+    }
     for (const field of ['fade_in', 'fade_out', 'trim_start']) {
         if (body[field] !== undefined) {
             if (typeof body[field] !== 'number' || !isFinite(body[field]) || body[field] < 0) {
@@ -749,7 +778,7 @@ router.post('/:projectId/samples', authenticate, async (req, res) => {
             [track_id, sample_id, start_time, clipFields.fade_in ?? 0, clipFields.fade_out ?? 0, clipFields.trim_start ?? 0, clipFields.trim_end ?? null]
         );
         const newSample = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, ps.volume, sl.mp3_url, sl.name, sl.duration
        FROM project_samples ps
        JOIN sample_library sl ON ps.sample_id = sl.id
        WHERE ps.id = ?`,
@@ -765,6 +794,7 @@ router.post('/:projectId/samples', authenticate, async (req, res) => {
             fade_out: Number(newSample[0].fade_out) || 0,
             trim_start: Number(newSample[0].trim_start) || 0,
             trim_end: newSample[0].trim_end == null ? null : Number(newSample[0].trim_end),
+            volume: newSample[0].volume == null ? 1 : Number(newSample[0].volume),
         });
     } catch (err) {
         console.error('Error in POST /projects/:projectId/samples:', err);
@@ -775,7 +805,7 @@ router.post('/:projectId/samples', authenticate, async (req, res) => {
 // Update a placed sample's clip settings (fades/trim) and/or position
 router.put('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
     const { projectId, sampleId } = req.params;
-    const { start_time } = req.body;
+    const { start_time, track_id } = req.body;
     try {
         const project = await pool.query(
             'SELECT id FROM projects WHERE id = ? AND user_id = ?',
@@ -799,11 +829,31 @@ router.put('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'start_time must be a non-negative number' });
         }
 
+        // Moving between tracks is an update, not a new clip. Dragging used to
+        // delete the row and create another, which lost the id, orphaned undo
+        // and could drop the clip entirely if the create failed.
+        if (track_id !== undefined) {
+            const target = await pool.query(
+                'SELECT id, track_type FROM tracks WHERE id = ? AND project_id = ?',
+                [track_id, projectId]
+            );
+            if (!target.length) {
+                return res.status(404).json({ error: 'Target track not found' });
+            }
+            if (target[0].track_type === 'midi') {
+                return res.status(400).json({ error: 'Audio clips cannot be placed on a MIDI track' });
+            }
+        }
+
         const updates = [];
         const values = [];
         if (start_time !== undefined) {
             updates.push('start_time = ?');
             values.push(start_time);
+        }
+        if (track_id !== undefined) {
+            updates.push('track_id = ?');
+            values.push(track_id);
         }
         for (const [field, value] of Object.entries(clipFields)) {
             updates.push(`${field} = ?`);
@@ -816,7 +866,7 @@ router.put('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
         await pool.query(`UPDATE project_samples SET ${updates.join(', ')} WHERE id = ?`, values);
 
         const updated = await pool.query(
-            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, sl.mp3_url, sl.name, sl.duration
+            `SELECT ps.id, ps.track_id, ps.sample_id, ps.start_time, ps.fade_in, ps.fade_out, ps.trim_start, ps.trim_end, ps.volume, sl.mp3_url, sl.name, sl.duration
              FROM project_samples ps
              JOIN sample_library sl ON ps.sample_id = sl.id
              WHERE ps.id = ?`,
@@ -832,6 +882,7 @@ router.put('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
             fade_out: Number(updated[0].fade_out) || 0,
             trim_start: Number(updated[0].trim_start) || 0,
             trim_end: updated[0].trim_end == null ? null : Number(updated[0].trim_end),
+            volume: updated[0].volume == null ? 1 : Number(updated[0].volume),
         });
     } catch (err) {
         console.error('Error in PUT /projects/:projectId/samples/:sampleId:', err);

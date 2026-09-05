@@ -8,6 +8,7 @@ const PianoRoll = ({
                        track,
                        projectId,
                        playheadPosition,
+                       registerPlayhead,
                        zoom,
                        bpm,
                        isSnapping,
@@ -127,9 +128,10 @@ const PianoRoll = ({
             ctx.strokeRect(lx, ly, lw, lh);
         }
 
-        ctx.fillStyle = '#ef4444';
-        const playheadX = playheadPosition * pixelsPerSecond;
-        ctx.fillRect(playheadX, 0, 4, currentHeight);
+        // The playhead is not painted here. It is a DOM element overlaid on this
+        // canvas and moved by a transform, so it can run at the frame rate
+        // without dragging a full repaint of the grid and every note along with
+        // it. Drawing it here meant the roll redrew as often as the line moved.
 
         ctx.restore();
     };
@@ -210,7 +212,7 @@ const PianoRoll = ({
 
     useEffect(() => {
         drawGrid();
-    }, [notes, playheadPosition, zoom, bpm, timelineDuration, isMinimized, track.instrument_type, selectedIndices, lassoRect]);
+    }, [notes, zoom, bpm, timelineDuration, isMinimized, track.instrument_type, selectedIndices, lassoRect]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -331,6 +333,25 @@ const PianoRoll = ({
                     pointerEvents: isMinimized ? 'none' : 'auto',
                 }}
             />
+            {/* Over the canvas, not in it. Registered with the playback engine,
+                which writes a transform every animation frame, so this sweeps
+                at the frame rate while the grid underneath is repainted only
+                when the notes themselves change. */}
+            <div
+                ref={registerPlayhead}
+                aria-hidden="true"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '4px',
+                    height: `${currentHeight}px`,
+                    background: '#ef4444',
+                    zIndex: 30,
+                    pointerEvents: 'none',
+                    transform: `translate3d(${playheadPosition * pixelsPerSecond}px, 0, 0)`,
+                }}
+            />
         </div>
     );
 };
@@ -339,6 +360,7 @@ PianoRoll.propTypes = {
     track: PropTypes.object.isRequired,
     projectId: PropTypes.string.isRequired,
     playheadPosition: PropTypes.number.isRequired,
+    registerPlayhead: PropTypes.func,
     zoom: PropTypes.number.isRequired,
     bpm: PropTypes.number.isRequired,
     isSnapping: PropTypes.bool.isRequired,
