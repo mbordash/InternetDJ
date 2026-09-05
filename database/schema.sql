@@ -392,7 +392,9 @@ CREATE TABLE IF NOT EXISTS `project_samples` (
   `fade_out` float NOT NULL DEFAULT 0,
   `trim_start` float NOT NULL DEFAULT 0,
   `trim_end` float DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_project_samples_track` (`track_id`),
+  CONSTRAINT `fk_project_samples_track` FOREIGN KEY (`track_id`) REFERENCES `tracks` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `releases` (

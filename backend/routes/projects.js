@@ -394,22 +394,31 @@ router.post('/:projectId/tracks', authenticate, async (req, res) => {
 router.delete('/:projectId/tracks/:trackId', authenticate, async (req, res) => {
     const { projectId, trackId } = req.params;
     try {
+        // pool.query resolves to the rows themselves, so an empty result is []
+        // and truthy. Checking the array rather than its length let anyone
+        // delete any track in anyone's project by id, because the statement
+        // below is keyed on trackId alone.
         const project = await pool.query(
             'SELECT id FROM projects WHERE id = ? AND user_id = ?',
             [projectId, req.user.id]
         );
-        if (!project) {
+        if (!project.length) {
             return res.status(404).json({ error: 'Project not found' });
         }
         const track = await pool.query(
             'SELECT id FROM tracks WHERE id = ? AND project_id = ?',
             [trackId, projectId]
         );
-        if (!track) {
+        if (!track.length) {
             return res.status(404).json({ error: 'Track not found' });
         }
+        // The clips go with it, through fk_project_samples_track.
         await pool.query('DELETE FROM tracks WHERE id = ?', [trackId]);
-        const [tracks] = await pool.query(
+        // Destructuring here took the first row object instead of the array, so
+        // .length was undefined and the renumbering below never ran. Deleting
+        // the last track left it undefined and threw, answering 500 after the
+        // row was already gone.
+        const tracks = await pool.query(
             'SELECT id FROM tracks WHERE project_id = ? ORDER BY track_order',
             [projectId]
         );
@@ -834,18 +843,20 @@ router.put('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
 router.delete('/:projectId/samples/:sampleId', authenticate, async (req, res) => {
     const { projectId, sampleId } = req.params;
     try {
+        // Same array-is-truthy bug as the track delete above: this guarded
+        // nothing, and the statement below is keyed on sampleId alone.
         const project = await pool.query(
             'SELECT id FROM projects WHERE id = ? AND user_id = ?',
             [projectId, req.user.id]
         );
-        if (!project) {
+        if (!project.length) {
             return res.status(404).json({ error: 'Project not found' });
         }
         const sample = await pool.query(
             'SELECT id FROM project_samples WHERE id = ? AND track_id IN (SELECT id FROM tracks WHERE project_id = ?)',
             [sampleId, projectId]
         );
-        if (!sample) {
+        if (!sample.length) {
             return res.status(404).json({ error: 'Sample not found' });
         }
         await pool.query('DELETE FROM project_samples WHERE id = ?', [sampleId]);

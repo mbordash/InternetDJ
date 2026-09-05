@@ -313,10 +313,14 @@ const Timeline = ({ trackId, samples, onDrop, onDrag, zoom, sampleDurations, isL
                 start_time = Math.round(start_time / snapIntervalScaled) * snapIntervalScaled;
             }
 
+            // Four decimals, not two. Snapping produces multiples of 0.125,
+            // and rounding those to 0.01 moved every other position back off
+            // the grid it had just been snapped to: 0.125 became 0.13, 0.375
+            // became 0.38.
             if (start_time < 0.05) {
                 start_time = 0.0;
             } else {
-                start_time = Math.round(start_time * 100) / 100;
+                start_time = Math.round(start_time * 10000) / 10000;
             }
 
             const result = { trackId, start_time: Math.max(0, start_time), sampleId: item.sampleId };
@@ -485,6 +489,10 @@ const MultiTrackSampler = () => {
     const [project, setProject] = useState(null);
     const [editTitle, setEditTitle] = useState('');
     const [tracks, setTracks] = useState([]);
+    // Mirrors `tracks` for handlers that need the current value rather than the
+    // one captured when they were created, such as committing a track rename
+    // from a blur that fires after several state updates.
+    const tracksRef = useRef([]);
 
     const [projectSamples, setProjectSamples] = useState([]);
     const [librarySamples, setLibrarySamples] = useState([]);
@@ -532,7 +540,19 @@ const MultiTrackSampler = () => {
     };
     const [newTrackName, setNewTrackName] = useState('');
     const [newTrackType, setNewTrackType] = useState('sample');
-    const [error, setError] = useState(null);
+    // Two kinds of bad news, told two different ways.
+    //
+    // `loadError` means the project itself could not be fetched, so there is no
+    // editor to show and the page is replaced. `notice` is everything else: a
+    // failed mute toggle, an empty track name, a clip dropped on a MIDI track.
+    //
+    // These used to share one state, and any of them replaced the whole editor
+    // with one line of red text and a Back to Projects link. Nothing cleared it,
+    // so a mistyped track name meant leaving and reopening the project, while
+    // playback carried on unseen underneath, because the rAF loop and the
+    // WaveSurfer instances live in refs that a re-render does not touch.
+    const [loadError, setLoadError] = useState(null);
+    const [notice, setNotice] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [playheadPosition, setPlayheadPosition] = useState(0);
@@ -577,6 +597,17 @@ const MultiTrackSampler = () => {
     const duplicateSelectedRef = useRef(null);
     const deleteSelectedRef = useRef(null);
     const initializedTracks = useRef(new Set());
+
+    useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+
+    // Notices clear themselves. Most are transient by nature and the successful
+    // retry already sets them to null; this covers the ones with no follow-up
+    // action, so a stale message does not sit above the timeline all session.
+    useEffect(() => {
+        if (!notice) return undefined;
+        const timer = setTimeout(() => setNotice(null), 8000);
+        return () => clearTimeout(timer);
+    }, [notice]);
 
     // Initialize minimized state for MIDI tracks
     useEffect(() => {
@@ -669,11 +700,11 @@ const MultiTrackSampler = () => {
                 { is_muted: newMuted },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Toggle mute error:', err.response?.data || err.message);
             setTracks(prev => prev.map(t => (t.id === trackId ? { ...t, is_muted: !newMuted } : t)));
-            setError('Failed to update mute: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to update mute: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -692,13 +723,13 @@ const MultiTrackSampler = () => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setProjectSamples(prev => prev.map(s => (s.id === sampleId ? { ...s, ...response.data } : s)));
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Update clip settings error:', err.response?.data || err.message);
             if (prevSample) {
                 setProjectSamples(prev => prev.map(s => (s.id === sampleId ? prevSample : s)));
             }
-            setError('Failed to update clip settings: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to update clip settings: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -861,7 +892,7 @@ const MultiTrackSampler = () => {
                     : err.response?.status === 403
                         ? `You do not have permission to access project ${projectId}.`
                         : 'Failed to fetch project: ' + (err.response?.data?.error || err.message);
-                setError(errorMessage);
+                setLoadError(errorMessage);
             }
         };
         if (user) fetchProject();
@@ -950,10 +981,10 @@ const MultiTrackSampler = () => {
             setBpm(project.bpm || 120);
             setEditTitle(project.title);
 
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Update effects settings error:', err.response?.data || err.message);
-            setError(`Failed to save effects: ${err.response?.data?.error || err.message}`);
+            setNotice(`Failed to save effects: ${err.response?.data?.error || err.message}`);
             // Revert optimistic update
             setTracks(prev => {
                 const revertedTracks = prev.map(t =>
@@ -1000,7 +1031,7 @@ const MultiTrackSampler = () => {
             );
         } catch (err) {
             console.error('Update instrument error:', err.response?.data || err.message);
-            setError(`Failed to save instrument: ${err.response?.data?.error || err.message}`);
+            setNotice(`Failed to save instrument: ${err.response?.data?.error || err.message}`);
         }
     };
 
@@ -1019,7 +1050,7 @@ const MultiTrackSampler = () => {
             );
         } catch (err) {
             console.error('Update polyphonic error:', err.response?.data || err.message);
-            setError(`Failed to save polyphonic setting: ${err.response?.data?.error || err.message}`);
+            setNotice(`Failed to save polyphonic setting: ${err.response?.data?.error || err.message}`);
         }
     };
 
@@ -1083,10 +1114,10 @@ const MultiTrackSampler = () => {
                 settings,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Update track settings error:', err.response?.data || err.message);
-            setError(`Failed to save settings: ${err.response?.data?.error || err.message}`);
+            setNotice(`Failed to save settings: ${err.response?.data?.error || err.message}`);
             // Revert optimistic updates on error
             setTrackVolumes(prev => ({ ...prev, [trackId]: previousSettings.volume }));
             setTrackPans(prev => ({ ...prev, [trackId]: previousSettings.pan }));
@@ -1119,7 +1150,7 @@ const MultiTrackSampler = () => {
 
     const handleSaveTitle = async () => {
         if (!editTitle.trim()) {
-            setError('Project title cannot be empty');
+            setNotice('Project title cannot be empty');
             setSaveState('idle');
             return false;
         }
@@ -1138,13 +1169,13 @@ const MultiTrackSampler = () => {
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 setProject(prev => ({ ...prev, title: editTitle.trim() }));
-                setError(null);
+                setNotice(null);
                 setLastSavedAt(new Date());
                 setSaveState('saved');
                 return true;
             } catch (err) {
                 console.error('Save title error:', err.response?.data || err.message);
-                setError('Failed to save project title: ' + (err.response?.data?.error || err.message));
+                setNotice('Failed to save project title: ' + (err.response?.data?.error || err.message));
                 setSaveState('idle');
                 return false;
             }
@@ -1199,36 +1230,88 @@ const MultiTrackSampler = () => {
             });
         } catch (err) {
             console.error('Update volume error:', err.response?.data || err.message);
-            setError(`Failed to save volume: ${err.response?.data?.error || err.message}`);
+            setNotice(`Failed to save volume: ${err.response?.data?.error || err.message}`);
         }
     };
 
-    // Persist the project tempo. Debounced because the number input fires on
-    // every keystroke, and clamped to the same range the API accepts.
+    // Persist the project tempo.
+    //
+    // The field keeps its own draft string rather than being driven straight
+    // from `bpm`. Clamping on every keystroke made anything under 100
+    // untypeable: "9" became 60 immediately, and the "0" that followed made
+    // "600", which clamped to 240. Emptying the field to retype snapped it to
+    // 120. The draft lets a half-typed number exist, and the clamp happens once
+    // the value is committed.
+    //
+    // A value that is already valid still updates `bpm` live, so playback and
+    // the grid follow along while typing, and still autosaves on the debounce.
+    // Commit on blur or Enter covers everything else.
     const bpmSaveTimerRef = useRef(null);
-    const handleBpmChange = (value) => {
-        const clamped = Math.max(60, Math.min(240, Math.round(value || 0) || 120));
-        setBpm(clamped);
-        setProject(prev => (prev ? { ...prev, bpm: clamped } : prev));
+    const pendingBpmRef = useRef(null);
+    const [bpmDraft, setBpmDraft] = useState('');
+
+    // Follow the project's tempo whenever it changes from anywhere but this
+    // field: initial load, and the reset after a commit.
+    useEffect(() => { setBpmDraft(String(bpm)); }, [bpm]);
+
+    const saveBpm = (value) => {
+        pendingBpmRef.current = value;
         if (bpmSaveTimerRef.current) clearTimeout(bpmSaveTimerRef.current);
-        bpmSaveTimerRef.current = setTimeout(async () => {
-            try {
-                const token = localStorage.getItem('token');
-                await axios.put(
-                    `${API_URL}/projects/${projectId}`,
-                    { bpm: clamped },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-            } catch (err) {
-                console.error('Save BPM error:', err.response?.data || err.message);
-                setError('Failed to save BPM: ' + (err.response?.data?.error || err.message));
-            }
-        }, 600);
+        bpmSaveTimerRef.current = setTimeout(() => flushBpmSave(), 600);
     };
 
-    useEffect(() => () => {
-        if (bpmSaveTimerRef.current) clearTimeout(bpmSaveTimerRef.current);
-    }, []);
+    const flushBpmSave = async () => {
+        if (bpmSaveTimerRef.current) {
+            clearTimeout(bpmSaveTimerRef.current);
+            bpmSaveTimerRef.current = null;
+        }
+        const value = pendingBpmRef.current;
+        if (value == null) return;
+        pendingBpmRef.current = null;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(
+                `${API_URL}/projects/${projectId}`,
+                { bpm: value },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+        } catch (err) {
+            console.error('Save BPM error:', err.response?.data || err.message);
+            setNotice('Failed to save BPM: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
+    // While typing: accept anything, and only act on a value already in range.
+    const handleBpmInput = (text) => {
+        setBpmDraft(text);
+        const parsed = Number(text);
+        if (text.trim() === '' || !Number.isFinite(parsed)) return;
+        if (parsed < 60 || parsed > 240) return;
+        const value = Math.round(parsed);
+        setBpm(value);
+        setProject(prev => (prev ? { ...prev, bpm: value } : prev));
+        saveBpm(value);
+    };
+
+    // On blur or Enter: clamp whatever is there and make it the tempo.
+    const handleBpmCommit = () => {
+        const parsed = Number(bpmDraft);
+        const value = Number.isFinite(parsed) && bpmDraft.trim() !== ''
+            ? Math.max(60, Math.min(240, Math.round(parsed)))
+            : bpm;
+        setBpmDraft(String(value));
+        if (value !== bpm) {
+            setBpm(value);
+            setProject(prev => (prev ? { ...prev, bpm: value } : prev));
+            saveBpm(value);
+        }
+    };
+
+    // Flush rather than drop. Clearing the timer alone lost a tempo change made
+    // within 600ms of clicking Save & Exit or any nav link.
+    const flushBpmRef = useRef(flushBpmSave);
+    flushBpmRef.current = flushBpmSave;
+    useEffect(() => () => { flushBpmRef.current(); }, []);
 
     const handleTogglePublic = async () => {
         try {
@@ -1242,7 +1325,7 @@ const MultiTrackSampler = () => {
             setProject(prev => ({ ...prev, is_public: !isPublic }));
         } catch (err) {
             console.error('Toggle public error:', err.response?.data || err.message);
-            setError('Failed to update project visibility: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to update project visibility: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -1374,13 +1457,13 @@ const MultiTrackSampler = () => {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                setError('MP3 encoding failed, exported as WAV instead');
+                setNotice('MP3 encoding failed, exported as WAV instead');
             }
 
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Export error:', err.message);
-            setError('Failed to export project: ' + err.message);
+            setNotice('Failed to export project: ' + err.message);
         } finally {
             setIsLoadingDurations(false);
         }
@@ -1496,7 +1579,7 @@ const MultiTrackSampler = () => {
             handleNotesChange(trackId, notesToSave);
         } catch (err) {
             console.error('Failed to save MIDI notes:', err.response?.data || err.message);
-            setError('Failed to save MIDI notes: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to save MIDI notes: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -1545,7 +1628,7 @@ const MultiTrackSampler = () => {
             return [...prev, response.data];
         });
         setSelectedSampleId(response.data.id);
-        setError(null);
+        setNotice(null);
     };
 
     const handlePlayAll = async () => {
@@ -1582,7 +1665,7 @@ const MultiTrackSampler = () => {
                 setIsPaused(true);
             } catch (err) {
                 console.error('Error pausing playback:', err.message);
-                setError('Failed to pause playback');
+                setNotice('Failed to pause playback');
             }
         } else {
             setIsPlaying(true);
@@ -1611,7 +1694,7 @@ const MultiTrackSampler = () => {
                     await Tone.start();
                 } catch (err2) {
                     console.error('Failed to start Tone audio:', err2);
-                    setError('Failed to start audio. Please click Play again.');
+                    setNotice('Failed to start audio. Please click Play again.');
                     setIsPlaying(false);
                     isPlayingRef.current = false;
                     return;
@@ -1626,7 +1709,7 @@ const MultiTrackSampler = () => {
                     await audioContextRef.current.resume();
                 } catch (err) {
                     console.error('Error resuming AudioContext:', err);
-                    setError('Failed to resume audio context');
+                    setNotice('Failed to resume audio context');
                     setIsPlaying(false);
                     isPlayingRef.current = false;
                     return;
@@ -1871,7 +1954,7 @@ const MultiTrackSampler = () => {
                     await Promise.all(playPromises);
                 } catch (err) {
                     console.error('Error initializing samples:', err);
-                    setError('Failed to initialize samples');
+                    setNotice('Failed to initialize samples');
                     setIsPlaying(false);
                     isPlayingRef.current = false;
                     return;
@@ -2253,7 +2336,7 @@ const MultiTrackSampler = () => {
                 console.log('Paused: playheadPosition=', seekTime);
             } catch (err) {
                 console.error('Error pausing playback:', err.message);
-                setError('Failed to pause playback');
+                setNotice('Failed to pause playback');
             }
         }
 
@@ -2274,14 +2357,16 @@ const MultiTrackSampler = () => {
             clickedTime = Math.round(clickedTime / snapIntervalScaled) * snapIntervalScaled;
         }
 
-        clickedTime = Math.max(0, Math.round(clickedTime * 100) / 100);
+        // Four decimals, matching the drop handler, so a snapped seek lands on
+        // the same grid line a snapped clip does.
+        clickedTime = Math.max(0, Math.round(clickedTime * 10000) / 10000);
         handleSeek(clickedTime);
     };
 
     const handleAddTrack = async (e) => {
         e.preventDefault();
         if (!newTrackName) {
-            setError('Track name is required');
+            setNotice('Track name is required');
             return;
         }
         try {
@@ -2298,10 +2383,10 @@ const MultiTrackSampler = () => {
             });
             setNewTrackName('');
             setNewTrackType('sample');
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Add track error:', err.message);
-            setError('Failed to add track: ' + err.message);
+            setNotice('Failed to add track: ' + err.message);
         }
     };
 
@@ -2321,31 +2406,58 @@ const MultiTrackSampler = () => {
                 return prev;
             });
             setProjectSamples(prev => prev.filter(s => s.track_id !== trackId));
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Delete track error:', err.response?.data || err.message);
-            setError('Failed to delete track: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to delete track: ' + (err.response?.data?.error || err.message));
         }
     };
 
-    const handleRenameTrack = async (trackId, newName) => {
-        if (!newName) return;
+    // Renaming a track.
+    //
+    // This used to PUT on every keystroke and only update state after the
+    // response, using the `tracks` array captured when the handler was created.
+    // Typed characters appeared a round trip late, responses arriving out of
+    // order could revert text, and the empty-string guard meant the last
+    // character could never be deleted.
+    //
+    // Now the field is local and immediate, and the save happens once, on blur
+    // or Enter. The name held at focus is what an empty field reverts to.
+    const renameOriginalRef = useRef({});
+
+    const handleTrackNameFocus = (trackId, currentName) => {
+        renameOriginalRef.current[trackId] = currentName;
+    };
+
+    const handleTrackNameInput = (trackId, newName) => {
+        setTracks(prev => prev.map(track => (
+            track.id === trackId ? { ...track, name: newName } : track
+        )));
+    };
+
+    const handleTrackNameCommit = async (trackId) => {
+        const original = renameOriginalRef.current[trackId];
+        const current = (tracksRef.current.find(t => t.id === trackId)?.name ?? '').trim();
+
+        // An empty name is not a rename, it is a half-finished edit.
+        if (!current) {
+            if (original != null) handleTrackNameInput(trackId, original);
+            return;
+        }
+        if (current === original) return;
+
         try {
             const token = localStorage.getItem('token');
             await axios.put(
                 `${API_URL}/projects/${projectId}/tracks/${trackId}`,
-                { name: newName },
+                { name: current },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            setTracks(
-                tracks.map((track) =>
-                    track.id === trackId ? { ...track, name: newName } : track
-                )
-            );
-            setError(null);
+            renameOriginalRef.current[trackId] = current;
         } catch (err) {
             console.error('Rename track error:', err.response?.data || err.message);
-            setError('Failed to rename track: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to rename track: ' + (err.response?.data?.error || err.message));
+            if (original != null) handleTrackNameInput(trackId, original);
         }
     };
 
@@ -2358,7 +2470,7 @@ const MultiTrackSampler = () => {
                 (isWav(file) && file.size <= 50 * 1024 * 1024)
         );
         if (validFiles.length !== files.length) {
-            setError('Some files are invalid (MP3 max 10MB, WAV max 50MB)');
+            setNotice('Some files are invalid (MP3 max 10MB, WAV max 50MB)');
             return;
         }
         try {
@@ -2376,12 +2488,15 @@ const MultiTrackSampler = () => {
                         },
                     }
                 );
-                setLibrarySamples([...librarySamples, response.data]);
+                // Functional update: this runs inside the upload loop, and
+                // spreading the captured array meant every iteration rebuilt the
+                // list from its pre-upload state, keeping only the last file.
+                setLibrarySamples(prev => [...prev, response.data]);
             }
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Upload samples error:', err.response?.data || err.message);
-            setError('Failed to upload samples: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to upload samples: ' + (err.response?.data?.error || err.message));
         }
         e.target.value = '';
     };
@@ -2392,11 +2507,11 @@ const MultiTrackSampler = () => {
             await axios.delete(`${API_URL}/sample-library/${sampleId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            setLibrarySamples(librarySamples.filter((sample) => sample.id !== sampleId));
-            setError(null);
+            setLibrarySamples(prev => prev.filter((sample) => sample.id !== sampleId));
+            setNotice(null);
         } catch (err) {
             console.error('Delete sample error:', err.response?.data || err.message);
-            setError(err.response?.data?.error || 'Failed to delete sample');
+            setNotice(err.response?.data?.error || 'Failed to delete sample');
         }
     };
 
@@ -2404,7 +2519,7 @@ const MultiTrackSampler = () => {
         try {
             const track = tracks.find(t => t.id === trackId);
             if (track.track_type === 'midi') {
-                setError('Cannot drop samples on MIDI tracks');
+                setNotice('Cannot drop samples on MIDI tracks');
                 return;
             }
             const token = localStorage.getItem('token');
@@ -2422,10 +2537,10 @@ const MultiTrackSampler = () => {
                 extendTimelineIfNeeded(start_time, realToUnits(droppedLength, 120 / bpm));
                 return updatedSamples;
             });
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Place sample error:', err.response?.data || err.message);
-            setError('Failed to place sample: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to place sample: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -2440,10 +2555,10 @@ const MultiTrackSampler = () => {
                 pushToHistory({ type: 'deleteSample', data: deletedSample });
                 return prev.filter(s => s.id !== sampleId);
             });
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Remove sample error:', err.response?.data || err.message);
-            setError('Failed to remove sample: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to remove sample: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -2453,7 +2568,7 @@ const MultiTrackSampler = () => {
         if (!original) return;
         const fullDuration = sampleDurations[original.id] || 0;
         if (!fullDuration) {
-            setError('Sample still loading — try again in a moment');
+            setNotice('Sample still loading — try again in a moment');
             return;
         }
         const { effDuration } = getClipTimes(original, fullDuration);
@@ -2492,10 +2607,10 @@ const MultiTrackSampler = () => {
             });
             // Select the new copy so Cmd+D can be chained to keep extending
             setSelectedSampleId(response.data.id);
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Duplicate sample error:', err.response?.data || err.message);
-            setError('Failed to duplicate sample: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to duplicate sample: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -2504,7 +2619,7 @@ const MultiTrackSampler = () => {
         const track = tracks.find(t => t.id === trackId);
         const notes = Array.isArray(track?.midi_notes) ? track.midi_notes : [];
         if (notes.length === 0) {
-            setError('No notes to repeat on this track');
+            setNotice('No notes to repeat on this track');
             return;
         }
         const barLength = 2; // 4 beats in timeline units, at any tempo
@@ -2519,17 +2634,17 @@ const MultiTrackSampler = () => {
         const newNotes = [...notes, ...shifted];
         try {
             await handleApplyGeneratedNotes(trackId, newNotes);
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Repeat MIDI pattern error:', err.response?.data || err.message);
-            setError('Failed to repeat pattern: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to repeat pattern: ' + (err.response?.data?.error || err.message));
         }
     };
 
     const handleDragSample = async (sampleId, newTrackId, newStartTime) => {        try {
             const newTrack = tracks.find(t => t.id === newTrackId);
             if (newTrack.track_type === 'midi') {
-                setError('Cannot drag samples to MIDI tracks');
+                setNotice('Cannot drag samples to MIDI tracks');
                 return;
             }
             const token = localStorage.getItem('token');
@@ -2562,10 +2677,10 @@ const MultiTrackSampler = () => {
                 extendTimelineIfNeeded(newStartTime, realToUnits(draggedLength, 120 / bpm));
                 return updatedSamples;
             });
-            setError(null);
+            setNotice(null);
         } catch (err) {
             console.error('Drag sample error:', err.response?.data || err.message);
-            setError('Failed to reposition sample: ' + (err.response?.data?.error || err.message));
+            setNotice('Failed to reposition sample: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -2635,10 +2750,11 @@ const MultiTrackSampler = () => {
         );
     }
 
-    if (error) {
+    // Only a project that would not load takes the whole page.
+    if (loadError) {
         return (
             <div className="container mx-auto px-4 py-8 text-center text-gray-100 pt-2">
-                <p className="text-red-500 text-lg">{error}</p>
+                <p className="text-red-500 text-lg" role="alert">{loadError}</p>
                 <Link to="/projects" className="retro-btn retro-btn--hot mt-4 inline-block py-2 px-4 text-xs">
                     Back to Projects
                 </Link>
@@ -2707,7 +2823,22 @@ const MultiTrackSampler = () => {
                         )}
                     </span>
                 </div>
-                {error && <p className="retro-mono text-xl text-fuchsia-400 mb-4">{error}</p>}
+                {notice && (
+                    <div
+                        role="alert"
+                        className="retro-panel retro-cut mb-4 flex items-start gap-3 p-3 border border-fuchsia-400/40"
+                    >
+                        <p className="retro-mono text-sm text-fuchsia-300 flex-1">{notice}</p>
+                        <button
+                            type="button"
+                            onClick={() => setNotice(null)}
+                            aria-label="Dismiss message"
+                            className="retro-btn px-2 py-1 text-[0.6rem] shrink-0"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
                 <div className="retro-panel retro-cut mb-8 flex flex-wrap items-center gap-3 p-4">
                     <button
                         onClick={handlePlayAllClick}
@@ -2746,10 +2877,13 @@ const MultiTrackSampler = () => {
                     </button>
                     <input
                         type="number"
-                        value={bpm}
-                        onChange={(e) => handleBpmChange(Number(e.target.value))}
+                        value={bpmDraft}
+                        onChange={(e) => handleBpmInput(e.target.value)}
+                        onBlur={handleBpmCommit}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         className="w-20 px-2 py-1 bg-[#1d0a38] text-white border border-cyan-400/30 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
                         placeholder="BPM"
+                        aria-label="Tempo in beats per minute"
                         min="60"
                         max="240"
                         disabled={isLoadingDurations}
@@ -2811,7 +2945,11 @@ const MultiTrackSampler = () => {
                                             <input
                                                 type="text"
                                                 value={track.name}
-                                                onChange={(e) => handleRenameTrack(track.id, e.target.value)}
+                                                aria-label={`Name of track ${track.name}`}
+                                                onFocus={() => handleTrackNameFocus(track.id, track.name)}
+                                                onChange={(e) => handleTrackNameInput(track.id, e.target.value)}
+                                                onBlur={() => handleTrackNameCommit(track.id)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                                                 className="w-24 px-2 py-1 bg-[#140628] text-gray-200 border border-cyan-400/30 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
                                                 disabled={isLoadingDurations}
                                             />
