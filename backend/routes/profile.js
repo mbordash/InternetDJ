@@ -56,7 +56,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
                  JOIN profiles p2 ON pl.profile_id = p2.id
           WHERE p2.user_id = ? AND pl.name = 'Likes'
         )
-          AND s.mp3_url IS NOT NULL
+          AND s.mp3_url IS NOT NULL AND s.visibility = 'public'
         ORDER BY
           CASE
       `;
@@ -100,7 +100,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
                  JOIN profiles p2 ON pl.profile_id = p2.id
           WHERE p2.user_id = ? AND pl.name = 'Likes'
         )
-          AND s.mp3_url IS NOT NULL
+          AND s.mp3_url IS NOT NULL AND s.visibility = 'public'
         ORDER BY RAND()
           LIMIT 10
       `, [userId]);
@@ -118,7 +118,7 @@ router.get('/:userId/recommended-songs', authenticate, async (req, res) => {
            WHERE pl2.name = 'Likes' AND ps2.song_id = s.id) AS likes_count
         FROM songs s
                LEFT JOIN profiles p ON s.profile_id = p.id
-        WHERE s.mp3_url IS NOT NULL
+        WHERE s.mp3_url IS NOT NULL AND s.visibility = 'public'
         ORDER BY RAND()
           LIMIT 10
       `);
@@ -170,7 +170,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
              JOIN playlists pl ON ps.playlist_id = pl.id
              JOIN songs s ON ps.song_id = s.id
              JOIN profiles p ON pl.profile_id = p.id
-      WHERE p.user_id = ? AND pl.name = 'Likes' AND s.mp3_url IS NOT NULL
+      WHERE p.user_id = ? AND pl.name = 'Likes' AND s.mp3_url IS NOT NULL AND s.visibility = 'public'
       ORDER BY RAND()
         LIMIT 1
     `, [userId]);
@@ -194,7 +194,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
                  JOIN profiles p2 ON pl.profile_id = p2.id
           WHERE p2.user_id = ? AND pl.name = 'Likes'
         )
-          AND s.mp3_url IS NOT NULL
+          AND s.mp3_url IS NOT NULL AND s.visibility = 'public'
         ORDER BY RAND()
           LIMIT 1
       `, [userId]);
@@ -212,7 +212,7 @@ router.get('/:userId/liked-songs', authenticate, async (req, res) => {
            WHERE pl2.name = 'Likes' AND ps2.song_id = s.id) AS likes_count
         FROM songs s
                LEFT JOIN profiles p ON s.profile_id = p.id
-        WHERE s.mp3_url IS NOT NULL
+        WHERE s.mp3_url IS NOT NULL AND s.visibility = 'public'
         ORDER BY RAND()
           LIMIT 1
       `);
@@ -465,7 +465,7 @@ router.get('/most-popular', async (req, res) => {
     const rows = await pool.query(`
       SELECT p.id, p.user_id, p.name, p.slug, COALESCE(SUM(s.plays), 0) as total_plays, p.picture_url
       FROM profiles p
-             LEFT JOIN songs s ON p.id = s.profile_id
+             LEFT JOIN songs s ON p.id = s.profile_id AND s.visibility = 'public'
       GROUP BY p.id, p.user_id, p.name, p.slug, p.picture_url
       ORDER BY total_plays DESC
         LIMIT 5
@@ -547,7 +547,11 @@ router.get('/slug-available/:slug', authenticate, async (req, res) => {
   }
 });
 
-router.get('/:profileId', async (req, res, next) => {
+// Optionally authenticated: the profile page is public, but the artist looking
+// at their own page has to see the tracks they delisted. Manage Songs reads its
+// list from this route too, and it would be empty of hidden tracks otherwise -
+// which is exactly where the switch to unhide them lives.
+router.get('/:profileId', authenticateOptional, async (req, res, next) => {
   try {
     // A profile answers to its numeric id forever, and to its slug once set.
     // Slugs can never be all digits, so the two can't be confused.
@@ -570,8 +574,10 @@ router.get('/:profileId', async (req, res, next) => {
       logger.error('Invalid profile data for profile_id:', profileId, profile);
       return res.status(500).json({ error: 'Invalid profile data' });
     }
+    const isOwner = req.user && Number(profile.user_id) === Number(req.user.id);
+
     const songs = await pool.query(`
-      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, s.allow_ai_training, s.bpm, s.musical_key, s.duration, p.user_id, p.name as profile_name, p.slug as profile_slug,
+      SELECT s.id, s.profile_id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.plays, s.created_at, s.is_featured, s.allow_download, s.allow_ai_training, s.bpm, s.musical_key, s.duration, s.visibility, s.share_token, s.current_version_no, p.user_id, p.name as profile_name, p.slug as profile_slug,
              (SELECT COUNT(*)
               FROM playlist_songs ps
                      JOIN playlists pl ON ps.playlist_id = pl.id
@@ -581,10 +587,21 @@ router.get('/:profileId', async (req, res, next) => {
              -- reviews that carried a score count: a comment without one is not
              -- a zero.
              (SELECT AVG(r.rating) FROM reviews r
-               WHERE r.song_id = s.id AND r.rating IS NOT NULL) AS avg_rating
+               WHERE r.song_id = s.id AND r.rating IS NOT NULL) AS avg_rating,
+             -- Which records this track sits on. Joined here rather than asked
+             -- for per song, because the Songs Manager shows it on every row
+             -- and a request per track would be an N+1 on page load. A hidden
+             -- release is only named to the artist who owns it.
+             (SELECT GROUP_CONCAT(rel.title ORDER BY rel.release_date DESC SEPARATOR '||')
+                FROM release_songs rs
+                JOIN releases rel ON rel.id = rs.release_id
+               WHERE rs.song_id = s.id
+                 ${isOwner ? '' : "AND rel.visibility = 'public'"}) AS release_titles
       FROM songs s
              LEFT JOIN profiles p ON s.profile_id = p.id
       WHERE s.profile_id = ?
+        ${isOwner ? '' : "AND s.visibility = 'public'"}
+      ORDER BY s.created_at DESC
     `, [profile.id]);
     const sanitizedSongs = songs.map((song) => ({
       ...song,
@@ -597,6 +614,15 @@ router.get('/:profileId', async (req, res, next) => {
       // Manage Songs reads its list from here, so a permission missing from
       // this column list reads back as off however it was saved.
       allow_ai_training: Boolean(song.allow_ai_training),
+      visibility: song.visibility || 'public',
+      // Split here so the client gets a list rather than a delimited string.
+      releases: song.release_titles ? String(song.release_titles).split('||') : [],
+      current_version_no: Number(song.current_version_no) || 1,
+      // The share token is a credential. It goes to the artist who owns the
+      // track and to nobody else; every other viewer is told only whether the
+      // field exists at all, and not even that.
+      share_token: isOwner ? (song.share_token || null) : undefined,
+      has_share_link: isOwner ? !!song.share_token : undefined,
       avg_rating: song.avg_rating == null ? null : Number(song.avg_rating),
       user_id: song.user_id ? Number(song.user_id) : null,
       profile_name: song.profile_name || 'Unknown Artist',
@@ -1071,6 +1097,7 @@ router.get('/:profileId/liked-songs-public', async (req, res) => {
       WHERE pl.profile_id = ?
         AND pl.name = 'Likes'
         AND s.profile_id <> ?
+        AND s.visibility = 'public'
       ORDER BY RAND()
       LIMIT 3
     `, [parsedProfileId, parsedProfileId]);
@@ -1122,6 +1149,7 @@ router.get('/:profileId/recent-reviews', async (req, res) => {
       LEFT JOIN profiles p ON p.id = s.profile_id
       WHERE r.profile_id = ?
         AND s.profile_id <> ?
+        AND s.visibility = 'public'
       ORDER BY r.created_at DESC
       LIMIT 6
     `, [parsedProfileId, parsedProfileId]);
@@ -1190,6 +1218,7 @@ router.get('/:userId/followed-songs', authenticate, async (req, res) => {
              JOIN profiles p ON f.followed_profile_id = p.id
              JOIN songs s ON p.id = s.profile_id
       WHERE f.follower_id = ? AND p.user_id IS NOT NULL
+        AND s.visibility = 'public'
       ORDER BY s.created_at DESC
         LIMIT 6
     `, [parsedUserId]);

@@ -14,3 +14,12 @@
 
 */5 * * * * node backend/scripts/cleanupLoops.js
 */15 * * * * node backend/scripts/cleanupMasteringPreviews.js
+
+# The weekly activity digest, Sunday at 17:00 UTC. Replaces the per-event emails
+# utils/notifications.js used to send on every review, follow and reply. It sends
+# one message per member listing what they have not read, and nothing at all to a
+# member with nothing waiting, so a quiet week is silent.
+#
+# Scope is unread AND from the last seven days, so a member who never opens the
+# bell does not receive the same growing list every week.
+0 17 * * 0 node backend/scripts/sendWeeklyDigest.js >> /app/cron.log 2>&1

@@ -12,6 +12,10 @@ const NOTIFICATION_TYPES = {
     COLLAB_TRACK_ADDED: 'collab_track_added',
     ARTIST_SONG_UPLOADED: 'artist_song_uploaded',
     PLAYLIST_DEDICATION: 'playlist_dedication',
+    REVIEW_REPLIED: 'review_replied',
+    REVIEW_REACTION: 'review_reaction',
+    SONG_VERSION_ADDED: 'song_version_added',
+    SITE_UPDATE: 'site_update',
 };
 
 const FRONTEND_URL =
@@ -43,6 +47,12 @@ const buildActivityUrl = (type, entityType, entityId, metadata) => {
     if (entityType === 'playlist' && entityId) {
         return `${FRONTEND_URL}/crate/${entityId}`;
     }
+    if (entityType === 'release' && entityId) {
+        return `${FRONTEND_URL}/release/${entityId}`;
+    }
+    if (entityType === 'article' && entityId) {
+        return `${FRONTEND_URL}/articles/${entityId}`;
+    }
     if (entityType === 'collaboration') {
         if (metadata?.owner_profile_id) {
             return `${FRONTEND_URL}/profile/${metadata.owner_profile_id}/collaborations`;
@@ -53,63 +63,6 @@ const buildActivityUrl = (type, entityType, entityId, metadata) => {
         return `${FRONTEND_URL}/collabs`;
     }
     return FRONTEND_URL;
-};
-
-const sendEmailNotification = async ({ recipientUserId, actorUserId, type, message, entityType, entityId, metadata }) => {
-    if (!mailgunClient) {
-        return;
-    }
-
-    const [recipient] = await pool.query(
-        'SELECT id, email, name, email_profile_activity_enabled, email_artist_activity_enabled FROM users WHERE id = ? LIMIT 1',
-        [recipientUserId]
-    );
-
-    if (!recipient?.email) {
-        return;
-    }
-
-    const isProfileActivityNotification = [
-        NOTIFICATION_TYPES.SONG_LIKED,
-        NOTIFICATION_TYPES.SONG_REVIEWED,
-        NOTIFICATION_TYPES.FORUM_POST_REPLIED,
-        NOTIFICATION_TYPES.PROFILE_FOLLOWED,
-        NOTIFICATION_TYPES.IDJC_RECEIVED,
-        NOTIFICATION_TYPES.COLLAB_TRACK_ADDED,
-    ].includes(type);
-
-    const isArtistActivityNotification = type === NOTIFICATION_TYPES.ARTIST_SONG_UPLOADED;
-
-    if (isProfileActivityNotification && (recipient.email_profile_activity_enabled === 0 || !recipient.email_profile_activity_enabled)) {
-        return;
-    }
-
-    if (isArtistActivityNotification && (recipient.email_artist_activity_enabled === 0 || !recipient.email_artist_activity_enabled)) {
-        return;
-    }
-
-    const [actorProfile] = await pool.query(
-        'SELECT name FROM profiles WHERE user_id = ? LIMIT 1',
-        [actorUserId]
-    );
-    const actorName = actorProfile?.name || 'A member';
-
-    const url = buildActivityUrl(type, entityType, entityId, metadata);
-    const subject = `InternetDJ activity: ${message}`;
-    const html = `
-        <h2>New activity on InternetDJ</h2>
-        <p><strong>${actorName}</strong> triggered this update:</p>
-        <p>${message}</p>
-        <p><a href="${url}">Open on InternetDJ</a></p>
-        <p>If you prefer, you can check all updates from your notifications area in-app.</p>
-    `;
-
-    await mailgunClient.messages.create(MAILGUN_DOMAIN, {
-        from: `InternetDJ <noreply@${MAILGUN_DOMAIN}>`,
-        to: recipient.email,
-        subject,
-        html,
-    });
 };
 
 const createNotification = async ({
@@ -159,27 +112,13 @@ const createNotification = async ({
             ]
         );
 
-        const createdId = Number(result.insertId) || null;
-
-        try {
-            await sendEmailNotification({
-                recipientUserId: recipientId,
-                actorUserId: actorId,
-                type,
-                message,
-                entityType,
-                entityId,
-                metadata: safeMetadata,
-            });
-        } catch (emailErr) {
-            logger.warn('Failed to send notification email:', {
-                message: emailErr.message,
-                recipientUserId: recipientId,
-                type,
-            });
-        }
-
-        return createdId;
+        // No email here. Activity mail is batched by
+        // scripts/sendWeeklyDigest.js, which sends one message per member per
+        // week listing what is unread, and nothing at all in a quiet week. The
+        // row written above is the record; the digest only decides what reaches
+        // an inbox. An IDJC tip is the exception and still mails immediately,
+        // through sendIdjcTipEmail below: that is money arriving, not activity.
+        return Number(result.insertId) || null;
     } catch (err) {
         // Notification failures should never block user actions.
         logger.warn('Failed to create notification:', {
@@ -228,8 +167,68 @@ const sendIdjcTipEmail = async ({ recipientUserId, amount, entityId, actorLabel 
     });
 };
 
+
+/**
+ * Post one site update to every member's notifications.
+ *
+ * A loop over createNotification would be one INSERT per account and one
+ * Mailgun decision per account, which is the wrong shape for something that by
+ * definition addresses everyone. INSERT ... SELECT writes the whole set in a
+ * single statement instead, and no email is sent at all - see the SITE_UPDATE
+ * note in sendEmailNotification for why an announcement stays in-site.
+ *
+ * The author is excluded, matching createNotification's rule that nobody is
+ * notified about their own action.
+ *
+ * Returns the number of members notified.
+ */
+const broadcastNotification = async ({
+    actorUserId,
+    message,
+    entityType = null,
+    entityId = null,
+    metadata = null,
+    type = NOTIFICATION_TYPES.SITE_UPDATE,
+}) => {
+    const actorId = Number(actorUserId);
+    if (!actorId || !message) {
+        return 0;
+    }
+
+    const safeMetadata = metadata && typeof metadata === 'object' ? metadata : null;
+
+    const result = await pool.query(
+        `
+            INSERT INTO notifications (
+                recipient_user_id,
+                actor_user_id,
+                type,
+                message,
+                entity_type,
+                entity_id,
+                metadata
+            )
+            SELECT u.id, ?, ?, ?, ?, ?, ?
+              FROM users u
+             WHERE u.id <> ?
+        `,
+        [
+            actorId,
+            type,
+            message,
+            entityType,
+            entityId,
+            safeMetadata ? JSON.stringify(safeMetadata) : null,
+            actorId,
+        ]
+    );
+
+    return Number(result.affectedRows) || 0;
+};
+
 module.exports = {
     NOTIFICATION_TYPES,
     createNotification,
+    broadcastNotification,
     sendIdjcTipEmail,
 };

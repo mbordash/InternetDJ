@@ -31,6 +31,12 @@ Upload `frontend/public/idj-coin-512.png` to Pinata. That file is the square
 coin mark on its own, which is what a wallet wants; `idj-share-card.png` is
 the wide social card and is the wrong shape here.
 
+Note that idj-coin-512.png carries the FLAT ticker rather than the chrome one
+on `frontend/src/assets/idj-coin.png`. That is deliberate: wallets and token
+lists draw this icon at 32 to 48 pixels, where a gradient ticker averages out
+against the face and stops being readable. Do not swap in the chrome file
+because it looks better when you open it full size.
+
 Both files are produced by `node backend/scripts/generateCoinArt.js`.
 
 ### 2. Put the image CID into the JSON
@@ -103,14 +109,16 @@ it exists.
 | File on Pinata | CID | Status |
 |---|---|---|
 | `idj-metadata3.json` | `bafkreidr45k65wrcwxlwiiasz5cnliwrdatp52n7nz5cayzpvq6rlxh7ja` | on chain until v4 lands. Keep pinned. |
-| `idj-metadata4.json` | `bafkreicjlbnvlvoyiwruzmzof724ou37g6rtkps5mlb27tp42phcwroewe` | pinned and verified. Set as the mint uri. |
+| `idj-metadata4.json` | `bafkreicjlbnvlvoyiwruzmzof724ou37g6rtkps5mlb27tp42phcwroewe` | on chain until v5 lands. Keep pinned. |
+| `idj-metadata5.json` | `bafkreidy4mhi5ykrbkzcnk3bg43if2jyzobl3hlthk5rbepjkcj2l3vity` | pinned and verified byte-identical to the repo file. Set as the mint uri. |
 
 Image CIDs:
 
 | File on Pinata | CID | Status |
 |---|---|---|
 | old coin render | `bafybeif6ozkjt6u77akd3dqdh34iqzmecyyrcihug6n2wx4s3o6foxg5qm` | superseded, keep pinned |
-| `idj-coin-512.png` | `bafkreihcvf523z6af7ywko4n6fuxaui6qo5unewqlrg7hubvswod6zrto4` | current, verified byte-identical to the generated file |
+| `idj-coin-512.png` (chrome ticker) | `bafkreihcvf523z6af7ywko4n6fuxaui6qo5unewqlrg7hubvswod6zrto4` | superseded, keep pinned |
+| `idj-coin-512.png` (flat ticker) | `bafkreibj4unyxzztkjrsnnbhfiwcoxlwvx4vg5xcrzkbhup3k4k4w3pxui` | current, verified byte-identical to the generated file |
 
 Three rules that follow from content addressing:
 
@@ -140,3 +148,12 @@ Recorded so the next edit does not quietly undo it.
 - `image` pointed at the old slate-blue coin render through the public
   `gateway.pinata.cloud`. Now the redrawn sunset coin, through the dedicated
   gateway.
+
+### Revision 5
+
+- `image` now carries the FLAT-ticker coin. The previous render used the chrome
+  ticker, which is a gradient roughly the same value as the sunset face behind
+  it, so at the 32 to 48 pixels a wallet or token list actually draws this icon
+  the letters stopped reading. Nothing else in the JSON changed, so only the
+  mint `uri` needed updating on chain; name, symbol and the on-chain
+  `description` were already correct from revision 4.

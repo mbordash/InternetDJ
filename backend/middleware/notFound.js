@@ -155,7 +155,7 @@ const loadGenreKeys = async () => {
     if (genreKeyCache.keys && genreKeyCache.expires > Date.now()) return genreKeyCache.keys;
 
     const rows = await pool.query(
-        "SELECT genre FROM songs WHERE genre IS NOT NULL AND genre != ''",
+        "SELECT genre FROM songs WHERE genre IS NOT NULL AND genre != '' AND visibility = 'public'",
     );
 
     const keys = new Set();
@@ -192,10 +192,24 @@ const checkTag = async (rawTag) => {
  * this module guessed wrong about a slug.
  */
 const DYNAMIC_ROUTES = [
-    { re: /^\/song\/(\d+)$/, check: id => checkExists(`song:${id}`, 'SELECT 1 FROM songs WHERE id = ? LIMIT 1', [id]) },
+    // A delisted track counts as missing. The artist asked for it to stop
+    // being findable, and a soft 404 is precisely what leaving it at 200 would
+    // produce: the page answers 404 from the API to everyone but its owner, so
+    // a crawler renders an empty shell. The owner still gets the working page -
+    // only the status code changes, since server.js serves the same shell
+    // either way and the app fetches the track with their own token.
+    { re: /^\/song\/(\d+)$/, check: id => checkExists(`song:${id}`, "SELECT 1 FROM songs WHERE id = ? AND visibility = 'public' LIMIT 1", [id]) },
     { re: /^\/crate\/(\d+)$/, check: checkCrate },
+    // A hidden release is missing for the same reason a delisted track is: its
+    // page answers 404 to everyone but the artist.
+    { re: /^\/release\/(\d+)$/, check: id => checkExists(`release:${id}`, "SELECT 1 FROM releases WHERE id = ? AND visibility = 'public' LIMIT 1", [id]) },
+    // A private share link is unconditionally 'ok'. The token is a credential,
+    // and this module has no business looking one up just to choose a status
+    // code - the page is noindex and /s/ is blocked in robots.txt, so no
+    // crawler should be asking in the first place.
+    { re: /^\/s\/([^/]+)$/, check: () => true },
     { re: /^\/forum\/post\/(\d+)$/, check: id => checkExists(`post:${id}`, 'SELECT 1 FROM forum_posts WHERE id = ? LIMIT 1', [id]) },
-    { re: /^\/profile\/([^/]+)\/(?:songs-manager|collaborations)$/, check: () => true },
+    { re: /^\/profile\/([^/]+)\/(?:songs-manager|collaborations|releases)$/, check: () => true },
     { re: /^\/profile\/([^/]+)$/, check: checkProfile },
     { re: /^\/articles\/([^/]+)$/, check: checkArticle },
     { re: /^\/tag\/([^/]+)$/, check: checkTag },

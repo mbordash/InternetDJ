@@ -22,6 +22,7 @@ const idjcRouter = require('./routes/idjc');
 const notificationsRouter = require('./routes/notifications');
 const sitemapRouter = require('./routes/sitemap');
 const articlesRouter = require('./routes/articles');
+const releasesRouter = require('./routes/releases');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -211,6 +212,7 @@ app.use('/api/loops', loopsRouter);
 app.use('/api/idjc', idjcRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/articles', articlesRouter);
+app.use('/api/releases', releasesRouter);
 
 // robots.txt and sitemap.xml are generated from the database, so they must be
 // matched before express.static and before the SPA catch-all below.

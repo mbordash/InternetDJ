@@ -58,19 +58,17 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     // Verify song exists and get its owner
-    const songsResult = await pool.query(
+    const songs = await pool.query(
         'SELECT s.id, s.profile_id, s.title, p.user_id AS owner_user_id FROM songs s JOIN profiles p ON p.id = s.profile_id WHERE s.id = ?',
         [song_id]
     );
-    const songs = Array.isArray(songsResult) ? songsResult : songsResult[0] || [];
-    if (!songs || songs.length === 0) {
+    if (!songs.length) {
       return res.status(404).json({ error: 'Song not found' });
     }
 
     // Get the reviewer's profile_id
-    const profilesResult = await pool.query('SELECT id, name, picture_url FROM profiles WHERE user_id = ?', [req.user.id]);
-    const profiles = Array.isArray(profilesResult) ? profilesResult : profilesResult[0] || [];
-    if (!profiles || profiles.length === 0) {
+    const profiles = await pool.query('SELECT id, name, picture_url FROM profiles WHERE user_id = ?', [req.user.id]);
+    if (!profiles.length) {
       return res.status(404).json({ error: 'Profile not found for user' });
     }
     const profileId = profiles[0].id;
@@ -97,15 +95,22 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: ratingField.error });
     }
 
-    // Insert review
+    // Insert review.
+    //
+    // insertId is read straight off the result. An INSERT returns an OkPacket
+    // rather than a row array, so the old `Array.isArray(r) ? r : r[0] || {}`
+    // unwrapping fell all the way through to `{}` and this id was
+    // Number(undefined) - NaN, which JSON.stringify writes as null. Every
+    // review posted came back to the page with `id: null`, so the comment the
+    // reviewer had just written could not be reacted to, replied to or deleted
+    // until they reloaded. The row itself was always written correctly.
     const insertResult = await pool.query(
         'INSERT INTO reviews (song_id, profile_id, review, feedback, rating) VALUES (?, ?, ?, ?, ?)',
         [song_id, profileId, normalizedReview, feedbackValue ? JSON.stringify(feedbackValue) : null, ratingField.value]
     );
-    const result = Array.isArray(insertResult) ? insertResult : insertResult[0] || {};
 
     const newReview = {
-      id: Number(result.insertId),
+      id: Number(insertResult.insertId),
       song_id: Number(song_id),
       profile_id: Number(profileId),
       review: normalizedReview,
@@ -126,7 +131,7 @@ router.post('/', authenticate, async (req, res) => {
       entityType: 'song',
       entityId: Number(song_id),
       metadata: {
-        review_id: Number(result.insertId),
+        review_id: Number(insertResult.insertId),
         song_title: songs[0].title,
       },
     });
@@ -144,15 +149,53 @@ router.get('/:songId', async (req, res) => {
     if (isNaN(songId)) {
       return res.status(400).json({ error: 'Invalid song ID' });
     }
+    // Top-level comments only. Replies live in the same table and would
+    // otherwise render as standalone reviews with nothing to reply to, and
+    // with no rating, which would read as an empty score rather than an answer.
     const reviews = await pool.query(`
       SELECT r.id, r.song_id, r.profile_id, r.review, r.feedback, r.rating, r.created_at,
              p.name AS user_name, p.slug AS profile_slug, p.picture_url
       FROM reviews r
       JOIN profiles p ON r.profile_id = p.id
-      WHERE r.song_id = ?
+      WHERE r.song_id = ? AND r.parent_review_id IS NULL
       ORDER BY r.created_at DESC
     `, [songId]);
     const reviewIds = reviews.map((r) => Number(r.id));
+
+    // Replies, oldest first, so a thread reads top to bottom even though the
+    // comments above it are newest first.
+    const repliesByParent = new Map();
+    if (reviewIds.length) {
+      const replyRows = await pool.query(
+        `SELECT r.id, r.parent_review_id, r.profile_id, r.review, r.created_at,
+                p.name AS user_name, p.slug AS profile_slug, p.picture_url,
+                (sp.user_id = p.user_id) AS is_artist
+           FROM reviews r
+           JOIN profiles p ON r.profile_id = p.id
+           JOIN songs s ON s.id = r.song_id
+           LEFT JOIN profiles sp ON sp.id = s.profile_id
+          WHERE r.parent_review_id IN (${reviewIds.map(() => '?').join(',')})
+          ORDER BY r.created_at ASC`,
+        reviewIds
+      );
+      for (const row of replyRows) {
+        const parentId = Number(row.parent_review_id);
+        if (!repliesByParent.has(parentId)) repliesByParent.set(parentId, []);
+        repliesByParent.get(parentId).push({
+          id: Number(row.id),
+          parent_review_id: parentId,
+          profile_id: Number(row.profile_id),
+          profile_slug: row.profile_slug || null,
+          review: row.review || '',
+          created_at: row.created_at,
+          user_name: row.user_name || 'Unknown',
+          picture_url: row.picture_url || null,
+          // Lets the page badge the artist's own answer, which is the reply
+          // everyone scrolling a comment thread is actually looking for.
+          is_artist: !!row.is_artist,
+        });
+      }
+    }
 
     // Reaction tallies for this page of reviews, plus whichever one the
     // signed-in viewer picked so the UI can show it as active. Counts are
@@ -199,6 +242,7 @@ router.get('/:songId', async (req, res) => {
       picture_url: review.picture_url || null,
       reactions: counts.get(Number(review.id)) || { thumbs_up: 0, thumbs_down: 0, clown: 0 },
       my_reaction: mine.get(Number(review.id)) || null,
+      replies: repliesByParent.get(Number(review.id)) || [],
     }));
     res.json(sanitizedReviews);
   } catch (err) {
@@ -248,10 +292,172 @@ router.post('/:reviewId/reactions', authenticate, async (req, res) => {
     const reactions = { thumbs_up: 0, thumbs_down: 0, clown: 0 };
     for (const row of tallies) reactions[row.reaction] = Number(row.n) || 0;
 
+    // Tell the comment's author somebody responded to it, but only when a
+    // reaction was actually set. Clearing one is a retraction, and nobody needs
+    // to be told their comment was un-liked.
+    if (myReaction) {
+      try {
+        const [owner] = await pool.query(
+          `SELECT p.user_id AS author_user_id, r.song_id, s.title AS song_title
+             FROM reviews r
+             JOIN profiles p ON p.id = r.profile_id
+             LEFT JOIN songs s ON s.id = r.song_id
+            WHERE r.id = ?`,
+          [reviewId]
+        );
+        if (owner?.author_user_id) {
+          await createNotification({
+            recipientUserId: Number(owner.author_user_id),
+            actorUserId: userId,
+            type: NOTIFICATION_TYPES.REVIEW_REACTION,
+            message: 'Someone reacted to your comment.',
+            entityType: 'song',
+            entityId: Number(owner.song_id),
+            metadata: {
+              review_id: reviewId,
+              reaction: myReaction,
+              song_title: owner.song_title || null,
+            },
+          });
+        }
+      } catch (notifyErr) {
+        // A reaction is the smallest thing on the page. It must never fail
+        // because the notification behind it did.
+        logger.warn('Failed to notify review author of a reaction:', notifyErr.message);
+      }
+    }
+
     res.json({ reactions, my_reaction: myReaction });
   } catch (err) {
     logger.error('Error in POST /reviews/:reviewId/reactions:', err);
     res.status(500).json({ error: 'Failed to save reaction' });
+  }
+});
+
+/**
+ * Reply to a comment on a song.
+ *
+ * Written for the artist answering feedback, which is the whole point of the
+ * comment being there, but open to anyone signed in: a thread where only one
+ * person may speak is not a thread.
+ *
+ * A reply is a row in `reviews` with parent_review_id set and no rating. That
+ * keeps one author, one timestamp and one delete path for both kinds of row,
+ * and it is why the reply body is read from `review` rather than some second
+ * text column.
+ *
+ * Threads are one level deep. Replying to a reply attaches to the same parent
+ * instead of nesting further, so a long exchange stays a readable column rather
+ * than marching off the right edge of a phone.
+ */
+router.post('/:reviewId/replies', authenticate, async (req, res) => {
+  const reviewId = parseInt(req.params.reviewId, 10);
+  const { review } = req.body;
+
+  if (isNaN(reviewId)) {
+    return res.status(400).json({ error: 'Invalid review ID' });
+  }
+
+  const text = typeof review === 'string' ? review.trim() : '';
+  if (!text) {
+    return res.status(400).json({ error: 'Write something before posting your reply' });
+  }
+  if (text.length > 5000) {
+    return res.status(400).json({ error: 'Reply must be 5000 characters or fewer' });
+  }
+
+  try {
+    const [parent] = await pool.query(
+      `SELECT r.id, r.song_id, r.parent_review_id, r.profile_id,
+              p.user_id AS author_user_id, s.title AS song_title
+         FROM reviews r
+         JOIN profiles p ON p.id = r.profile_id
+         LEFT JOIN songs s ON s.id = r.song_id
+        WHERE r.id = ?`,
+      [reviewId]
+    );
+    if (!parent) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Flatten: a reply to a reply belongs to the comment that started it.
+    const threadId = parent.parent_review_id ? Number(parent.parent_review_id) : Number(parent.id);
+
+    const [profile] = await pool.query(
+      'SELECT id, name, picture_url, slug FROM profiles WHERE user_id = ?',
+      [req.user.id]
+    );
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found for user' });
+    }
+
+    const [song] = await pool.query(
+      `SELECT s.id, s.title, p.user_id AS owner_user_id
+         FROM songs s
+         JOIN profiles p ON p.id = s.profile_id
+        WHERE s.id = ?`,
+      [parent.song_id]
+    );
+
+    const insert = await pool.query(
+      'INSERT INTO reviews (song_id, profile_id, review, rating, parent_review_id) VALUES (?, ?, ?, NULL, ?)',
+      [parent.song_id, profile.id, text, threadId]
+    );
+
+    const reply = {
+      id: Number(insert.insertId),
+      parent_review_id: threadId,
+      song_id: Number(parent.song_id),
+      profile_id: Number(profile.id),
+      profile_slug: profile.slug || null,
+      review: text,
+      created_at: new Date(),
+      user_name: profile.name || req.user.name,
+      picture_url: profile.picture_url || null,
+      is_artist: !!song && Number(song.owner_user_id) === Number(req.user.id),
+    };
+
+    // The person being answered. createNotification already drops the case
+    // where that is the replier themselves.
+    await createNotification({
+      recipientUserId: Number(parent.author_user_id),
+      actorUserId: req.user.id,
+      type: NOTIFICATION_TYPES.REVIEW_REPLIED,
+      message: reply.is_artist
+        ? 'The artist replied to your comment.'
+        : 'Someone replied to your comment.',
+      entityType: 'song',
+      entityId: Number(parent.song_id),
+      metadata: {
+        review_id: threadId,
+        reply_id: reply.id,
+        song_title: parent.song_title || null,
+      },
+    });
+
+    // The artist owns the conversation happening under their track, so they
+    // hear about a third party joining it too. Skipped when they are the
+    // author being replied to, which would otherwise be the same event twice.
+    if (song && Number(song.owner_user_id) !== Number(parent.author_user_id)) {
+      await createNotification({
+        recipientUserId: Number(song.owner_user_id),
+        actorUserId: req.user.id,
+        type: NOTIFICATION_TYPES.REVIEW_REPLIED,
+        message: 'Someone replied to a comment on your song.',
+        entityType: 'song',
+        entityId: Number(parent.song_id),
+        metadata: {
+          review_id: threadId,
+          reply_id: reply.id,
+          song_title: song.title || null,
+        },
+      });
+    }
+
+    res.status(201).json({ reply });
+  } catch (err) {
+    logger.error('Error in POST /reviews/:reviewId/replies:', err);
+    res.status(500).json({ error: 'Failed to post reply' });
   }
 });
 
@@ -261,15 +467,23 @@ router.delete('/:reviewId', authenticate, async (req, res) => {
     if (isNaN(reviewId)) {
       return res.status(400).json({ error: 'Invalid review ID' });
     }
-    const reviewsResult = await pool.query('SELECT profile_id, song_id FROM reviews WHERE id = ?', [reviewId]);
-    const reviews = Array.isArray(reviewsResult) ? reviewsResult : Array.isArray(reviewsResult[0]) ? reviewsResult[0] : [];
-    if (!reviews || reviews.length === 0) {
+    // Read straight off the result. Both of these used to be unwrapped through
+    // `Array.isArray(r) ? r : Array.isArray(r[0]) ? r[0] : []`, guarding against
+    // the [rows, fields] pair that mysql2 returns - which this driver never
+    // does, so the first branch always won and the rest was unreachable. That
+    // dead branch was also wrong: the profile lookup fell back to
+    // `reviewsResult[0]`, the review rows, so had it ever run it would have
+    // compared the review's own profile_id against itself and let anybody
+    // delete anybody's comment. Unreachable, but not a thing to leave sitting
+    // in an authorization check.
+    const reviews = await pool.query('SELECT profile_id, song_id FROM reviews WHERE id = ?', [reviewId]);
+    if (!reviews.length) {
       return res.status(404).json({ error: 'Review not found' });
     }
     const review = reviews[0];
-    const profilesResult = await pool.query('SELECT id FROM profiles WHERE user_id = ?', [req.user.id]);
-    const profiles = Array.isArray(profilesResult) ? profilesResult : Array.isArray(profilesResult[0]) ? reviewsResult[0] : [];
-    if (!profiles || profiles.length === 0) {
+
+    const profiles = await pool.query('SELECT id FROM profiles WHERE user_id = ?', [req.user.id]);
+    if (!profiles.length) {
       return res.status(404).json({ error: 'Profile not found for user' });
     }
     const profileId = profiles[0].id;

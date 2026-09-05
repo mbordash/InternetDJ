@@ -44,6 +44,7 @@ async function coverArtFor(playlistId) {
         FROM playlist_songs ps
         JOIN songs s ON s.id = ps.song_id
         WHERE ps.playlist_id = ? AND s.image_url IS NOT NULL AND s.image_url <> ''
+          AND s.visibility = 'public'
         ORDER BY ps.added_at ASC
         LIMIT 4
     `, [playlistId]);
@@ -405,7 +406,7 @@ router.get('/crate/:playlistId', async (req, res) => {
             FROM playlist_songs ps
             JOIN songs s ON s.id = ps.song_id
             LEFT JOIN profiles sp ON sp.id = s.profile_id
-            WHERE ps.playlist_id = ?
+            WHERE ps.playlist_id = ? AND s.visibility = 'public'
             ORDER BY ps.added_at ASC
         `, [playlistId]);
 
@@ -619,7 +620,7 @@ router.get('/:playlistId/songs', authenticate, async (req, res) => {
             FROM playlist_songs ps
                      JOIN songs s ON ps.song_id = s.id
                      JOIN profiles pr ON s.profile_id = pr.id
-            WHERE ps.playlist_id = ?
+            WHERE ps.playlist_id = ? AND s.visibility = 'public'
             ORDER BY ps.added_at
         `, [parsedPlaylistId]);
 

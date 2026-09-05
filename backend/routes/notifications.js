@@ -2,8 +2,14 @@ const express = require('express');
 const pool = require('../config/database');
 const authenticate = require('../middleware/authenticate');
 const logger = require('../utils/logger');
+const { broadcastNotification, NOTIFICATION_TYPES } = require('../utils/notifications');
 
 const router = express.Router();
+
+// The bell polls, so the list is capped rather than paged. A hundred rows is
+// far more than anyone scrolls, and older activity is still reachable from the
+// thing it happened to.
+const MAX_NOTIFICATIONS = 100;
 
 router.get('/preferences', authenticate, async (req, res) => {
     try {
@@ -66,6 +72,12 @@ router.patch('/preferences', authenticate, async (req, res) => {
 });
 
 router.get('/', authenticate, async (req, res) => {
+    const unreadOnly = req.query.unread === '1' || req.query.unread === 'true';
+    const limit = Math.min(
+        Math.max(parseInt(req.query.limit, 10) || MAX_NOTIFICATIONS, 1),
+        MAX_NOTIFICATIONS
+    );
+
     try {
         const rows = await pool.query(
             `
@@ -85,9 +97,17 @@ router.get('/', authenticate, async (req, res) => {
                 FROM notifications n
                 LEFT JOIN profiles p ON p.user_id = n.actor_user_id
                 WHERE n.recipient_user_id = ?
+                  ${unreadOnly ? 'AND n.is_read = 0' : ''}
                 ORDER BY n.created_at DESC
-                LIMIT 100
+                LIMIT ?
             `,
+            [req.user.id, limit]
+        );
+
+        // Sent with the list so the bell needs one request rather than two,
+        // and so the badge can never disagree with what the panel shows.
+        const [unread] = await pool.query(
+            'SELECT COUNT(*) AS n FROM notifications WHERE recipient_user_id = ? AND is_read = 0',
             [req.user.id]
         );
 
@@ -106,7 +126,7 @@ router.get('/', authenticate, async (req, res) => {
             actor_picture: row.actor_picture || null,
         }));
 
-        res.json({ notifications });
+        res.json({ notifications, unread_count: Number(unread?.n) || 0 });
     } catch (err) {
         logger.error('Error in GET /notifications:', err);
         res.status(500).json({ error: 'Failed to fetch notifications' });
@@ -151,6 +171,86 @@ router.patch('/read-all', authenticate, async (req, res) => {
     } catch (err) {
         logger.error('Error in PATCH /notifications/read-all:', err);
         res.status(500).json({ error: 'Failed to update notifications' });
+    }
+});
+
+// Dismiss a single notification. Read and dismissed are different things: read
+// means seen, dismissed means the member is done with it, and a list that can
+// only ever grow stops being usable long before the hundred-row cap bites.
+router.delete('/:notificationId', authenticate, async (req, res) => {
+    const notificationId = Number(req.params.notificationId);
+    if (!notificationId) {
+        return res.status(400).json({ error: 'Invalid notification ID' });
+    }
+
+    try {
+        const result = await pool.query(
+            'DELETE FROM notifications WHERE id = ? AND recipient_user_id = ?',
+            [notificationId, req.user.id]
+        );
+
+        if (!result.affectedRows) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        logger.error('Error in DELETE /notifications/:notificationId:', err);
+        res.status(500).json({ error: 'Failed to dismiss notification' });
+    }
+});
+
+/**
+ * Post a site update to every member. Admin only.
+ *
+ * This is the one notification type nobody triggers by using the site, so it is
+ * the one that needs its own door. It writes in-site notifications and sends no
+ * email at all - see the SITE_UPDATE note in utils/notifications.js.
+ *
+ * is_admin is re-read from the database rather than taken from the JWT claim of
+ * the same name. The claim is set at sign-in and would still say admin after
+ * the flag was cleared, which is exactly the wrong direction for the only
+ * endpoint on the site that writes a row for every account at once.
+ */
+router.post('/announce', authenticate, async (req, res) => {
+    const { message, link_type, link_id } = req.body;
+
+    try {
+        const [account] = await pool.query(
+            'SELECT is_admin FROM users WHERE id = ? LIMIT 1',
+            [req.user.id]
+        );
+        if (!account || Number(account.is_admin) !== 1) {
+            return res.status(403).json({ error: 'Admins only' });
+        }
+
+        const text = typeof message === 'string' ? message.trim() : '';
+        if (!text) {
+            return res.status(400).json({ error: 'Message is required' });
+        }
+        // The column is varchar(500); refuse it here so the member reads a
+        // sentence rather than a truncated announcement nobody can correct.
+        if (text.length > 500) {
+            return res.status(400).json({ error: 'Message must be 500 characters or fewer' });
+        }
+
+        const linkType = ['song', 'profile', 'forum_post', 'playlist', 'release', 'article']
+            .includes(link_type) ? link_type : null;
+        const linkId = linkType && Number(link_id) ? Number(link_id) : null;
+
+        const notified = await broadcastNotification({
+            actorUserId: req.user.id,
+            type: NOTIFICATION_TYPES.SITE_UPDATE,
+            message: text,
+            entityType: linkId ? linkType : null,
+            entityId: linkId,
+        });
+
+        logger.info(`Site update announced by user ${req.user.id} to ${notified} member(s)`);
+        res.json({ success: true, notified });
+    } catch (err) {
+        logger.error('Error in POST /notifications/announce:', err);
+        res.status(500).json({ error: 'Failed to post site update' });
     }
 });
 

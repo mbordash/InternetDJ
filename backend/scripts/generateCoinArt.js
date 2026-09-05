@@ -79,10 +79,21 @@ const LEGEND = { text: 'INTERNETDJ.CO', size: 62, sweep: 100, radius: 406 };
 const CARD_W = 1200;             // matches backend/utils/articleCover.js
 const CARD_H = 675;
 
+// `style` is chosen by how big each file is DISPLAYED, not by its pixel size.
+// idj-coin-512.png is the clearest case: it is a big file that is almost
+// always shown tiny, because it is the wallet and token-list icon and the
+// JSON-LD logo. See MARK_STYLES for why that changes the artwork.
 const OUT = [
-    { file: '../frontend/src/assets/idj-coin.png', size: 500 },   // the coin page
-    { file: '../frontend/public/idj-coin-512.png', size: 512 },   // JSON-LD logo
-    { file: '../frontend/public/idj-coin-200-nobg.png', size: 200 }, // legacy, cached
+    // The coin page hero: w-40 to w-64, never small. Chrome.
+    { file: '../frontend/src/assets/idj-coin.png', size: 500, style: 'chrome' },
+    // Home's sidebar shows the coin at w-10. That is the 40px case the flat
+    // mark exists for, and it needs its own import rather than a downscale of
+    // the hero.
+    { file: '../frontend/src/assets/idj-coin-small.png', size: 128, style: 'ink' },
+    // Wallets, DEX listings and the JSON-LD logo. All small.
+    { file: '../frontend/public/idj-coin-512.png', size: 512, style: 'ink' },
+    // Legacy og:image. Nothing points at it, but old scrapers cached the URL.
+    { file: '../frontend/public/idj-coin-200-nobg.png', size: 200, style: 'ink' },
 ];
 
 const deg = (d) => (d * Math.PI) / 180;
@@ -266,12 +277,55 @@ const scanlines = () => {
     return `<g clip-path="url(#faceClip)" opacity="0.1">${rows.join('')}</g>`;
 };
 
+/* ---------------------------------------------------------------- ticker -- */
+const tickerMark = (mark, s) => {
+    const common = `x="${C}" y="${s.y}" font-family="${mark.family}" font-size="${mark.size}"
+      font-weight="900" letter-spacing="${mark.spacing}" text-anchor="middle"`;
+    const keyline = s.stroke ? `stroke="${INK}" stroke-width="${s.stroke}" paint-order="stroke"` : '';
+    // The shadow only helps where the mark is large enough to read as raised.
+    const shadow = s.shadow
+        ? `<text ${common} fill="${INK}" opacity="0.5" transform="translate(7 8)">${mark.text}</text>\n    `
+        : '';
+    return `\n    ${shadow}<text ${common} fill="${s.fill}" ${keyline}>${mark.text}</text>\n  `;
+};
+
 /* ------------------------------------------------------------------ coin -- */
-const renderCoinSvg = async (legend = LEGEND, bandFloor = BAND_FLOOR) => {
+// TWO TICKER TREATMENTS, and which one an output gets is decided by how big
+// that output is actually DISPLAYED, not by its pixel dimensions.
+//
+// 'chrome' is the coin as designed: white-to-steel gradient, thin ink keyline.
+// It only works while the letterforms are big enough to hold a gradient.
+//
+// 'ink' is flat INK, no gradient, no keyline, no shadow, set larger. It exists
+// because of a measured failure, and the measurements are worth keeping:
+//
+//   At a 40px render the cap height of the ticker is about 7px and the counter
+//   inside the D is under 2px. A gradient averages out to roughly the value of
+//   the face behind it, so a chrome ticker has almost no contrast left. The
+//   obvious fix -- a heavier ink outline -- makes it WORSE, because
+//   paint-order puts half the stroke inside the glyph and it closes those 2px
+//   counters until IDJC is one dark smear. Darkening the gradient instead runs
+//   into the same wall from the other side: the letter and its outline become
+//   the same value and the shapes stop separating.
+//
+//   What survives downsampling is a flat fill at maximum contrast. Ink on the
+//   hot part of the face is about 6:1; the chrome averages nearer 2:1. Cap
+//   height is the only other lever, so the ink mark is set at 300 rather
+//   than 250.
+const MARK_STYLES = {
+    chrome: { size: 250, y: 606, fill: 'url(#chrome)', stroke: 7, shadow: true },
+    ink: { size: 300, y: 616, fill: INK, stroke: 0, shadow: false },
+};
+
+const renderCoinSvg = async (opts = {}) => {
+    const { legend = LEGEND, bandFloor = BAND_FLOOR, style = 'chrome' } = opts;
+    const s = MARK_STYLES[style];
+    if (!s) throw new Error(`unknown mark style: ${style}`);
+
     // The ticker, not the site name. Sized to the face rather than hardcoded,
     // because IDJC is a letter wider than the IDJ it replaced.
-    const mark = { text: 'IDJC', family: 'Arial Black, Arial, sans-serif', weight: 900, spacing: 4, size: 250 };
-    mark.size = await fitSize(mark.text, mark, 660);
+    const mark = { text: 'IDJC', family: 'Arial Black, Arial, sans-serif', weight: 900, spacing: 4, size: s.size };
+    mark.size = await fitSize(mark.text, mark, 800);
 
     return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
@@ -290,15 +344,8 @@ ${defs()}
   ${faders(214, 206)}
   ${scope(654, 210, 190, 118)}
 
-  <!-- IDJC over the sun. Dark body first for weight, chrome on top. -->
-  <g>
-    <text x="${C}" y="606" font-family="${mark.family}" font-size="${mark.size}"
-      font-weight="900" letter-spacing="${mark.spacing}" text-anchor="middle"
-      fill="${INK}" opacity="0.5" transform="translate(7 8)">${mark.text}</text>
-    <text x="${C}" y="606" font-family="${mark.family}" font-size="${mark.size}"
-      font-weight="900" letter-spacing="${mark.spacing}" text-anchor="middle"
-      fill="url(#chrome)" stroke="${INK}" stroke-width="7" paint-order="stroke">${mark.text}</text>
-  </g>
+  <!-- IDJC over the sun -->
+  <g>${tickerMark(mark, s)}</g>
 
   ${await arcText(legend.text, legend.radius, { size: legend.size, sweep: legend.sweep })}
 
@@ -392,26 +439,33 @@ const renderCardSvg = async () => {
 
 /* ------------------------------------------------------------------ main -- */
 async function main() {
-    const svg = await renderCoinSvg();
-    const svgPath = path.join(__dirname, '../../frontend/src/assets/idj-coin.svg');
-    fs.writeFileSync(svgPath, svg, 'utf8');
-    console.log(`wrote ${path.relative(process.cwd(), svgPath)}`);
+    const svgs = {
+        chrome: await renderCoinSvg({ style: 'chrome' }),
+        ink: await renderCoinSvg({ style: 'ink' }),
+    };
 
-    for (const { file, size } of OUT) {
+    for (const [style, svg] of Object.entries(svgs)) {
+        const name = style === 'chrome' ? 'idj-coin.svg' : 'idj-coin-small.svg';
+        const svgPath = path.join(__dirname, '../../frontend/src/assets/', name);
+        fs.writeFileSync(svgPath, svg, 'utf8');
+        console.log(`wrote ${path.relative(process.cwd(), svgPath)}`);
+    }
+
+    for (const { file, size, style } of OUT) {
         const dest = path.join(__dirname, '..', file);
-        await sharp(Buffer.from(svg))
+        await sharp(Buffer.from(svgs[style]))
             .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
             .png({ compressionLevel: 9 })
             .toFile(dest);
         const { size: bytes } = fs.statSync(dest);
-        console.log(`wrote ${file.replace('../', '')}  ${size}x${size}  ${(bytes / 1024).toFixed(1)} KB`);
+        console.log(`wrote ${file.replace('../', '')}  ${size}x${size}  ${style}  ${(bytes / 1024).toFixed(1)} KB`);
     }
 
     // The coin is composited rather than re-drawn at card scale: it is already
     // one self-contained SVG, and rendering it once then placing it keeps a
     // single definition of the artwork.
     const COIN_PX = 340;
-    const coin = await sharp(Buffer.from(svg))
+    const coin = await sharp(Buffer.from(svgs.chrome))
         .resize(COIN_PX, COIN_PX, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .png()
         .toBuffer();

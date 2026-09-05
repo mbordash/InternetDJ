@@ -13,13 +13,11 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const fetchUser = async () => {
             const token = localStorage.getItem('token');
-            console.log('AuthContext token:', token); // Debug token
             if (token) {
                 try {
                     const response = await axios.get(`${API_URL}/auth/me`, {
                         headers: { Authorization: `Bearer ${token}` },
                     });
-                    console.log('AuthContext user:', response.data); // Debug user data
                     setUser(response.data);
                 } catch (err) {
                     console.error(

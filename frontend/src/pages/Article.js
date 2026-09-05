@@ -6,6 +6,7 @@ import axios from 'axios';
 import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { articleCoverUrl, shareSafeImage, usableHeroImage } from '../utils/articleCover';
+import useDocumentTitle from '../utils/useDocumentTitle';
 
 /**
  * The article reader.
@@ -30,6 +31,7 @@ function Article() {
     const { slug } = useParams();
     const { user } = useContext(AuthContext);
     const [article, setArticle] = useState(null);
+    useDocumentTitle(article?.title);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
 

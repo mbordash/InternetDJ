@@ -747,7 +747,7 @@ const fetchSongMetadata = async (songId) => {
                    p.id AS profile_id, p.name AS profile_name, p.slug AS profile_slug
             FROM songs s
             LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.id = ?
+            WHERE s.id = ? AND s.visibility = 'public'
             LIMIT 1
         `, [songId]);
 
@@ -900,7 +900,7 @@ const fetchProfileMetadata = async (profileRef) => {
         const name = profile.name || 'InternetDJ artist';
 
         const counts = await pool.query(
-            'SELECT COUNT(*) AS total FROM songs WHERE profile_id = ?',
+            "SELECT COUNT(*) AS total FROM songs WHERE profile_id = ? AND visibility = 'public'",
             [profile.id]
         );
         const trackCount = counts && counts[0] ? Number(counts[0].total) : 0;
@@ -910,7 +910,7 @@ const fetchProfileMetadata = async (profileRef) => {
         const topTracks = await pool.query(`
             SELECT s.id, s.title, s.genre
             FROM songs s
-            WHERE s.profile_id = ?
+            WHERE s.profile_id = ? AND s.visibility = 'public'
             ORDER BY s.plays DESC, s.id DESC
             LIMIT 20
         `, [profile.id]);
@@ -1162,7 +1162,7 @@ const fetchTagMetadata = async (rawTag) => {
             SELECT s.title, s.genre, s.image_url, p.name AS artist
             FROM songs s
             LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE ${clauses.join(' OR ')}
+            WHERE s.visibility = 'public' AND (${clauses.join(' OR ')})
             ORDER BY s.plays DESC
             LIMIT 100
         `, tokens.map(t => `%${t}%`).concat(aliases.map(a => `%${a}%`)));
@@ -1482,6 +1482,7 @@ const fetchNewReleasesMetadata = async () => {
                    p.name AS profile_name
             FROM songs s
             LEFT JOIN profiles p ON s.profile_id = p.id
+            WHERE s.visibility = 'public'
             ORDER BY s.created_at DESC
             LIMIT ?
         `, [NEW_JUST_ADDED_LIMIT]);
@@ -1503,6 +1504,7 @@ const fetchNewReleasesMetadata = async () => {
                  ) recent
                      JOIN songs s ON s.id = recent.song_id
                      LEFT JOIN profiles p ON s.profile_id = p.id
+            WHERE s.visibility = 'public'
             ORDER BY recent.recent_plays DESC, s.created_at DESC
         `, [NEW_PLAYED_LATELY_DAYS, NEW_PLAYED_LATELY_LIMIT]);
 
@@ -1604,7 +1606,7 @@ const fetchBrowseMetadata = async () => {
         const rows = await pool.query(`
             SELECT s.genre
             FROM songs s
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND s.visibility = 'public'
             ORDER BY s.plays DESC
         `);
 
@@ -1731,6 +1733,7 @@ const fetchDiscoverMetadata = async () => {
                         WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
                 FROM songs s
                          LEFT JOIN profiles p ON s.profile_id = p.id
+                WHERE s.visibility = 'public'
                 ORDER BY likes_count DESC, s.plays DESC
                 LIMIT 15
             `),
@@ -1738,6 +1741,7 @@ const fetchDiscoverMetadata = async () => {
                 SELECT s.id, s.title, p.name AS profile_name
                 FROM songs s
                          LEFT JOIN profiles p ON s.profile_id = p.id
+                WHERE s.visibility = 'public'
                 ORDER BY s.created_at DESC
                 LIMIT 15
             `),

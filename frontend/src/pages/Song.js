@@ -12,8 +12,10 @@ import API_URL from '../utils/api';
 import SITE_URL from '../utils/site';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import profilePath from '../utils/profilePath';
+import relativeDate from '../utils/relativeDate';
 import genreTags, { tagHref } from '../utils/genreTags';
 import { TrackMetaChips, ratingHref } from '../components/TrackFilters';
+import useDocumentTitle from '../utils/useDocumentTitle';
 
 // Feedback criteria
 const feedbackCriteria = [
@@ -63,6 +65,14 @@ function scoredCriteria(feedback) {
 // Expressive reactions on reviews. These are never summed into a score or
 // fed into Top Reviewers - the point is to let people register an opinion
 // without creating a number worth farming.
+// How a release type is written out. "ep" is an abbreviation everywhere except
+// on screen, where it is EP.
+const RELEASE_TYPE_LABELS = {
+    album: 'Album',
+    ep: 'EP',
+    single: 'Single',
+};
+
 const REVIEW_REACTIONS = [
     { key: 'thumbs_up', glyph: '\u{1F44D}', label: 'Agree' },
     { key: 'thumbs_down', glyph: '\u{1F44E}', label: 'Disagree' },
@@ -74,6 +84,8 @@ const Song = () => {
     const { user } = useContext(AuthContext);
     const isAuthenticated = !!user;
     const [song, setSong] = useState(null);
+    // The tab name, once there is one. RouteTitle says "Song" until then.
+    useDocumentTitle(song?.title && `${song.title} by ${song.profile_name || 'an artist'}`);
     const [isLoadingSong, setIsLoadingSong] = useState(true);
     const [reviews, setReviews] = useState([]);
     const [error, setError] = useState(null);
@@ -149,7 +161,11 @@ const Song = () => {
     useEffect(() => {
         const fetchSong = async () => {
             try {
-                const response = await axios.get(`${API_URL}/music/${songId}`);
+                const token = localStorage.getItem('token');
+                const response = await axios.get(
+                    `${API_URL}/music/${songId}`,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+                );
                 setSong(response.data.song);
                 setError(null);
             } catch (err) {
@@ -263,8 +279,42 @@ const Song = () => {
             }
         };
 
+        // Both of these are additive detail: a track that has never been revised
+        // and is on no release simply renders neither panel, so a failure here
+        // is logged and dropped rather than shown as a page error.
+        const fetchVersions = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(
+                    `${API_URL}/music/${songId}/versions`,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+                );
+                setVersions(response.data?.versions || []);
+                setCurrentVersionNo(response.data?.current_version_no || 1);
+            } catch (err) {
+                console.error('Failed to fetch song versions:', err);
+                setVersions([]);
+            }
+        };
+
+        const fetchAppearsOn = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(
+                    `${API_URL}/releases/for-song/${songId}`,
+                    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+                );
+                setAppearsOn(response.data?.releases || []);
+            } catch (err) {
+                console.error('Failed to fetch releases for song:', err);
+                setAppearsOn([]);
+            }
+        };
+
         setIsLoadingSong(true);
         fetchSong();
+        fetchVersions();
+        fetchAppearsOn();
         fetchReviews();
         fetchPlaylists();
         checkIfLiked();
@@ -439,6 +489,20 @@ const Song = () => {
 
     const [reactingReviewId, setReactingReviewId] = useState(null);
 
+    // Which comment has its reply box open, what is typed in it, and whether a
+    // reply is in flight. Only one box is open at a time: a page with a text
+    // area under every comment is a wall of empty boxes, and the artist
+    // answering feedback is answering one comment at a time anyway.
+    // Version history and the releases this track sits on. Both are quiet
+    // extras: an unrevised track that is on no album shows neither panel.
+    const [versions, setVersions] = useState([]);
+    const [currentVersionNo, setCurrentVersionNo] = useState(1);
+    const [appearsOn, setAppearsOn] = useState([]);
+
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [replyText, setReplyText] = useState('');
+    const [replySubmitting, setReplySubmitting] = useState(false);
+
     const handleReact = async (reviewId, reaction) => {
         if (!isAuthenticated) {
             navigate(`/login?return=${encodeURIComponent(`/song/${songId}`)}`);
@@ -462,6 +526,62 @@ const Song = () => {
             setReviewError('Could not save your reaction: ' + (err.response?.data?.error || err.message));
         } finally {
             setReactingReviewId(null);
+        }
+    };
+
+    const openReply = (reviewId) => {
+        // Clicking Reply on the open one closes it, so the button is a toggle
+        // rather than a one-way door with no obvious way out.
+        setReplyingTo((current) => (current === reviewId ? null : reviewId));
+        setReplyText('');
+        setReviewError(null);
+    };
+
+    const handleReplySubmit = async (e, reviewId) => {
+        e.preventDefault();
+        const text = replyText.trim();
+        if (!text) return;
+        if (!isAuthenticated) {
+            setReviewError('You must be logged in to reply');
+            return;
+        }
+
+        setReplySubmitting(true);
+        try {
+            const response = await axios.post(
+                `${API_URL}/reviews/${reviewId}/replies`,
+                { review: text },
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            const reply = response.data?.reply;
+            // Appended rather than refetched: replies read oldest first, so the
+            // new one belongs at the bottom of the thread it was written into.
+            setReviews((prev) => prev.map((r) => (
+                r.id === reviewId ? { ...r, replies: [...(r.replies || []), reply] } : r
+            )));
+            setReplyingTo(null);
+            setReplyText('');
+            setReviewError(null);
+        } catch (err) {
+            setReviewError('Failed to post reply: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setReplySubmitting(false);
+        }
+    };
+
+    const handleDeleteReply = async (reviewId, replyId) => {
+        if (!isAuthenticated) return;
+        try {
+            await axios.delete(`${API_URL}/reviews/${replyId}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            });
+            setReviews((prev) => prev.map((r) => (
+                r.id === reviewId
+                    ? { ...r, replies: (r.replies || []).filter((reply) => reply.id !== replyId) }
+                    : r
+            )));
+        } catch (err) {
+            setReviewError('Failed to delete reply: ' + (err.response?.data?.error || err.message));
         }
     };
 
@@ -1123,7 +1243,107 @@ const Song = () => {
                                                                         </button>
                                                                     );
                                                                 })}
+
+                                                                {/* Anyone signed in may join a thread; the
+                                                                    artist answering their own feedback is
+                                                                    just the commonest case of that. */}
+                                                                {isAuthenticated && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openReply(review.id)}
+                                                                        aria-expanded={replyingTo === review.id}
+                                                                        className="retro-chip px-2 py-1 text-gray-400 hover:text-gray-200"
+                                                                    >
+                                                                        Reply
+                                                                    </button>
+                                                                )}
                                                             </div>
+
+                                                            {(review.replies?.length > 0 || replyingTo === review.id) && (
+                                                                <div className="mt-3 pl-4 border-l-2 border-cyan-400/25 space-y-3">
+                                                                    {(review.replies || []).map((reply) => (
+                                                                        <div key={reply.id} className="flex items-start space-x-3">
+                                                                            <Link
+                                                                                to={reply.profile_id ? profilePath(reply) : '#'}
+                                                                                className={reply.profile_id ? 'hover:underline' : 'cursor-not-allowed'}
+                                                                            >
+                                                                                <img
+                                                                                    src={reply.picture_url || getDefaultAvatar(reply.profile_id || reply.user_name)}
+                                                                                    alt={reply.user_name}
+                                                                                    className="w-7 h-7 rounded-full object-cover"
+                                                                                    onError={(e) => {
+                                                                                        e.currentTarget.src = getDefaultAvatar(reply.profile_id || reply.user_name);
+                                                                                    }}
+                                                                                />
+                                                                            </Link>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                                                                                    <Link
+                                                                                        to={reply.profile_id ? profilePath(reply) : '#'}
+                                                                                        className={reply.profile_id ? 'retro-link retro-mono text-lg' : 'text-gray-500 text-sm font-semibold'}
+                                                                                    >
+                                                                                        {reply.user_name}
+                                                                                    </Link>
+                                                                                    {/* The artist's own answer is the reply
+                                                                                        everyone scrolling a thread is looking
+                                                                                        for, so it is badged. */}
+                                                                                    {reply.is_artist && (
+                                                                                        <span className="retro-chip px-1.5 py-0.5 text-[0.6rem] border-fuchsia-400 text-fuchsia-200">
+                                                                                            Artist
+                                                                                        </span>
+                                                                                    )}
+                                                                                    <span className="text-sm text-gray-500">
+                                                                                        {new Date(reply.created_at).toLocaleDateString()}
+                                                                                    </span>
+                                                                                    {user && reply.profile_id === user.profile_id && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleDeleteReply(review.id, reply.id)}
+                                                                                            className="text-red-600 hover:text-red-700 text-sm font-semibold"
+                                                                                        >
+                                                                                            Delete
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                                <p className="mt-1 text-sm text-gray-300 break-words">{reply.review}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+
+                                                                    {replyingTo === review.id && (
+                                                                        <form onSubmit={(e) => handleReplySubmit(e, review.id)} className="space-y-2">
+                                                                            <label htmlFor={`reply-${review.id}`} className="sr-only">
+                                                                                Reply to {review.user_name}
+                                                                            </label>
+                                                                            <textarea
+                                                                                id={`reply-${review.id}`}
+                                                                                value={replyText}
+                                                                                onChange={(e) => setReplyText(e.target.value)}
+                                                                                rows={3}
+                                                                                maxLength={5000}
+                                                                                placeholder={`Reply to ${review.user_name}...`}
+                                                                                className="retro-input w-full p-2 text-sm"
+                                                                            />
+                                                                            <div className="flex items-center gap-2">
+                                                                                <button
+                                                                                    type="submit"
+                                                                                    disabled={replySubmitting || !replyText.trim()}
+                                                                                    className="retro-btn retro-btn--hot px-4 py-1 text-[0.6rem] disabled:opacity-50"
+                                                                                >
+                                                                                    {replySubmitting ? 'Posting...' : 'Post Reply'}
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                                                                                    className="retro-btn px-4 py-1 text-[0.6rem]"
+                                                                                >
+                                                                                    Cancel
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1135,6 +1355,102 @@ const Song = () => {
 
                             {/* Right Column: Other Songs + Activity Feed */}
                             <div className="space-y-6">
+                                {/* Which record this track belongs to, when it belongs
+                                    to one. A track can sit on an EP and again on a later
+                                    compilation, so this lists them all rather than
+                                    picking one and calling it the home. */}
+                                {appearsOn.length > 0 && (
+                                    <div className="retro-panel retro-cut p-6">
+                                        <h2 className="retro-display text-lg retro-glow-magenta mb-4">
+                                            {appearsOn.length === 1 ? 'From the release' : 'Appears on'}
+                                        </h2>
+                                        <div className="space-y-3">
+                                            {appearsOn.map((release) => (
+                                                <Link
+                                                    key={release.id}
+                                                    to={`/release/${release.id}`}
+                                                    className="retro-card retro-cut flex items-center gap-3 p-2 hover:opacity-90"
+                                                >
+                                                    {release.cover_url ? (
+                                                        <img
+                                                            src={release.cover_url}
+                                                            alt=""
+                                                            className="w-14 h-14 object-cover border border-cyan-400/30 shrink-0"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-14 h-14 shrink-0 border border-cyan-400/30 bg-fuchsia-900/30 flex items-center justify-center retro-pixel text-[0.4rem] text-cyan-300">
+                                                            {release.release_type.toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="retro-mono text-lg text-cyan-200 truncate">{release.title}</p>
+                                                        <p className="text-sm text-gray-400">
+                                                            {RELEASE_TYPE_LABELS[release.release_type] || 'Release'}
+                                                            {' '}&middot; track {release.track_no}
+                                                            {release.visibility === 'private' && ' \u00b7 hidden'}
+                                                        </p>
+                                                    </div>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Version history. Only shown once there is one: a
+                                    track nobody has revised has no history worth a
+                                    panel, and the endpoint reports it as a single
+                                    version so this stays quiet. */}
+                                {versions.length > 1 && (
+                                    <div className="retro-panel retro-cut p-6">
+                                        <h2 className="retro-display text-lg retro-glow-magenta mb-2">Versions</h2>
+                                        <p className="text-sm text-gray-400 mb-4">
+                                            The player is on version {currentVersionNo}. Earlier versions are kept.
+                                        </p>
+                                        <ul className="space-y-3">
+                                            {versions.map((version) => (
+                                                <li
+                                                    key={version.version_no}
+                                                    className={`retro-card retro-cut p-3 ${
+                                                        version.is_current ? 'border-fuchsia-400/60' : ''
+                                                    }`}
+                                                >
+                                                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                                                        <span className="retro-mono text-lg text-cyan-200">
+                                                            v{version.version_no}
+                                                            {version.label ? ` \u00b7 ${version.label}` : ''}
+                                                        </span>
+                                                        {version.is_current && (
+                                                            <span className="retro-chip px-1.5 py-0.5 text-[0.6rem] border-fuchsia-400 text-fuchsia-200">
+                                                                Playing
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {version.notes && (
+                                                        <p className="mt-1 text-sm text-gray-300 break-words">{version.notes}</p>
+                                                    )}
+                                                    <p className="mt-1 retro-mono text-sm text-gray-500">
+                                                        {relativeDate(version.created_at)}
+                                                    </p>
+                                                    {/* An earlier version is auditionable in place with
+                                                        a plain audio element rather than through the
+                                                        footer player, which belongs to the current
+                                                        recording and should not be hijacked by history. */}
+                                                    {!version.is_current && version.mp3_url && (
+                                                        <audio
+                                                            controls
+                                                            preload="none"
+                                                            src={version.mp3_url}
+                                                            className="mt-2 w-full"
+                                                        >
+                                                            <track kind="captions" />
+                                                        </audio>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
                                 <div className="retro-panel retro-cut p-6">
                                     <h2 className="retro-display text-lg retro-glow-magenta mb-4">More by {song?.profile_name || 'Artist'}</h2>
                                     {otherSongs.length === 0 ? (

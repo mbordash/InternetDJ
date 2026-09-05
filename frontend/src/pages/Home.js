@@ -6,7 +6,9 @@ import { AuthContext } from '../context/AuthContext';
 import { AudioPlayerContext } from '../context/AudioPlayerContext';
 import { Helmet } from 'react-helmet-async';
 import API_URL from '../utils/api';
-import IDJCoinLogo from '../assets/idj-coin.png';
+// The small mark, not the hero one: this renders at w-10, where the chrome
+// ticker on the full coin is unreadable. See backend/scripts/generateCoinArt.js.
+import IDJCoinLogo from '../assets/idj-coin-small.png';
 import { getDefaultAvatar } from '../utils/defaultAvatar';
 import profilePath from '../utils/profilePath';
 

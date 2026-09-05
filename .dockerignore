@@ -23,3 +23,22 @@ backend/temp
 **/__pycache__
 **/*.pyc
 
+
+# The mobile app. Expo project for the iOS and Android build, and no part of
+# the server image: the dockerfile copies frontend/ and backend/ and nothing
+# else. Left in the context it was 1.1 GB of the 1.2 GB uploaded to the Fly
+# builder on every single deploy, almost all of it mobile/ios and
+# mobile/node_modules, both of which are regenerated rather than committed.
+mobile
+
+# Any other dependency directory, so a new sub-project cannot quietly repeat
+# the above. The two that the build genuinely needs are installed by npm ci
+# inside the image.
+**/node_modules
+
+# article-recovery is a one-off import archive. The dockerfile copies exactly
+# two files out of it, articles.jsonl and recovered-images.json; the rest is
+# previous runs and scratch, worth about 9 MB.
+article-recovery/*
+!article-recovery/articles.jsonl
+!article-recovery/recovered-images.json

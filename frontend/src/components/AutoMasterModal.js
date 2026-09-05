@@ -58,7 +58,7 @@ function formatWait(seconds) {
  * settings, which takes several ffmpeg passes, so it goes through a queue and
  * this component polls for it.
  */
-const AutoMasterModal = ({ song, onClose, onSaved }) => {
+const AutoMasterModal = ({ song, onClose, onSaved, onSavedVersion }) => {
     const [preset, setPreset] = useState(null);
     const [isMastering, setIsMastering] = useState(false);
     const [masteredUrl, setMasteredUrl] = useState(null);
@@ -309,7 +309,20 @@ const AutoMasterModal = ({ song, onClose, onSaved }) => {
         return new Blob([await response.blob()], { type: 'audio/mpeg' });
     };
 
-    const handleSave = async () => {
+    /**
+     * Save the render, either as a new version of this track or as its own song.
+     *
+     * A remaster is the same work corrected, so a version is usually what the
+     * artist means: the song keeps its page, its address, its plays and every
+     * comment, and the recording it replaced is archived rather than discarded.
+     * That last part is why this is now offered at all - before versioning
+     * existed, the only way to preserve the audio people had reviewed was to
+     * make a separate song.
+     *
+     * A new song is still right when the master is meant to be its own artifact
+     * with its own feedback, so it stays on offer rather than being removed.
+     */
+    const handleSave = async (mode = 'version') => {
         if (!masteredUrl || isSaving) return;
 
         setIsSaving(true);
@@ -322,6 +335,30 @@ const AutoMasterModal = ({ song, onClose, onSaved }) => {
 
             const presetLabel = PRESETS.find(p => p.id === preset)?.label;
             const suffix = presetLabel ? `Auto Master — ${presetLabel}` : 'Auto Master';
+
+            if (mode === 'version') {
+                const versionForm = new FormData();
+                versionForm.append('mp3', blob, `mastered-${Date.now()}.mp3`);
+                versionForm.append('label', presetLabel ? `Auto Master, ${presetLabel}` : 'Auto Master');
+                versionForm.append('notes', 'Mastered in the browser from the previous version.');
+
+                const versionResponse = await axios.post(
+                    `${API_URL}/music/${song.id}/versions`,
+                    versionForm,
+                    { headers: { Authorization: `Bearer ${token}` }, timeout: 180000 },
+                );
+
+                if (!isMountedRef.current) return;
+                onSavedVersion?.({
+                    songId: song.id,
+                    title: song.title,
+                    versionNo: versionResponse.data?.current_version_no,
+                    mp3Url: versionResponse.data?.version?.mp3_url,
+                });
+                releasePreview();
+                onClose();
+                return;
+            }
 
             const formData = new FormData();
             formData.append('title', `${song.title || 'Untitled Song'} (${suffix})`);
@@ -494,17 +531,26 @@ const AutoMasterModal = ({ song, onClose, onSaved }) => {
                         )}
 
                         <p className="retro-mono text-base text-gray-400">
-                            Saving adds a new song to your library. Your original stays exactly as it is,
-                            with its reviews and plays intact.
+                            A new version keeps this song&rsquo;s page, its address, its plays and every
+                            comment on it, and the recording it replaces is kept in the song&rsquo;s
+                            history so you can go back to it. Save it as its own song instead if you
+                            want this master to collect feedback of its own.
                         </p>
 
-                        <div className="flex space-x-2">
+                        <div className="flex flex-wrap gap-2">
                             <button
-                                onClick={handleSave}
+                                onClick={() => handleSave('version')}
                                 disabled={isSaving}
                                 className="retro-btn retro-btn--hot flex-1 py-2 px-4 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                                {isSaving ? 'Saving…' : 'Save as New Song'}
+                                {isSaving ? 'Saving…' : 'Save as New Version'}
+                            </button>
+                            <button
+                                onClick={() => handleSave('song')}
+                                disabled={isSaving}
+                                className="retro-btn flex-1 py-2 px-4 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                Save as New Song
                             </button>
                             <button
                                 onClick={resetResult}
@@ -547,6 +593,7 @@ AutoMasterModal.propTypes = {
     }).isRequired,
     onClose: PropTypes.func.isRequired,
     onSaved: PropTypes.func.isRequired,
+    onSavedVersion: PropTypes.func,
 };
 
 export default AutoMasterModal;

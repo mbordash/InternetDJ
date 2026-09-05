@@ -4,6 +4,7 @@ import API_URL from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
 import Logo from './Logo';
 import profilePath from '../utils/profilePath';
+import NotificationsBell from './NotificationsBell';
 
 function Navbar() {
     // Auth lives in AuthContext. The navbar used to keep its own copy and fetch
@@ -152,6 +153,7 @@ function Navbar() {
         ? [
             { to: profilePath(user), label: 'Profile' },
             { to: `${profilePath(user)}/songs-manager`, label: 'Songs Manager' },
+            { to: `${profilePath(user)}/releases`, label: 'Releases' },
             { to: '/playlists', label: 'Mixtapes' },
             { to: `${profilePath(user)}/collaborations`, label: 'Collabs' },
             { to: '/settings', label: 'Settings' },
@@ -214,7 +216,12 @@ function Navbar() {
                         </div>
                     </div>
 
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-2">
+                        {/* Signed out, this renders nothing at all. */}
+                        <div className="hidden md:block">
+                            <NotificationsBell />
+                        </div>
+
                         <button
                             className="md:hidden retro-icon-btn p-2"
                             onClick={() => setIsOpen(!isOpen)}
@@ -345,6 +352,13 @@ function Navbar() {
                                 )
                             ))}
                         </div>
+
+                        {user && (
+                            <div>
+                                <div className="retro-eyebrow mb-2">// Activity //</div>
+                                <NotificationsBell onNavigate={() => setIsOpen(false)} />
+                            </div>
+                        )}
 
                         <div>
                             <div className="retro-eyebrow mb-2">

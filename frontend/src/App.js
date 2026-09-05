@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider } from './context/AuthContext';
 import { AudioPlayerProvider } from './context/AudioPlayerContext';
 import { HelmetProvider, Helmet } from 'react-helmet-async'; // Add Helmet import
+import useDocumentTitle, { SITE_NAME } from './utils/useDocumentTitle';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -43,6 +44,9 @@ import Collabs from './pages/Collabs';
 import Settings from './pages/Settings';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import Release from './pages/Release';
+import Releases from './pages/Releases';
+import SharedSong from './pages/SharedSong';
 import NotFound from './pages/NotFound';
 import './styles.css';
 import './styles/backgrounds.css';
@@ -50,6 +54,88 @@ import './styles/audioPlayer.css';
 import './styles/react-select.css';
 
 // Updated Layout component
+
+/**
+ * A tab title for every route.
+ *
+ * Titles used to be left to react-helmet-async, and Helmet does nothing in this
+ * app: see utils/useDocumentTitle.js for what was measured. The visible effect
+ * was that every tab read "InternetDJ", the static title in index.html, no
+ * matter what was on the screen, so a row of open tabs was unreadable and a tab
+ * opened on a song still looked like that song many navigations later.
+ *
+ * This sets a title from the path on every navigation, which covers the routes
+ * that never had a Helmet block at all - login, search, crates, playlists, the
+ * songs manager - and gives the rest a sane baseline. Pages whose real title
+ * depends on fetched data call useDocumentTitle once that data arrives, and
+ * that write lands after this one, so it wins.
+ *
+ * Ordered most specific first; the first pattern that matches is used.
+ */
+const ROUTE_TITLES = [
+    [/^\/$/, 'InternetDJ'],
+    [/^\/about/, 'About'],
+    [/^\/promote/, 'Promote your music'],
+    [/^\/articles\/submit/, 'Write for InternetDJ'],
+    [/^\/articles\/queue/, "Editor's desk"],
+    [/^\/articles\/.+/, 'Articles'],
+    [/^\/articles/, 'Articles'],
+    [/^\/privacy/, 'Privacy policy'],
+    [/^\/terms/, 'Terms of service'],
+    [/^\/discover/, 'Discover'],
+    [/^\/browse/, 'Browse genres'],
+    [/^\/new$/, 'New music'],
+    // The tag is already in the path, so the tab can name the genre before the
+    // page has fetched anything.
+    [/^\/tag\/(.+)/, (m) => decodeURIComponent(m[1])],
+    [/^\/search/, 'Search'],
+    [/^\/forum\/post\//, 'Forum'],
+    [/^\/forum/, 'Forum'],
+    [/^\/collabs\/invite\//, 'Collab invite'],
+    [/^\/collabs/, 'Collabs'],
+    [/^\/settings/, 'Settings'],
+    [/^\/login/, 'Sign in'],
+    [/^\/register/, 'Join InternetDJ'],
+    [/^\/forgot-password/, 'Reset your password'],
+    [/^\/reset-password/, 'Reset your password'],
+    [/^\/verify-email/, 'Verify your email'],
+    [/^\/confirm-google-relink/, 'Link your Google account'],
+    [/^\/profile\/[^/]+\/songs-manager/, 'Songs Manager'],
+    [/^\/profile\/[^/]+\/collaborations/, 'Collabs'],
+    [/^\/profile\/[^/]+\/releases/, 'Your releases'],
+    [/^\/profile\//, 'Profile'],
+    [/^\/song\//, 'Song'],
+    [/^\/release\//, 'Release'],
+    [/^\/s\//, 'Private link'],
+    [/^\/projects\/.+/, 'Studio'],
+    [/^\/projects/, 'Your projects'],
+    [/^\/public\//, 'Studio'],
+    [/^\/playlists/, 'Your mixtapes'],
+    [/^\/crate\//, 'Crate'],
+    [/^\/crates/, 'Crates'],
+    [/^\/idj-coin/, 'IDJC'],
+    [/^\/loops/, 'AI loop generator'],
+    [/^\/stems/, 'AI loop generator'],
+];
+
+function RouteTitle() {
+    const { pathname } = useLocation();
+
+    // Every declared route matches something above, so falling through means
+    // the router landed on its catch-all.
+    let title = 'Page not found';
+    for (const [pattern, value] of ROUTE_TITLES) {
+        const match = pattern.exec(pathname);
+        if (match) {
+            title = typeof value === 'function' ? value(match) : value;
+            break;
+        }
+    }
+
+    useDocumentTitle(title);
+    return null;
+}
+
 function Layout() {
     const location = useLocation();
 
@@ -60,6 +146,7 @@ function Layout() {
 
     return (
         <div className="app-shell flex flex-col min-h-screen text-gray-100">
+            <RouteTitle />
             <Navbar />
             <main className="flex-grow bg-transparent pt-24 pb-28">
                 <Routes>
@@ -94,6 +181,14 @@ function Layout() {
                     <Route path="/profile/:profileId/songs-manager" element={<SongsManager />} />
                     <Route path="/song/:songId" element={<Song />} />
                     <Route path="/profile/:profileId/collaborations" element={<CollaborationsManager />} />
+                    <Route path="/profile/:profileId/releases" element={<Releases />} />
+                    {/* An album, EP or single. Public and indexable, unlike a
+                        mixtape, because it is the artist's own body of work. */}
+                    <Route path="/release/:releaseId" element={<Release />} />
+                    {/* A private share link. The token is the credential, so the
+                        page sends its own noindex and /s/ is blocked in
+                        robots.txt. See backend/routes/music.js. */}
+                    <Route path="/s/:token" element={<SharedSong />} />
                     <Route path="/collabs/invite/:token" element={<InviteAccept />} />
                     <Route path="/projects" element={<Projects />} />
                     <Route path="/projects/:projectId" element={<MultitrackSampler />} />

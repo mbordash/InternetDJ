@@ -56,14 +56,12 @@
     <polyline points="654,269 657.65,267.92 661.31,265.14 664.96,261.89 668.62,259.76 672.27,260.16 675.92,263.82 679.58,270.47 683.23,278.76 686.88,286.6 690.54,291.68 694.19,292.12 697.85,287.03 701.5,276.93 705.15,263.67 708.81,250.14 712.46,239.55 716.12,234.67 719.77,237.07 723.42,246.7 727.08,261.77 730.73,279.13 734.38,294.95 738.04,305.64 741.69,308.7 745.35,303.29 749,290.53 752.65,273.19 756.31,255.09 759.96,240.19 763.62,231.68 767.27,231.25 770.92,238.73 774.58,252.2 778.23,268.44 781.88,283.81 785.54,295.02 789.19,299.94 792.85,298.02 796.5,290.3 800.15,279.07 803.81,267.18 807.46,257.38 811.12,251.57 814.77,250.47 818.42,253.53 822.08,259.19 825.73,265.49 829.38,270.56 833.04,273.23 836.69,273.28 840.35,271.42 844,269" fill="none" stroke="#2b0838" stroke-width="5" stroke-linejoin="round"/>
   </g>
 
-  <!-- IDJC over the sun. Dark body first for weight, chrome on top. -->
+  <!-- IDJC over the sun -->
   <g>
     <text x="512" y="606" font-family="Arial Black, Arial, sans-serif" font-size="250"
-      font-weight="900" letter-spacing="4" text-anchor="middle"
-      fill="#2b0838" opacity="0.5" transform="translate(7 8)">IDJC</text>
+      font-weight="900" letter-spacing="4" text-anchor="middle" fill="#2b0838" opacity="0.5" transform="translate(7 8)">IDJC</text>
     <text x="512" y="606" font-family="Arial Black, Arial, sans-serif" font-size="250"
-      font-weight="900" letter-spacing="4" text-anchor="middle"
-      fill="url(#chrome)" stroke="#2b0838" stroke-width="7" paint-order="stroke">IDJC</text>
+      font-weight="900" letter-spacing="4" text-anchor="middle" fill="url(#chrome)" stroke="#2b0838" stroke-width="7" paint-order="stroke">IDJC</text>
   </g>
 
   <g><text x="212.91" y="786.56" font-family="Futura" font-size="62"

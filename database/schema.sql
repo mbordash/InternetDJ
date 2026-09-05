@@ -395,6 +395,35 @@ CREATE TABLE IF NOT EXISTS `project_samples` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
+CREATE TABLE IF NOT EXISTS `releases` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `profile_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `release_type` enum('album','ep','single') NOT NULL DEFAULT 'album',
+  `description` text DEFAULT NULL,
+  `cover_url` varchar(255) DEFAULT NULL,
+  `release_date` date DEFAULT NULL,
+  `visibility` enum('public','private') NOT NULL DEFAULT 'public',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_releases_profile` (`profile_id`,`release_date`),
+  KEY `idx_releases_visibility` (`visibility`,`release_date`),
+  CONSTRAINT `fk_releases_profile` FOREIGN KEY (`profile_id`) REFERENCES `profiles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `release_songs` (
+  `release_id` int(11) NOT NULL,
+  `song_id` int(11) NOT NULL,
+  `track_no` int(11) NOT NULL DEFAULT 1,
+  `added_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`release_id`,`song_id`),
+  KEY `idx_release_songs_song` (`song_id`),
+  KEY `idx_release_songs_order` (`release_id`,`track_no`),
+  CONSTRAINT `fk_release_songs_release` FOREIGN KEY (`release_id`) REFERENCES `releases` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_release_songs_song` FOREIGN KEY (`song_id`) REFERENCES `songs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE IF NOT EXISTS `reviews` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `song_id` int(11) NOT NULL,
@@ -403,10 +432,13 @@ CREATE TABLE IF NOT EXISTS `reviews` (
   `review` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `feedback` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`feedback`)),
+  `parent_review_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `song_id` (`song_id`),
   KEY `fk_reviews_profile_id` (`profile_id`),
+  KEY `idx_reviews_parent` (`parent_review_id`),
   CONSTRAINT `fk_reviews_profile_id` FOREIGN KEY (`profile_id`) REFERENCES `profiles` (`id`),
+  CONSTRAINT `fk_reviews_parent` FOREIGN KEY (`parent_review_id`) REFERENCES `reviews` (`id`) ON DELETE CASCADE,
   CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`song_id`) REFERENCES `songs` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -456,10 +488,15 @@ CREATE TABLE IF NOT EXISTS `songs` (
   `analysis_status` enum('pending','queued','analyzing','done','failed') NOT NULL DEFAULT 'pending',
   `allow_ai_training` tinyint(1) NOT NULL DEFAULT 0,
   `ai_training_opted_in_at` datetime DEFAULT NULL,
+  `visibility` enum('public','private') NOT NULL DEFAULT 'public',
+  `share_token` varchar(32) DEFAULT NULL,
+  `current_version_no` int(11) NOT NULL DEFAULT 1,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_songs_share_token` (`share_token`),
   KEY `profile_id` (`profile_id`),
   KEY `genre` (`genre`),
   KEY `analysis_status_idx` (`analysis_status`),
+  KEY `idx_songs_visibility` (`visibility`,`created_at`),
   CONSTRAINT `songs_ibfk_1` FOREIGN KEY (`profile_id`) REFERENCES `profiles` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -479,6 +516,23 @@ CREATE TABLE IF NOT EXISTS `song_plays` (
   PRIMARY KEY (`id`),
   KEY `idx_song_ip` (`song_id`,`ip_address`),
   CONSTRAINT `song_plays_ibfk_1` FOREIGN KEY (`song_id`) REFERENCES `songs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `song_versions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `song_id` int(11) NOT NULL,
+  `version_no` int(11) NOT NULL,
+  `label` varchar(120) DEFAULT NULL,
+  `notes` varchar(500) DEFAULT NULL,
+  `mp3_url` varchar(255) NOT NULL,
+  `peaks` mediumtext DEFAULT NULL,
+  `duration` float DEFAULT NULL,
+  `is_current` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_song_version` (`song_id`,`version_no`),
+  KEY `idx_song_versions_song` (`song_id`,`version_no`),
+  CONSTRAINT `fk_song_versions_song` FOREIGN KEY (`song_id`) REFERENCES `songs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `tracks` (

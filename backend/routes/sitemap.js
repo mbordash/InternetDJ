@@ -140,14 +140,19 @@ const SECTIONS = {
         count: async () => 1,
     },
 
-    // Songs carry no visibility flag — uploading one publishes it — so every
-    // row belongs in the map.
+    // Only public tracks. An artist who delists a song is asking for it to stop
+    // being findable, and leaving it in the sitemap would be inviting the one
+    // crawler that matters most to keep coming back to it. The song page itself
+    // answers 404 to everyone but the owner, so a stale entry would also be a
+    // soft 404 in Search Console, which is a report this site has already had
+    // to clean up once.
     songs: {
-        count: async () => scalar('SELECT COUNT(*) AS n FROM songs'),
+        count: async () => scalar("SELECT COUNT(*) AS n FROM songs WHERE visibility = 'public'"),
         urls: async (base) => {
         const rows = await pool.query(`
             SELECT s.id, s.created_at
             FROM songs s
+            WHERE s.visibility = 'public'
             ORDER BY s.plays DESC, s.id DESC
         `);
         return rows.map(row => ({
@@ -159,16 +164,44 @@ const SECTIONS = {
         },
     },
 
+    // Public releases. An album page is a real document - a title, a sleeve, a
+    // running order and the artist behind it - so it is worth indexing in a way
+    // a mixtape of other people's music is not. Empty ones are left out for the
+    // same reason an artist with no tracks is: there is nothing on the page.
+    releases: {
+        count: async () => scalar(
+            "SELECT COUNT(*) AS n FROM releases r WHERE r.visibility = 'public' AND EXISTS ("
+            + "SELECT 1 FROM release_songs rs JOIN songs s ON s.id = rs.song_id "
+            + "WHERE rs.release_id = r.id AND s.visibility = 'public')"),
+        urls: async (base) => {
+        const rows = await pool.query(`
+            SELECT r.id, r.updated_at
+            FROM releases r
+            WHERE r.visibility = 'public'
+              AND EXISTS (SELECT 1 FROM release_songs rs
+                            JOIN songs s ON s.id = rs.song_id
+                           WHERE rs.release_id = r.id AND s.visibility = 'public')
+            ORDER BY r.id DESC
+        `);
+        return rows.map(row => ({
+            loc: `${base}/release/${row.id}`,
+            lastmod: toW3CDate(row.updated_at),
+            changefreq: 'monthly',
+            priority: '0.7',
+        }));
+        },
+    },
+
     // An artist with no tracks has an empty page, which is thin content in the
     // same way a one-song genre is.
     profiles: {
         count: async () => scalar(
-            'SELECT COUNT(*) AS n FROM profiles p WHERE EXISTS (SELECT 1 FROM songs s WHERE s.profile_id = p.id)'),
+            "SELECT COUNT(*) AS n FROM profiles p WHERE EXISTS (SELECT 1 FROM songs s WHERE s.profile_id = p.id AND s.visibility = 'public')"),
         urls: async (base) => {
         const rows = await pool.query(`
             SELECT p.id, p.created_at
             FROM profiles p
-            WHERE EXISTS (SELECT 1 FROM songs s WHERE s.profile_id = p.id)
+            WHERE EXISTS (SELECT 1 FROM songs s WHERE s.profile_id = p.id AND s.visibility = 'public')
             ORDER BY p.id DESC
         `);
         return rows.map(row => ({
@@ -195,14 +228,14 @@ const SECTIONS = {
         // generated, which is correct if slower and is a problem this site will
         // not have for a long time.
         count: async () => {
-            const songs = await scalar('SELECT COUNT(*) AS n FROM songs WHERE genre IS NOT NULL AND genre != \'\'');
+            const songs = await scalar("SELECT COUNT(*) AS n FROM songs WHERE genre IS NOT NULL AND genre != '' AND visibility = 'public'");
             return songs === 0 ? 0 : Math.min(songs, MAX_URLS_PER_CHUNK);
         },
         urls: async (base) => {
         const rows = await pool.query(`
             SELECT s.genre
             FROM songs s
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND s.visibility = 'public'
         `);
 
         const counts = {};
@@ -467,6 +500,9 @@ const DISALLOWED_PATHS = [
     ]],
     ['Search result pages: infinite URL space, duplicate content.', [
         '/search',
+    ]],
+    ['Private share links. The token is the whole access control, so the one\n# thing these must never become is a crawlable, indexable URL - a work in\n# progress an artist sent to three people has no business turning up in a\n# search result. The page also serves its own noindex meta tag, which is what\n# actually keeps it out of the index; this only stops the fetch.', [
+        '/s/',
     ]],
     ['Authoring tools. Both need a login, and an indexed submission form would\n# compete with /articles for the same searches.', [
         '/articles/submit',

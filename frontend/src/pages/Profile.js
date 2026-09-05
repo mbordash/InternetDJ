@@ -34,6 +34,7 @@ import sanitizeHtml from 'sanitize-html';
 import {Helmet} from "react-helmet-async";
 import profilePath from '../utils/profilePath';
 import genreTags, { tagHref } from '../utils/genreTags';
+import useDocumentTitle from '../utils/useDocumentTitle';
 
 window.Buffer = window.Buffer || Buffer;
 
@@ -66,6 +67,7 @@ const ProfilePage = () => {
     const { user } = useContext(AuthContext);
     const { playSong, playPlaylist, currentSong, isPlaying, togglePlayPause } = useContext(AudioPlayerContext);
     const [profile, setProfile] = useState(null);
+    useDocumentTitle(profile?.name);
     const [songs, setSongs] = useState([]);
     const [error, setError] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -94,6 +96,9 @@ const ProfilePage = () => {
     const [followingProfiles, setFollowingProfiles] = useState([]);
     const [likedSongsByArtist, setLikedSongsByArtist] = useState([]);
     const [latestArtistReviews, setLatestArtistReviews] = useState([]);
+    // Albums, EPs and singles. An artist who has made none shows no section at
+    // all rather than an empty shelf.
+    const [releases, setReleases] = useState([]);
     const [likesPlaylist, setLikesPlaylist] = useState(null);
     const [viewerLikedSongIds, setViewerLikedSongIds] = useState([]);
     const [likedSongActionIds, setLikedSongActionIds] = useState([]);
@@ -185,7 +190,11 @@ const ProfilePage = () => {
                 return;
             }
             try {
-                const response = await axios.get(`${API_URL}/profile/${profileId}`);
+                const viewerToken = localStorage.getItem('token');
+                const response = await axios.get(
+                    `${API_URL}/profile/${profileId}`,
+                    viewerToken ? { headers: { Authorization: `Bearer ${viewerToken}` } } : undefined
+                );
                 if (!response.data || !response.data.profile || typeof response.data.profile !== 'object') {
                     console.error('Invalid profile response:', response.data);
                     setError('Failed to load profile: Invalid response data');
@@ -195,11 +204,18 @@ const ProfilePage = () => {
                 // The URL may be a slug; every other endpoint keys off the id.
                 const resolvedId = Number(response.data.profile.id);
 
-                const [followersResponse, followingResponse, likedSongsResponse, recentReviewsResponse] = await Promise.all([
+                const [followersResponse, followingResponse, likedSongsResponse, recentReviewsResponse, releasesResponse] = await Promise.all([
                     axios.get(`${API_URL}/profile/${resolvedId}/followers`),
                     axios.get(`${API_URL}/profile/${resolvedId}/following`),
                     axios.get(`${API_URL}/profile/${resolvedId}/liked-songs-public`),
                     axios.get(`${API_URL}/profile/${resolvedId}/recent-reviews`),
+                    // Sent with the viewer's token so the artist sees the
+                    // releases they have not published yet, the same way they
+                    // see their own hidden tracks.
+                    axios.get(
+                        `${API_URL}/releases/by-profile/${resolvedId}`,
+                        viewerToken ? { headers: { Authorization: `Bearer ${viewerToken}` } } : undefined
+                    ).catch(() => ({ data: { releases: [] } })),
                 ]);
 
                 setProfile(response.data.profile);
@@ -210,6 +226,7 @@ const ProfilePage = () => {
                 setFollowingProfiles(Array.isArray(followingResponse.data) ? followingResponse.data : []);
                 setLikedSongsByArtist(Array.isArray(likedSongsResponse.data) ? likedSongsResponse.data.slice(0, 3) : []);
                 setLatestArtistReviews(Array.isArray(recentReviewsResponse.data) ? recentReviewsResponse.data : []);
+                setReleases(releasesResponse.data?.releases || []);
                 setIsArtistInfoExpanded(false);
 
                 if (user) {
@@ -1782,6 +1799,63 @@ const ProfilePage = () => {
                                 {genre.label} <span className="text-cyan-300/60">{genre.count}</span>
                             </Link>
                         ))}
+                    </div>
+                )}
+
+                {/* Releases sit above the track list because a record is how an
+                    artist wants their work introduced, and the flat list of
+                    songs is still right underneath it. */}
+                {(releases.length > 0 || isOwner) && (
+                    <div className="retro-panel retro-cut p-6 mb-8">
+                        <div className="flex items-baseline justify-between gap-4 flex-wrap mb-4">
+                            <h2 className="retro-display text-lg retro-glow-magenta">Releases</h2>
+                            {isOwner && (
+                                <Link
+                                    to={`${profilePath(profile)}/releases`}
+                                    className="retro-link retro-mono text-lg"
+                                >
+                                    Manage releases
+                                </Link>
+                            )}
+                        </div>
+
+                        {releases.length === 0 ? (
+                            <p className="retro-mono text-lg text-gray-400">
+                                No releases yet. Group your tracks into an album, EP or single
+                                from Manage releases.
+                            </p>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {releases.map((release) => (
+                                    <Link
+                                        key={release.id}
+                                        to={`/release/${release.id}`}
+                                        className="retro-card retro-cut p-2 hover:opacity-90"
+                                    >
+                                        {release.cover_url ? (
+                                            <img
+                                                src={release.cover_url}
+                                                alt=""
+                                                className="w-full aspect-square object-cover border border-cyan-400/30 mb-2"
+                                            />
+                                        ) : (
+                                            <div className="w-full aspect-square border border-cyan-400/30 bg-fuchsia-900/25 flex items-center justify-center retro-pixel text-[0.5rem] text-cyan-300 text-center px-1 mb-2">
+                                                {release.title.slice(0, 16)}
+                                            </div>
+                                        )}
+                                        <p className="retro-mono text-lg text-cyan-200 truncate">{release.title}</p>
+                                        <p className="retro-mono text-sm text-gray-400">
+                                            {release.release_type === 'ep'
+                                                ? 'EP'
+                                                : release.release_type.charAt(0).toUpperCase() + release.release_type.slice(1)}
+                                            {' \u00b7 '}
+                                            {release.track_count} track{release.track_count === 1 ? '' : 's'}
+                                            {release.visibility === 'private' ? ' \u00b7 hidden' : ''}
+                                        </p>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 

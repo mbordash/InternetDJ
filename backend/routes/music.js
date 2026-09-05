@@ -47,11 +47,58 @@ const buildDownloadFilename = (title) => {
 };
 
 const { getRunningJobs, incrementRunningJobs, decrementRunningJobs } = require('../utils/concurrency');
-const { randomUUID } = require('crypto');
+const { randomUUID, randomBytes } = require('crypto');
 const { enqueueMasteringJob, estimateWait, ACTIVE_STATUSES } = require('../utils/masteringQueue');
 const { enqueueSongAnalysis } = require('../utils/analysisQueue');
 const { parseEditableBpm, parseEditableKey, compatibleKeys, camelotOf, isMusicalKey } = require('../utils/musicalKeys');
 const { rankCandidates, TEMPO_LOOSE } = require('../utils/trackMatching');
+
+/**
+ * Owner check for the per-song controls below.
+ *
+ * songs.profile_id points at a profile and the profile carries the user_id, so
+ * every one of these routes was doing the same two-step join by hand. Returns
+ * the song row with owner_user_id attached, or null when there is no such song.
+ * The caller decides between 404 and 403, because "this track does not exist"
+ * and "this track is not yours" are different answers.
+ */
+const findSongWithOwner = async (songId, columns = 's.*') => {
+    const rows = await pool.query(
+        `SELECT ${columns}, p.user_id AS owner_user_id
+           FROM songs s
+           JOIN profiles p ON p.id = s.profile_id
+          WHERE s.id = ?`,
+        [songId]
+    );
+    return rows && rows.length ? rows[0] : null;
+};
+
+/**
+ * A private share link, in the SoundCloud sense.
+ *
+ * 24 random bytes rendered base64url is 32 characters, which is what
+ * songs.share_token holds. It has to be long enough that guessing one is
+ * hopeless, because the token is the entire access control on an unlisted
+ * track: anybody holding it can play the song no matter what its visibility
+ * says. base64url rather than hex so it stays short enough to paste into a
+ * message without wrapping.
+ */
+const generateShareToken = () => randomBytes(24).toString('base64url');
+
+/**
+ * Public listings only ever show public tracks.
+ *
+ * Delisting a song must take it out of browse, search, the genre pages, the
+ * sitemap and the artist's own public profile at once, and the way that stays
+ * true is for every one of those queries to carry this clause rather than each
+ * remembering the rule on its own. Owner-facing queries - the songs manager,
+ * a track's own stats - deliberately do not use it, since the artist has to be
+ * able to see what they hid in order to unhide it.
+ *
+ * Written with the `s` alias because that is what every song query in this file
+ * already calls the table.
+ */
+const PUBLIC_SONG = "s.visibility = 'public'";
 
 router.get('/user-songs', authenticate, async (req, res) => {
     try {
@@ -179,6 +226,12 @@ router.get('/:songId/similar', async (req, res) => {
         id: Number(row.id),
         title: row.title,
         image_url: row.image_url,
+        // Carried so a caller that wants to play these, rather than link to
+        // them, does not have to fetch every row again. The mobile station
+        // queues straight off this response; without these two it needed a
+        // second request per track just to learn where the audio was.
+        mp3_url: row.mp3_url,
+        duration: row.duration == null ? null : Number(row.duration),
         plays: Number(row.plays) || 0,
         genre: row.genre,
         bpm: row.bpm == null ? null : Number(row.bpm),
@@ -193,7 +246,7 @@ router.get('/:songId/similar', async (req, res) => {
     });
 
     const SELECT_FIELDS = `
-        s.id, s.title, s.image_url, s.plays, s.genre, s.profile_id,
+        s.id, s.title, s.image_url, s.mp3_url, s.duration, s.plays, s.genre, s.profile_id,
         s.bpm, s.musical_key,
         p.name AS profile_name, p.slug AS profile_slug,
         (SELECT COUNT(*) FROM playlist_songs ps JOIN playlists pl ON ps.playlist_id = pl.id
@@ -248,6 +301,7 @@ router.get('/:songId/similar', async (req, res) => {
                 LEFT JOIN profiles p ON s.profile_id = p.id
                 WHERE s.id != ?
                   AND s.profile_id != ?
+                  AND ${PUBLIC_SONG}
                   AND (${orClauses.join(' OR ')})
                 ORDER BY s.plays DESC
                 LIMIT ${CANDIDATE_POOL}
@@ -442,6 +496,7 @@ router.get('/featured', async (req, res) => {
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
             WHERE s.mp3_url IS NOT NULL
+              AND ${PUBLIC_SONG}
               AND COALESCE(s.plays, 0) > 0
               AND EXISTS (
                 SELECT 1
@@ -502,7 +557,7 @@ router.get('/unreviewed', async (req, res) => {
                 FROM songs s
                          LEFT JOIN profiles p ON s.profile_id = p.id
                          LEFT JOIN reviews r ON s.id = r.song_id
-                WHERE r.id IS NULL
+                WHERE r.id IS NULL AND ${PUBLIC_SONG}
             )
             SELECT id, title, mp3_url, image_url, plays, profile_id, genre, profile_name, likes_count
             FROM RankedSongs
@@ -635,7 +690,10 @@ router.get('/search', async (req, res) => {
         }
         const ratingClause = ratingClauses.length ? ratingClauses.join(' AND ') : null;
 
-        const where = [termClause, bpmClause, keyClause, ratingClause].filter(Boolean).join(' AND ');
+        // PUBLIC_SONG is first in the list rather than appended, so a search
+        // with no filters at all is still `WHERE s.visibility = 'public'` and
+        // never an empty WHERE.
+        const where = [PUBLIC_SONG, termClause, bpmClause, keyClause, ratingClause].filter(Boolean).join(' AND ');
         const params = [...termParams, ...bpmParams, ...keyParams, ...ratingParams];
 
         // Search songs
@@ -662,7 +720,7 @@ router.get('/search', async (req, res) => {
         // Each count is "how many did THIS filter exclude for having no value",
         // so it applies every other active filter and then asks for the nulls.
         const countMissing = async (nullClause, otherClauses, otherParams) => {
-            const clauses = [termClause, ...otherClauses, nullClause].filter(Boolean);
+            const clauses = [PUBLIC_SONG, termClause, ...otherClauses, nullClause].filter(Boolean);
             const rows = await pool.query(
                 `SELECT COUNT(*) AS count FROM songs s WHERE ${clauses.join(' AND ')}`,
                 [...termParams, ...otherParams]
@@ -747,7 +805,7 @@ router.get('/by-genre', async (req, res) => {
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND ${PUBLIC_SONG}
             ORDER BY s.genre ASC, s.plays DESC
         `);
 
@@ -797,7 +855,7 @@ router.get('/by-tags', async (req, res) => {
         const rows = await pool.query(`
             SELECT s.genre, s.image_url
             FROM songs s
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND ${PUBLIC_SONG}
             ORDER BY s.plays DESC
         `);
 
@@ -849,7 +907,7 @@ router.get('/genres', async (req, res) => {
         const rows = await pool.query(`
             SELECT s.genre
             FROM songs s
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND ${PUBLIC_SONG}
         `);
 
         const buckets = {};
@@ -902,7 +960,7 @@ router.get('/tag/:tag/overview', async (req, res) => {
             SELECT s.genre, s.plays, s.created_at, s.profile_id, p.name AS profile_name, p.slug AS profile_slug, p.picture_url
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND ${PUBLIC_SONG}
         `);
 
         const spellings = {};
@@ -1023,7 +1081,7 @@ router.get('/by-tag/:tag', async (req, res) => {
         const candidates = await pool.query(`
             SELECT s.id, s.genre
             FROM songs s
-            WHERE s.genre IS NOT NULL AND s.genre != ''
+            WHERE s.genre IS NOT NULL AND s.genre != '' AND ${PUBLIC_SONG}
         `);
 
         const matchingIds = candidates
@@ -1039,13 +1097,17 @@ router.get('/by-tag/:tag', async (req, res) => {
         const placeholders = matchingIds.map(() => '?').join(',');
         const query = `
             SELECT s.id, s.title, s.mp3_url, s.image_url, s.plays, s.profile_id, p.name AS profile_name, p.slug AS profile_slug,
+                   -- Carried so a list can say more than a title and a name.
+                   -- The genre page on mobile shows tempo and key per row, and
+                   -- for a DJ audience those are the columns worth reading.
+                   s.genre, s.bpm, s.musical_key, s.duration,
                    (SELECT COUNT(*)
                     FROM playlist_songs ps
                              JOIN playlists pl ON ps.playlist_id = pl.id
                     WHERE pl.name = 'Likes' AND ps.song_id = s.id) AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            WHERE s.id IN (${placeholders})
+            WHERE s.id IN (${placeholders}) AND ${PUBLIC_SONG}
             ORDER BY ${orderBy}
                 LIMIT ? OFFSET ?
         `;
@@ -1062,6 +1124,10 @@ router.get('/by-tag/:tag', async (req, res) => {
             profile_name: row.profile_name || 'Unknown',
             profile_slug: row.profile_slug || null,
             likes_count: Number(row.likes_count) || 0,
+            genre: row.genre || null,
+            bpm: row.bpm == null ? null : Number(row.bpm),
+            musical_key: row.musical_key || null,
+            duration: row.duration == null ? null : Number(row.duration),
         }));
 
         res.json({ songs, total: matchingIds.length });
@@ -1093,6 +1159,14 @@ router.delete('/:songId', authenticate, async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized to delete this song' });
         }
 
+        // Read the archived versions before the row goes: song_versions
+        // cascades on the delete, and their audio files would be left in the
+        // bucket forever with nothing pointing at them.
+        const archivedVersions = await pool.query(
+            'SELECT mp3_url FROM song_versions WHERE song_id = ?',
+            [songId]
+        );
+
         await pool.query('START TRANSACTION');
 
         // Delete dependent records
@@ -1112,8 +1186,15 @@ router.delete('/:songId', authenticate, async (req, res) => {
             }
         };
 
+        // The current audio may also be one of the archived rows, so the set is
+        // deduplicated: asking S3 to delete the same key twice is harmless but
+        // the second call is pure noise in the log.
+        const audioUrls = new Set(
+            [song.mp3_url, ...archivedVersions.map((row) => row.mp3_url)].filter(Boolean)
+        );
+
         await Promise.all([
-            deleteS3File(song.mp3_url),
+            ...[...audioUrls].map(deleteS3File),
             deleteS3File(song.image_url),
         ]);
 
@@ -1129,7 +1210,7 @@ router.delete('/:songId', authenticate, async (req, res) => {
 });
 
 router.post('/upload', authenticate, async (req, res) => {
-    const { title, description, genre, stems_url, allow_download, allow_ai_training } = req.body;
+    const { title, description, genre, stems_url, allow_download, allow_ai_training, visibility } = req.body || {};
     const mp3 = req.files?.mp3;
     const image = req.files?.image;
 
@@ -1190,13 +1271,19 @@ router.post('/upload', authenticate, async (req, res) => {
         const allowDownload = parseBooleanFlag(allow_download);
         const allowAiTraining = parseBooleanFlag(allow_ai_training);
 
+        // Uploading still publishes by default. Choosing 'private' here is for
+        // the case the private share link exists to serve: putting a work in
+        // progress somewhere you can send three people, without it landing on
+        // browse the moment it finishes uploading.
+        const songVisibility = visibility === 'private' ? 'private' : 'public';
+
         // Insert song
         const result = await pool.query(
             `INSERT INTO songs (profile_id, title, mp3_url, image_url, description, genre, stems_url,
-                                allow_download, allow_ai_training, ai_training_opted_in_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                allow_download, allow_ai_training, ai_training_opted_in_at, visibility)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [profileId, title, mp3Url, imageUrl, description || '', genre || '', stems_url || null,
-             allowDownload, allowAiTraining, allowAiTraining ? new Date() : null]
+             allowDownload, allowAiTraining, allowAiTraining ? new Date() : null, songVisibility]
         );
         const songId = Number(result.insertId);
 
@@ -1222,12 +1309,14 @@ router.post('/upload', authenticate, async (req, res) => {
             stems_url: stems_url || null,
             allow_download: allowDownload,
             allow_ai_training: allowAiTraining,
+            visibility: songVisibility,
+            current_version_no: 1,
             plays: 0,
             likes_count: 0,
         };
 
         try {
-            const followers = await pool.query(
+            const followers = songVisibility === 'private' ? [] : await pool.query(
                 `
                     SELECT DISTINCT f.follower_id
                     FROM follows f
@@ -1283,6 +1372,7 @@ router.get('/most-played', async (req, res) => {
                      FROM songs s
                               LEFT JOIN profiles p ON s.profile_id = p.id
                      WHERE s.created_at >= DATE_SUB(NOW(), INTERVAL 270 DAY)
+                       AND ${PUBLIC_SONG}
                  ) ranked
             WHERE rn = 1
             ORDER BY ranked.plays DESC
@@ -1336,6 +1426,7 @@ router.get('/highest-rated', async (req, res) => {
                 WHERE pl.name = 'Likes'
                 GROUP BY ps.song_id
             ) l ON l.song_id = s.id
+            WHERE ${PUBLIC_SONG}
             ORDER BY likes_count DESC, s.plays DESC
                 LIMIT 10
         `);
@@ -1375,6 +1466,7 @@ router.get('/latest', async (req, res) => {
                              ) AS likes_count
                      FROM songs s
                               LEFT JOIN profiles p ON s.profile_id = p.id
+                     WHERE ${PUBLIC_SONG}
                  ) ranked
             WHERE row_num <= 2
             ORDER BY ranked.created_at DESC
@@ -1451,6 +1543,7 @@ router.get('/recent', async (req, res) => {
                    ${LIKES_SUBQUERY} AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
+            WHERE ${PUBLIC_SONG}
             ORDER BY s.created_at DESC
             LIMIT ?
         `, [JUST_ADDED_LIMIT]);
@@ -1476,6 +1569,7 @@ router.get('/recent', async (req, res) => {
                  ) recent
                      JOIN songs s ON s.id = recent.song_id
                      LEFT JOIN profiles p ON s.profile_id = p.id
+            WHERE ${PUBLIC_SONG}
             ORDER BY recent.recent_plays DESC, s.created_at DESC
         `, [PLAYED_LATELY_DAYS, PLAYED_LATELY_LIMIT]);
 
@@ -1489,7 +1583,8 @@ router.get('/recent', async (req, res) => {
                    ${LIKES_SUBQUERY} AS likes_count
             FROM songs s
                      LEFT JOIN profiles p ON s.profile_id = p.id
-            ${placeholders ? `WHERE s.id NOT IN (${placeholders})` : ''}
+            WHERE ${PUBLIC_SONG}
+            ${placeholders ? `AND s.id NOT IN (${placeholders})` : ''}
             ORDER BY RAND()
             LIMIT ?
         `, placeholders ? [...shownIds, ARCHIVE_LIMIT] : [ARCHIVE_LIMIT]);
@@ -1506,7 +1601,10 @@ router.get('/recent', async (req, res) => {
     }
 });
 
-router.get('/:songId', async (req, res) => {
+// Authenticated optionally, because the song page is public but a delisted
+// track has to stay visible to the artist who delisted it - otherwise there is
+// no way back to the switch that unhides it.
+router.get('/:songId', authenticateOptional, async (req, res) => {
     try {
         const songId = parseInt(req.params.songId);
         if (isNaN(songId)) {
@@ -1525,11 +1623,26 @@ router.get('/:songId', async (req, res) => {
         if (!songs || songs.length === 0) {
             return res.status(404).json({ error: 'Song not found' });
         }
+
+        // A delisted track answers 404 to everyone but its owner, rather than
+        // 403. A 403 confirms the track exists, and "this song was taken down"
+        // is not something a delisting should broadcast.
+        const isOwner = req.user && Number(songs[0].user_id) === Number(req.user.id);
+        if (songs[0].visibility === 'private' && !isOwner) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
         const song = {
             ...songs[0],
             id: Number(songs[0].id),
             profile_id: Number(songs[0].profile_id),
             user_id: Number(songs[0].user_id),
+            visibility: songs[0].visibility || 'public',
+            current_version_no: Number(songs[0].current_version_no) || 1,
+            // The token itself is owner-only: it is a credential, and the song
+            // payload is what every visitor to the page receives.
+            share_token: isOwner ? (songs[0].share_token || null) : undefined,
+            has_share_link: isOwner ? !!songs[0].share_token : undefined,
             plays: Number(songs[0].plays) || 0,
             profile_name: songs[0].profile_name || 'Unknown Artist',
             profile_slug: songs[0].profile_slug || null,
@@ -1546,7 +1659,9 @@ router.get('/:songId', async (req, res) => {
 });
 
 router.put('/:songId', authenticate, async (req, res) => {
-    const { title, description, genre, stems_url, allow_download, allow_ai_training } = req.body;
+    // See the note on POST /:songId/versions: a multipart edit that changes
+    // only the artwork sends no text fields, and req.body is then undefined.
+    const { title, description, genre, stems_url, allow_download, allow_ai_training, visibility } = req.body || {};
     const mp3 = req.files?.mp3;
     const image = req.files?.image;
     try {
@@ -1568,7 +1683,8 @@ router.put('/:songId', authenticate, async (req, res) => {
 
         const songs = await pool.query(`
             SELECT s.id, s.profile_id, s.mp3_url, s.image_url, s.stems_url, s.allow_download,
-                   s.allow_ai_training, s.ai_training_opted_in_at
+                   s.allow_ai_training, s.ai_training_opted_in_at, s.visibility,
+                   s.current_version_no, s.peaks, s.duration
             FROM songs s
                      JOIN profiles p ON s.profile_id = p.id
             WHERE s.id = ?
@@ -1588,22 +1704,52 @@ router.put('/:songId', authenticate, async (req, res) => {
         }
 
         let mp3Url = songs[0].mp3_url;
+        let newVersionNo = null;
         if (mp3) {
-            if (songs[0].mp3_url) {
-                const oldKey = extractObjectKey(songs[0].mp3_url);
-                await s3Client.send(new DeleteObjectCommand({
-                    Bucket: process.env.BUCKET_NAME,
-                    Key: oldKey,
-                }));
-            }
+            // The outgoing audio is archived, not deleted.
+            //
+            // This used to send a DeleteObjectCommand for the old key, which
+            // was fine when a song had exactly one recording and no memory of
+            // any other. It is not fine now: the file being replaced is the one
+            // a song_versions row points at, so deleting it would leave the
+            // history listing a version that 404s. Replacing the audio here and
+            // uploading a new version through /:songId/versions are the same
+            // act with two entry points, so they leave the same trail.
             const mp3UploadParams = {
                 Bucket: process.env.BUCKET_NAME,
                 Key: `music/${req.user.id}-${Date.now()}.mp3`,
                 Body: mp3.data,
+                ContentType: 'audio/mpeg',
             };
             await s3Client.send(new PutObjectCommand(mp3UploadParams));
             mp3Url = buildPublicFileUrl(mp3UploadParams.Key);
-            await pool.query('UPDATE songs SET peaks = NULL WHERE id = ?', [songId]);
+
+            const [archived] = await pool.query(
+                'SELECT COUNT(*) AS n, MAX(version_no) AS highest FROM song_versions WHERE song_id = ?',
+                [songId]
+            );
+            if (Number(archived?.n || 0) === 0 && songs[0].mp3_url) {
+                await pool.query(
+                    `INSERT INTO song_versions (song_id, version_no, label, mp3_url, peaks, duration, is_current)
+                     VALUES (?, 1, 'Original', ?, ?, ?, 0)`,
+                    [songId, songs[0].mp3_url, songs[0].peaks, songs[0].duration]
+                );
+            }
+            newVersionNo = Math.max(
+                Number(archived?.highest) || 0,
+                1,
+                Number(songs[0].current_version_no) || 1
+            ) + 1;
+
+            await pool.query('UPDATE song_versions SET is_current = 0 WHERE song_id = ?', [songId]);
+            await pool.query(
+                `INSERT INTO song_versions (song_id, version_no, mp3_url, is_current)
+                 VALUES (?, ?, ?, 1)`,
+                [songId, newVersionNo, mp3Url]
+            );
+
+            await pool.query('UPDATE songs SET peaks = NULL, current_version_no = ? WHERE id = ?',
+                [newVersionNo, songId]);
         }
 
         let imageUrl = songs[0].image_url;
@@ -1635,10 +1781,16 @@ router.put('/:songId', authenticate, async (req, res) => {
             ? (wasOptedIn ? songs[0].ai_training_opted_in_at : new Date())
             : null;
 
+        // An edit that says nothing about visibility leaves it alone, the same
+        // way it leaves the training consent alone.
+        const nextVisibility = ['public', 'private'].includes(visibility)
+            ? visibility
+            : (songs[0].visibility || 'public');
+
         await pool.query(`
             UPDATE songs
             SET title = ?, description = ?, genre = ?, mp3_url = ?, image_url = ?, stems_url = ?,
-                allow_download = ?, allow_ai_training = ?, ai_training_opted_in_at = ?
+                allow_download = ?, allow_ai_training = ?, ai_training_opted_in_at = ?, visibility = ?
             WHERE id = ?
         `, [
             title || songs[0].title,
@@ -1650,6 +1802,7 @@ router.put('/:songId', authenticate, async (req, res) => {
             allow_download !== undefined ? parseBooleanFlag(allow_download) : Boolean(songs[0].allow_download),
             allowAiTraining,
             aiOptedInAt,
+            nextVisibility,
             songId
         ]);
 
@@ -1796,6 +1949,477 @@ router.patch('/:songId/allow-ai-training', authenticate, async (req, res) => {
     }
 });
 
+
+// ---------------------------------------------------------------------------
+// Visibility, private share links and version history.
+//
+// These three sit together because from the artist's side they are one
+// question - who can hear this, and which recording of it. All of them are
+// owner-only except the share-link lookup, which is the point.
+// ---------------------------------------------------------------------------
+
+/**
+ * Delist a track, or put it back.
+ *
+ * Delisting is not deleting, and the difference is the whole feature: a private
+ * track keeps its id, its plays, its reviews and its place in every playlist it
+ * was ever added to. It simply stops appearing anywhere public. Make it public
+ * again and everything that was attached to it is still attached.
+ *
+ * A private track is still reachable by its share link, if one exists, which is
+ * how you hand a work in progress to three people without publishing it.
+ */
+router.patch('/:songId/visibility', authenticate, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId, 10);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const { visibility } = req.body;
+        if (!['public', 'private'].includes(visibility)) {
+            return res.status(400).json({ error: "visibility must be 'public' or 'private'" });
+        }
+
+        const song = await findSongWithOwner(songId, 's.id, s.profile_id, s.visibility, s.share_token');
+        if (!song) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+        if (Number(song.owner_user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        await pool.query('UPDATE songs SET visibility = ? WHERE id = ?', [visibility, songId]);
+
+        res.json({
+            id: songId,
+            visibility,
+            // Handed back so the manager can say "hidden, but your private link
+            // still works" without a second request.
+            has_share_link: !!song.share_token,
+        });
+    } catch (err) {
+        logger.error('Error in PATCH /music/:songId/visibility:', err);
+        res.status(500).json({ error: 'Failed to update visibility' });
+    }
+});
+
+/**
+ * Create a private link for a track, or replace the one it has.
+ *
+ * Creating and rotating are the same operation on purpose: both mint a fresh
+ * token, and rotating quietly kills every link already sent. That is the only
+ * honest way to withdraw access from one person once a link has been forwarded,
+ * so the UI says so in as many words before it happens.
+ */
+router.post('/:songId/share-link', authenticate, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId, 10);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const song = await findSongWithOwner(songId, 's.id, s.profile_id, s.share_token');
+        if (!song) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+        if (Number(song.owner_user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        // Asking for a link when one already exists returns the existing one
+        // rather than silently invalidating it. Replacing it takes ?rotate=1,
+        // so nobody breaks their own shared links by clicking the wrong button.
+        const rotate = req.query.rotate === '1' || req.query.rotate === 'true';
+        if (song.share_token && !rotate) {
+            return res.json({ id: songId, share_token: song.share_token, rotated: false });
+        }
+
+        const token = generateShareToken();
+        await pool.query('UPDATE songs SET share_token = ? WHERE id = ?', [token, songId]);
+
+        res.json({ id: songId, share_token: token, rotated: !!song.share_token });
+    } catch (err) {
+        logger.error('Error in POST /music/:songId/share-link:', err);
+        res.status(500).json({ error: 'Failed to create share link' });
+    }
+});
+
+// Revoke the private link. Every copy of it stops working at once; the track
+// itself is untouched and keeps whatever visibility it had.
+router.delete('/:songId/share-link', authenticate, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId, 10);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const song = await findSongWithOwner(songId, 's.id, s.profile_id');
+        if (!song) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+        if (Number(song.owner_user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        await pool.query('UPDATE songs SET share_token = NULL WHERE id = ?', [songId]);
+        res.json({ id: songId, share_token: null });
+    } catch (err) {
+        logger.error('Error in DELETE /music/:songId/share-link:', err);
+        res.status(500).json({ error: 'Failed to revoke share link' });
+    }
+});
+
+/**
+ * Play a track from its private link.
+ *
+ * Public by design and by necessity: the person the artist sent the link to
+ * usually does not have an account. The token is the credential, so it is
+ * matched exactly and the route never falls back to an id lookup - a wrong or
+ * revoked token is a 404 and says nothing about whether the track exists.
+ *
+ * Visibility is deliberately not checked. A link handed out for a delisted
+ * track has to keep working, or the feature does nothing.
+ */
+router.get('/shared/:token', async (req, res) => {
+    try {
+        const token = String(req.params.token || '');
+        if (!token || token.length > 32) {
+            return res.status(404).json({ error: 'Link not found' });
+        }
+
+        const rows = await pool.query(
+            `SELECT s.id, s.title, s.mp3_url, s.image_url, s.description, s.genre, s.peaks,
+                    s.bpm, s.musical_key, s.duration, s.created_at, s.visibility,
+                    s.current_version_no, s.profile_id,
+                    p.name AS profile_name, p.slug AS profile_slug, p.picture_url AS profile_picture
+               FROM songs s
+               LEFT JOIN profiles p ON p.id = s.profile_id
+              WHERE s.share_token = ?`,
+            [token]
+        );
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ error: 'Link not found' });
+        }
+
+        const row = rows[0];
+        res.json({
+            song: {
+                ...row,
+                id: Number(row.id),
+                profile_id: Number(row.profile_id),
+                plays: 0,
+                profile_name: row.profile_name || 'Unknown Artist',
+                profile_slug: row.profile_slug || null,
+                // A private link is a preview, not a release. Downloads stay
+                // off whatever the track's own download setting says, since the
+                // artist shared a link rather than published the file.
+                allow_download: false,
+                is_private_link: true,
+            },
+        });
+    } catch (err) {
+        logger.error('Error in GET /music/shared/:token:', err);
+        res.status(500).json({ error: 'Failed to load shared track' });
+    }
+});
+
+/**
+ * The version history of a track.
+ *
+ * A song with no rows here has never been revised, and the page shows it as a
+ * single version rather than inventing a history for it - see the note in
+ * backend/scripts/migrateSongVisibility.js for why nothing was backfilled.
+ *
+ * Public, because a listener seeing that a track was revised is part of the
+ * point, but a delisted track's history is owner-only like the track itself.
+ */
+router.get('/:songId/versions', authenticateOptional, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId, 10);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+
+        const song = await findSongWithOwner(
+            songId,
+            's.id, s.profile_id, s.visibility, s.current_version_no, s.mp3_url, s.duration, s.created_at'
+        );
+        if (!song) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
+        const isOwner = req.user && Number(song.owner_user_id) === Number(req.user.id);
+        if (song.visibility === 'private' && !isOwner) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+
+        const rows = await pool.query(
+            `SELECT id, version_no, label, notes, mp3_url, duration, is_current, created_at
+               FROM song_versions
+              WHERE song_id = ?
+              ORDER BY version_no DESC`,
+            [songId]
+        );
+
+        const versions = rows.map((row) => ({
+            id: Number(row.id),
+            version_no: Number(row.version_no),
+            label: row.label || null,
+            notes: row.notes || null,
+            mp3_url: row.mp3_url,
+            duration: row.duration == null ? null : Number(row.duration),
+            is_current: !!row.is_current,
+            created_at: row.created_at,
+        }));
+
+        res.json({
+            song_id: songId,
+            current_version_no: Number(song.current_version_no) || 1,
+            // An unrevised track reports the one version it has, described from
+            // the song row, so the client renders the same shape either way.
+            versions: versions.length
+                ? versions
+                : [{
+                    id: null,
+                    version_no: 1,
+                    label: 'Original',
+                    notes: null,
+                    mp3_url: song.mp3_url,
+                    duration: song.duration == null ? null : Number(song.duration),
+                    is_current: true,
+                    created_at: song.created_at,
+                }],
+        });
+    } catch (err) {
+        logger.error('Error in GET /music/:songId/versions:', err);
+        res.status(500).json({ error: 'Failed to load versions' });
+    }
+});
+
+/**
+ * Upload a new version of an existing track.
+ *
+ * This is the thing an artist actually wants when they re-master or fix a mix:
+ * the same release, the same URL, the same reviews and the same play count,
+ * playing the new audio. A brand new song row would scatter the feedback across
+ * two pages and reset the history, which is why a revision is not an upload.
+ *
+ * Note that this is the opposite call from a derived track - an auto-master, a
+ * stem split, a remix. Those are new work and become their own song, because
+ * the feedback belongs to the thing that was uploaded. A version is the same
+ * work, corrected.
+ *
+ * The song row always holds the current audio, so nothing that plays a track
+ * had to learn about versions. song_versions is written beside it:
+ *
+ *   - The first revision lazily archives the outgoing audio as version 1, so a
+ *     track that predates this feature still gets a complete history from the
+ *     moment it has one.
+ *   - The new audio is inserted as the next number and marked current.
+ *   - peaks and duration are cleared on the song row and analysis is requeued,
+ *     because the old waveform belongs to the old audio and drawing it under
+ *     the new one would be a lie the listener can see.
+ */
+router.post('/:songId/versions', authenticate, async (req, res) => {
+    const mp3 = req.files?.mp3;
+    // `req.body || {}` because both are optional. server.js mounts only
+    // express.json() and express-fileupload, and a multipart request carrying
+    // a file and no text fields at all leaves req.body undefined - which is
+    // exactly the commonest way to use this route: replace the audio, do not
+    // bother naming the version. Destructuring that directly threw a
+    // TypeError before the try block could catch it, so the caller got an HTML
+    // 500 from Express rather than any answer this route knows how to give.
+    const { label, notes } = req.body || {};
+
+    try {
+        const songId = parseInt(req.params.songId, 10);
+        if (isNaN(songId)) {
+            return res.status(400).json({ error: 'Invalid song ID' });
+        }
+        if (!mp3) {
+            return res.status(400).json({ error: 'MP3 file is required' });
+        }
+        if (mp3.mimetype !== 'audio/mpeg') {
+            return res.status(400).json({ error: 'Invalid MP3 file format' });
+        }
+        if (label && String(label).length > 120) {
+            return res.status(400).json({ error: 'Version name must be 120 characters or fewer' });
+        }
+        if (notes && String(notes).length > 500) {
+            return res.status(400).json({ error: 'Version notes must be 500 characters or fewer' });
+        }
+
+        const song = await findSongWithOwner(
+            songId,
+            's.id, s.profile_id, s.title, s.mp3_url, s.peaks, s.duration, s.current_version_no'
+        );
+        if (!song) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+        if (Number(song.owner_user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        const uploadParams = {
+            Bucket: process.env.BUCKET_NAME,
+            Key: `music/${req.user.id}-${Date.now()}.mp3`,
+            Body: mp3.data,
+            ContentType: 'audio/mpeg',
+        };
+        await s3Client.send(new PutObjectCommand(uploadParams));
+        const mp3Url = buildPublicFileUrl(uploadParams.Key);
+
+        const [existing] = await pool.query(
+            'SELECT COUNT(*) AS n, MAX(version_no) AS highest FROM song_versions WHERE song_id = ?',
+            [songId]
+        );
+        const archivedCount = Number(existing?.n) || 0;
+
+        // Archive the outgoing audio the first time round, so version 1 is the
+        // original recording rather than the first revision.
+        if (archivedCount === 0) {
+            await pool.query(
+                `INSERT INTO song_versions (song_id, version_no, label, mp3_url, peaks, duration, is_current)
+                 VALUES (?, 1, 'Original', ?, ?, ?, 0)`,
+                [songId, song.mp3_url, song.peaks, song.duration]
+            );
+        }
+
+        const highest = Math.max(Number(existing?.highest) || 0, 1, Number(song.current_version_no) || 1);
+        const nextVersion = highest + 1;
+
+        await pool.query('UPDATE song_versions SET is_current = 0 WHERE song_id = ?', [songId]);
+        const inserted = await pool.query(
+            `INSERT INTO song_versions (song_id, version_no, label, notes, mp3_url, is_current)
+             VALUES (?, ?, ?, ?, ?, 1)`,
+            [songId, nextVersion, label ? String(label).trim() : null, notes ? String(notes).trim() : null, mp3Url]
+        );
+
+        await pool.query(
+            `UPDATE songs
+                SET mp3_url = ?, current_version_no = ?, peaks = NULL, duration = NULL,
+                    analysis_status = 'pending'
+              WHERE id = ?`,
+            [mp3Url, nextVersion, songId]
+        );
+
+        // Tempo and key belong to the audio, not to the release, so the new
+        // file is measured rather than inheriting the old reading.
+        if (await enqueueSongAnalysis(songId)) {
+            await pool.query("UPDATE songs SET analysis_status = 'queued' WHERE id = ?", [songId])
+                .catch(() => {});
+        }
+
+        // Anyone who reviewed the track heard the version being replaced, so
+        // they are told a new one is up. The artist's followers are not: this
+        // is a revision, not a release, and the upload route already covers new
+        // music.
+        try {
+            const reviewers = await pool.query(
+                `SELECT DISTINCT p.user_id
+                   FROM reviews r
+                   JOIN profiles p ON p.id = r.profile_id
+                  WHERE r.song_id = ? AND p.user_id IS NOT NULL`,
+                [songId]
+            );
+            for (const reviewer of reviewers || []) {
+                await createNotification({
+                    recipientUserId: Number(reviewer.user_id),
+                    actorUserId: req.user.id,
+                    type: NOTIFICATION_TYPES.SONG_VERSION_ADDED,
+                    message: 'A track you commented on has a new version.',
+                    entityType: 'song',
+                    entityId: songId,
+                    metadata: {
+                        song_title: song.title,
+                        version_no: nextVersion,
+                        version_label: label ? String(label).trim() : null,
+                    },
+                });
+            }
+        } catch (notifyErr) {
+            logger.warn('Failed to notify reviewers of a new song version:', notifyErr.message);
+        }
+
+        res.status(201).json({
+            song_id: songId,
+            current_version_no: nextVersion,
+            version: {
+                id: Number(inserted.insertId),
+                version_no: nextVersion,
+                label: label ? String(label).trim() : null,
+                notes: notes ? String(notes).trim() : null,
+                mp3_url: mp3Url,
+                is_current: true,
+                created_at: new Date(),
+            },
+        });
+    } catch (err) {
+        logger.error('Error in POST /music/:songId/versions:', err);
+        res.status(500).json({ error: 'Failed to upload new version' });
+    }
+});
+
+/**
+ * Make an older version current again.
+ *
+ * The reason to keep history is to be able to go back to it, so rolling back is
+ * part of the feature rather than a nicety. Nothing is deleted and no numbers
+ * are reused: the older version simply becomes the current one again, and the
+ * one it replaced stays in the list at its own number.
+ */
+router.post('/:songId/versions/:versionNo/restore', authenticate, async (req, res) => {
+    try {
+        const songId = parseInt(req.params.songId, 10);
+        const versionNo = parseInt(req.params.versionNo, 10);
+        if (isNaN(songId) || isNaN(versionNo)) {
+            return res.status(400).json({ error: 'Invalid song or version' });
+        }
+
+        const song = await findSongWithOwner(songId, 's.id, s.profile_id, s.current_version_no');
+        if (!song) {
+            return res.status(404).json({ error: 'Song not found' });
+        }
+        if (Number(song.owner_user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Unauthorized to edit this song' });
+        }
+
+        const rows = await pool.query(
+            'SELECT id, version_no, mp3_url, peaks, duration FROM song_versions WHERE song_id = ? AND version_no = ?',
+            [songId, versionNo]
+        );
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ error: 'Version not found' });
+        }
+        const version = rows[0];
+
+        await pool.query('UPDATE song_versions SET is_current = 0 WHERE song_id = ?', [songId]);
+        await pool.query('UPDATE song_versions SET is_current = 1 WHERE id = ?', [version.id]);
+
+        // The archived row kept this version's own waveform and duration, so
+        // restoring it restores those too rather than re-analysing audio that
+        // has already been measured once.
+        await pool.query(
+            'UPDATE songs SET mp3_url = ?, current_version_no = ?, peaks = ?, duration = ? WHERE id = ?',
+            [version.mp3_url, versionNo, version.peaks, version.duration, songId]
+        );
+
+        if (version.peaks == null || version.duration == null) {
+            await pool.query("UPDATE songs SET analysis_status = 'pending' WHERE id = ?", [songId]);
+            if (await enqueueSongAnalysis(songId)) {
+                await pool.query("UPDATE songs SET analysis_status = 'queued' WHERE id = ?", [songId])
+                    .catch(() => {});
+            }
+        }
+
+        res.json({ song_id: songId, current_version_no: versionNo, mp3_url: version.mp3_url });
+    } catch (err) {
+        logger.error('Error in POST /music/:songId/versions/:versionNo/restore:', err);
+        res.status(500).json({ error: 'Failed to restore version' });
+    }
+});
+
 // Public download of a song, only when the owner has enabled it
 router.get('/:songId/download', async (req, res) => {
     try {
@@ -1804,12 +2428,20 @@ router.get('/:songId/download', async (req, res) => {
             return res.status(400).json({ error: 'Invalid song ID' });
         }
 
-        const songs = await pool.query('SELECT id, title, mp3_url, allow_download FROM songs WHERE id = ?', [songId]);
+        const songs = await pool.query(
+            'SELECT id, title, mp3_url, allow_download, visibility FROM songs WHERE id = ?',
+            [songId]
+        );
         if (!songs || songs.length === 0) {
             return res.status(404).json({ error: 'Song not found' });
         }
 
         const song = songs[0];
+        // Delisted first, so a hidden track reads as absent rather than as a
+        // track that exists but has downloads switched off.
+        if (song.visibility === 'private') {
+            return res.status(404).json({ error: 'Song not found' });
+        }
         if (!song.allow_download) {
             return res.status(403).json({ error: 'Downloads are not enabled for this song' });
         }
